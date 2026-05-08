@@ -1,0 +1,43 @@
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './lib/auth.jsx';
+import Login from './pages/Login.jsx';
+import Layout from './components/Layout.jsx';
+import Dashboard from './pages/Dashboard.jsx';
+import Plots from './pages/Plots.jsx';
+import Water from './pages/Water.jsx';
+import Chemicals from './pages/Chemicals.jsx';
+import Pests from './pages/Pests.jsx';
+import Harvest from './pages/Harvest.jsx';
+import Storage from './pages/Storage.jsx';
+import Workers from './pages/Workers.jsx';
+import Costs from './pages/Costs.jsx';
+import Report from './pages/Report.jsx';
+import Trace from './pages/Trace.jsx';
+
+function Protected({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="p-8">กำลังโหลด...</div>;
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/trace/:lot" element={<Trace />} />
+      <Route path="/" element={<Protected><Layout /></Protected>}>
+        <Route index element={<Dashboard />} />
+        <Route path="plots" element={<Plots />} />
+        <Route path="water" element={<Water />} />
+        <Route path="chemicals" element={<Chemicals />} />
+        <Route path="pests" element={<Pests />} />
+        <Route path="harvest" element={<Harvest />} />
+        <Route path="storage" element={<Storage />} />
+        <Route path="workers" element={<Workers />} />
+        <Route path="costs" element={<Costs />} />
+        <Route path="report" element={<Report />} />
+      </Route>
+    </Routes>
+  );
+}
