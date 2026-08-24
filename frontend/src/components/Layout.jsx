@@ -1,7 +1,28 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth.jsx';
-import { Sprout, LayoutDashboard, Map, Droplets, FlaskConical, Bug, Leaf, Package, Users, Wallet, FileText, LogOut, Menu, X } from 'lucide-react';
+import {
+  BadgeCheck,
+  Bug,
+  ClipboardList,
+  Droplets,
+  ExternalLink,
+  FileText,
+  FlaskConical,
+  LayoutDashboard,
+  Leaf,
+  LogOut,
+  Map,
+  Menu,
+  MessageCircle,
+  Package,
+  ReceiptText,
+  ShoppingBag,
+  Sparkles,
+  Users,
+  Wallet,
+  X,
+} from 'lucide-react';
 
 const items = [
   { to: '/', icon: LayoutDashboard, label: 'แดชบอร์ด', end: true },
@@ -10,11 +31,24 @@ const items = [
   { to: '/chemicals', icon: FlaskConical, label: 'ปุ๋ย/สารเคมี' },
   { to: '/pests', icon: Bug, label: 'ศัตรูพืช' },
   { to: '/harvest', icon: Leaf, label: 'เก็บเกี่ยว' },
+  { to: '/products', icon: ShoppingBag, label: 'สินค้า' },
+  { to: '/orders', icon: ReceiptText, label: 'คำสั่งซื้อ (LINE)' },
   { to: '/storage', icon: Package, label: 'ขนส่ง/เก็บ' },
   { to: '/workers', icon: Users, label: 'คนงาน' },
   { to: '/costs', icon: Wallet, label: 'ต้นทุน' },
+  { to: '/checklists', icon: ClipboardList, label: 'Checklist GAP' },
   { to: '/report', icon: FileText, label: 'รายงาน GAP' },
 ];
+
+function BrandMark({ compact = false }) {
+  return (
+    <div className={`relative ${compact ? 'h-10 w-10' : 'h-12 w-12'} rounded-2xl bg-[#173f2a] flex items-center justify-center shadow-xl shadow-emerald-900/15`}>
+      <ShoppingBag className={`${compact ? 'h-5 w-5' : 'h-6 w-6'} text-[#f4d27a]`} />
+      <Leaf className="absolute -right-1 -top-1 h-4 w-4 fill-emerald-300 text-emerald-300" />
+      <BadgeCheck className="absolute -bottom-1 -right-1 h-4 w-4 fill-[#173f2a] text-emerald-200" />
+    </div>
+  );
+}
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -22,51 +56,83 @@ export default function Layout() {
   const nav = useNavigate();
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
-      <header className="md:hidden bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+    <div className="min-h-screen flex flex-col bg-transparent">
+      <header className="md:hidden bg-white/90 backdrop-blur border-b border-emerald-100 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
-            <Sprout className="w-5 h-5 text-white" />
-          </div>
+          <BrandMark compact />
           <div>
-            <div className="font-bold">FarmGAP</div>
-            <div className="text-xs text-gray-500 truncate w-32">{user?.farm_name || user?.email}</div>
+            <div className="font-black tracking-wide text-[#173f2a]">FarmGAP Goods</div>
+            <div className="text-xs text-emerald-700 truncate w-40">{user?.farm_name || user?.email}</div>
           </div>
         </div>
-        <button onClick={() => setSidebarOpen(true)} className="rounded-lg border border-gray-200 p-2 text-primary shadow-sm hover:bg-gray-100">
+        <button onClick={() => setSidebarOpen(true)} className="rounded-lg border border-emerald-100 p-2 text-primary shadow-sm hover:bg-emerald-50">
           <Menu className="w-5 h-5" />
         </button>
       </header>
 
       <div className="flex flex-1">
-        <aside className={`fixed inset-y-0 left-0 z-50 w-72 transform bg-white border-r border-gray-200 p-4 flex flex-col transition duration-200 ease-out md:static md:translate-x-0 md:w-64 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
-                <Sprout className="w-5 h-5 text-white" />
-              </div>
+        <aside className={`fixed inset-y-0 left-0 z-50 w-72 transform bg-[#fdfef9]/95 backdrop-blur-xl border-r border-emerald-100 p-4 flex flex-col transition duration-200 ease-out md:static md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+          <div className="surface relative rounded-2xl p-4 mb-5">
+            <div className="flex items-center gap-3">
+              <BrandMark />
               <div>
-                <div className="font-bold">FarmGAP</div>
-                <div className="text-xs text-gray-500">{user?.farm_name || user?.email}</div>
+                <div className="text-[10px] font-bold uppercase tracking-[.2em] text-[#b5812d]">premium produce</div>
+                <div className="text-lg font-black leading-tight text-[#173f2a]">FarmGAP Goods</div>
               </div>
             </div>
-            <button onClick={() => setSidebarOpen(false)} className="md:hidden rounded-lg p-2 text-gray-600 hover:bg-gray-100">
+            <div className="mt-4 flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800">
+              <Sparkles className="h-4 w-4 text-[#b5812d]" />
+              <span className="truncate">{user?.farm_name || user?.email}</span>
+            </div>
+            <button onClick={() => setSidebarOpen(false)} className="absolute right-3 top-3 md:hidden rounded-lg p-2 text-gray-600 hover:bg-gray-100">
               <X className="w-5 h-5" />
             </button>
           </div>
 
           <nav className="flex-1 space-y-1">
             {items.map(it => (
-              <NavLink key={it.to} to={it.to} end={it.end}
+              <NavLink
+                key={it.to}
+                to={it.to}
+                end={it.end}
                 onClick={() => setSidebarOpen(false)}
-                className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-medium transition ${isActive ? 'bg-primary text-white shadow-sm' : 'text-gray-700 hover:bg-gray-100'}`}>
+                className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition ${isActive ? 'bg-[#173f2a] text-white shadow-lg shadow-emerald-900/10' : 'text-slate-700 hover:bg-emerald-50 hover:text-[#173f2a]'}`}
+              >
                 <it.icon className="w-5 h-5" />
                 <span>{it.label}</span>
               </NavLink>
             ))}
           </nav>
 
-          <button onClick={() => { logout(); nav('/login'); }} className="mt-4 flex items-center gap-2 px-4 py-3 rounded-2xl text-sm font-medium text-gray-700 hover:bg-gray-100">
+          {/* LINE OA LIFF Hub */}
+          <div className="mt-4 pt-3 border-t border-emerald-100">
+            <div className="px-3 mb-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+              <span className="flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5 text-green-600" /> LINE OA & หน้าร้าน</span>
+              <span className="bg-green-100 text-green-700 text-[9px] px-1.5 py-0.5 rounded font-bold">LIFF</span>
+            </div>
+            <div className="space-y-1">
+              <a
+                href="/liff/order"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-green-50 hover:text-green-800 transition group"
+              >
+                <span className="flex items-center gap-2">🛒 หน้าร้านสั่งซื้อผัก</span>
+                <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-green-600" />
+              </a>
+              <a
+                href="/liff/history"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-green-50 hover:text-green-800 transition group"
+              >
+                <span className="flex items-center gap-2">📦 ติดตามออเดอร์ลูกค้า</span>
+                <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-green-600" />
+              </a>
+            </div>
+          </div>
+
+          <button onClick={() => { logout(); nav('/login'); }} className="mt-3 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-rose-50 hover:text-rose-700">
             <LogOut className="w-4 h-4" /> ออกจากระบบ
           </button>
         </aside>

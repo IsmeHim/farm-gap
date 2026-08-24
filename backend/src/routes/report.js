@@ -11,7 +11,7 @@ r.get('/:year', async (req, res) => {
   const start = `${year}-01-01`, end = `${year}-12-31`;
   const uid = req.user.id;
   const q = (sql, params) => pool.query(sql, params).then(([rows]) => rows);
-  const [plots, water, chems, pests, harvest, storage, workers, costs, profile] = await Promise.all([
+  const [plots, water, chems, pests, harvest, storage, workers, costs, checklists, profile] = await Promise.all([
     q('SELECT * FROM plots WHERE user_id=?', [uid]),
     q('SELECT * FROM water_logs WHERE user_id=? AND log_date BETWEEN ? AND ?', [uid, start, end]),
     q('SELECT * FROM chemical_logs WHERE user_id=? AND log_date BETWEEN ? AND ?', [uid, start, end]),
@@ -20,9 +20,10 @@ r.get('/:year', async (req, res) => {
     q('SELECT * FROM storage_logs WHERE user_id=? AND log_date BETWEEN ? AND ?', [uid, start, end]),
     q('SELECT * FROM workers WHERE user_id=?', [uid]),
     q('SELECT * FROM cost_logs WHERE user_id=? AND log_date BETWEEN ? AND ?', [uid, start, end]),
+    q('SELECT * FROM gap_checklists WHERE user_id=? AND check_date BETWEEN ? AND ?', [uid, start, end]),
     q('SELECT display_name, farm_name FROM users WHERE id=?', [uid]),
   ]);
-  res.json({ year, profile: profile[0], plots, water, chems, pests, harvest, storage, workers, costs });
+  res.json({ year, profile: profile[0], plots, water, chems, pests, harvest, storage, workers, costs, checklists });
 });
 
 export default r;

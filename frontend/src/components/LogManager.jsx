@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { toast } from 'sonner';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Plus, Trash2, Pencil, X } from 'lucide-react';
 import { format } from 'date-fns';
 
 // Generic CRUD UI for any /api/<endpoint>
-export default function LogManager({ title, endpoint, fields, plotsLookup }) {
+export default function LogManager({ title, endpoint, fields, plotsLookup, renderRowAction }) {
+
   const [rows, setRows] = useState([]);
   const [plots, setPlots] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({});
+  const [editingId, setEditingId] = useState(null);
 
   const load = async () => {
     const { data } = await api.get(`/api/${endpoint}`);
@@ -25,16 +27,44 @@ export default function LogManager({ title, endpoint, fields, plotsLookup }) {
     fields.forEach(f => {
       if (f.type === 'date') init[f.key] = format(new Date(), 'yyyy-MM-dd');
       else if (f.default !== undefined) init[f.key] = f.default;
+      if (f.allowCustom) init[`custom_${f.key}`] = '';
     });
     setForm(init);
+    setEditingId(null);
+    setOpen(true);
+  };
+
+  const openEdit = (item) => {
+    const init = {};
+    fields.forEach(f => {
+      init[f.key] = item[f.key] ?? (f.type === 'date' ? '' : '');
+      if (f.allowCustom) init[`custom_${f.key}`] = '';
+    });
+    setForm(init);
+    setEditingId(item.id);
     setOpen(true);
   };
 
   const save = async () => {
     try {
-      await api.post(`/api/${endpoint}`, form);
+      const payload = { ...form };
+      fields.forEach(f => {
+        if (f.allowCustom) {
+          const customKey = `custom_${f.key}`;
+          if (payload[customKey]) {
+            payload[f.key] = payload[customKey];
+          }
+          delete payload[customKey];
+        }
+      });
+      if (editingId) {
+        await api.put(`/api/${endpoint}/${editingId}`, payload);
+      } else {
+        await api.post(`/api/${endpoint}`, payload);
+      }
       toast.success('บันทึกแล้ว');
       setOpen(false);
+      setEditingId(null);
       load();
     } catch (e) {
       toast.error(e.response?.data?.error || e.message);
@@ -71,11 +101,17 @@ export default function LogManager({ title, endpoint, fields, plotsLookup }) {
                     <td key={f.key} className="px-4 py-3 align-top">
                       {f.type === 'date' && r[f.key] ? format(new Date(r[f.key]), 'dd/MM/yyyy')
                         : f.key === 'plot_id' ? plotName(r[f.key])
-                        : f.type === 'bool' ? (r[f.key] ? '✓' : '—')
+                        : f.key === 'image_url' && r[f.key] ? (
+                          <img src={r[f.key]} alt="รูปสินค้า" className="w-24 h-16 rounded-xl object-cover border border-slate-200" />
+                        ) : f.type === 'bool' ? (r[f.key] ? '✓' : '—')
                         : r[f.key] ?? '—'}
                     </td>
                   ))}
-                  <td className="px-4 py-3 text-right"><button onClick={() => del(r.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-full"><Trash2 className="w-4 h-4" /></button></td>
+                  <td className="px-4 py-3 text-right flex gap-2 justify-end items-center">
+                    {renderRowAction && renderRowAction(r)}
+                    <button onClick={() => openEdit(r)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"><Pencil className="w-4 h-4" /></button>
+                    <button onClick={() => del(r.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-full"><Trash2 className="w-4 h-4" /></button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -87,7 +123,7 @@ export default function LogManager({ title, endpoint, fields, plotsLookup }) {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setOpen(false)}>
           <div className="bg-white rounded-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold">เพิ่มข้อมูลใหม่</h2>
+              <h2 className="text-lg font-bold">{editingId ? 'แก้ไขข้อมูล' : 'เพิ่มข้อมูลใหม่'}</h2>
               <button onClick={() => setOpen(false)}><X className="w-5 h-5" /></button>
             </div>
             <div className="space-y-3">
@@ -101,6 +137,20 @@ export default function LogManager({ title, endpoint, fields, plotsLookup }) {
                       <option value="">{f.placeholder || '-- เลือกแปลง --'}</option>
                       {plots.map(p => <option key={p.id} value={p.id}>{p.name} ({p.crop_name})</option>)}
                     </select>
+                  ) : f.type === 'select' && f.allowCustom ? (
+                    <div className="space-y-2">
+                      <select className="input" value={form[f.key] ?? ''} onChange={e => setForm({...form, [f.key]: e.target.value})}>
+                        <option value="">{f.placeholder || '-- เลือก --'}</option>
+                        {f.options.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                      <input
+                        className="input"
+                        type="text"
+                        value={form[`custom_${f.key}`] ?? ''}
+                        placeholder={`เพิ่ม${f.label.toLowerCase()}ใหม่`}
+                        onChange={e => setForm({...form, [`custom_${f.key}`]: e.target.value})}
+                      />
+                    </div>
                   ) : f.type === 'select' ? (
                     <select className="input" value={form[f.key] ?? ''} onChange={e => setForm({...form, [f.key]: e.target.value})}>
                       <option value="">{f.placeholder || '-- เลือก --'}</option>

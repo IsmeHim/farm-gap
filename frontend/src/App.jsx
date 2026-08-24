@@ -8,11 +8,16 @@ import Water from './pages/Water.jsx';
 import Chemicals from './pages/Chemicals.jsx';
 import Pests from './pages/Pests.jsx';
 import Harvest from './pages/Harvest.jsx';
+import Products from './pages/Products.jsx';
 import Storage from './pages/Storage.jsx';
 import Workers from './pages/Workers.jsx';
 import Costs from './pages/Costs.jsx';
 import Report from './pages/Report.jsx';
 import Trace from './pages/Trace.jsx';
+import Checklists from './pages/Checklists.jsx';
+import Orders from './pages/Orders.jsx';
+import LiffOrder from './pages/LiffOrder.jsx';
+import LiffHistory from './pages/LiffHistory.jsx';
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -26,6 +31,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/trace/:lot" element={<Trace />} />
+      <Route path="/liff/order" element={<LiffOrder />} />
+      <Route path="/liff/history" element={<LiffHistory />} />
       <Route path="/" element={<Protected><Layout /></Protected>}>
         <Route index element={<Dashboard />} />
         <Route path="plots" element={<Plots />} />
@@ -33,9 +40,12 @@ export default function App() {
         <Route path="chemicals" element={<Chemicals />} />
         <Route path="pests" element={<Pests />} />
         <Route path="harvest" element={<Harvest />} />
+        <Route path="products" element={<Products />} />
+        <Route path="orders" element={<Orders />} />
         <Route path="storage" element={<Storage />} />
         <Route path="workers" element={<Workers />} />
         <Route path="costs" element={<Costs />} />
+        <Route path="checklists" element={<Checklists />} />
         <Route path="report" element={<Report />} />
       </Route>
     </Routes>

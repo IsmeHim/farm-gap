@@ -1,101 +1,160 @@
 # 🌱 FarmGAP — ระบบบริหารจัดการสวนผัก (GAP Compliance)
 
-ระบบบันทึกข้อมูลการทำเกษตรเพื่อส่ง GAP (Good Agricultural Practices) อัตโนมัติ
-ออกแบบสำหรับฟาร์มผักสลัด (กรีนโอ๊ค, เรดโอ๊ค ฯลฯ)
+ระบบ FarmGAP เป็นแพลตฟอร์มบริหารจัดการฟาร์มผักสลัด เพื่อให้เจ้าของฟาร์มสามารถจัดการข้อมูลการปลูก การเก็บเกี่ยว การขนส่ง การสั่งซื้อผ่าน LINE และระบบ AI เชิงวิเคราะห์ได้ในที่เดียว
 
-## 📦 Tech Stack
-- **Frontend**: React 18 + Vite + TailwindCSS v4 + React Router
-- **Backend**: Node.js + Express + JWT Auth
-- **Database**: MySQL 8
+## 📌 สถานะปัจจุบันของระบบ
+ตอนนี้โครงการพัฒนาไปได้มากแล้วทั้งฝั่ง Backend และ Frontend โดยมีฟีเจอร์หลักทำงานได้จริง ดังนี้:
 
-## ✨ Features
-- 🔐 Auth (Register/Login ด้วย JWT)
-- 🌾 จัดการแปลงปลูก (Plots)
-- 💧 บันทึกการให้น้ำ (GAP #1)
-- 🧪 บันทึกสารเคมี/ปุ๋ย + แจ้งเตือน PHI (GAP #3)
-- 🐛 บันทึกศัตรูพืช/โรค (GAP #4)
-- 🧺 บันทึกการเก็บเกี่ยว + Lot Code (GAP #5)
-- 📦 บันทึกการเก็บรักษา/ขนส่ง (GAP #6)
-- 👨‍🌾 ทะเบียนคนงาน (GAP #7)
-- 💰 บันทึกต้นทุน-กำไร
-- 📊 Dashboard + กราฟ
-- 📄 ออก **GAP Report PDF** อัตโนมัติรายปี
-- 🏷️ QR Code Traceability (ลูกค้า scan ดูที่มาผัก)
+### ✅ Backend
+- `Express` API ทำงานครบทั้งระบบ CRUD สำหรับฟาร์มและกิจกรรม GAP
+- รองรับโมดูลหลัก:
+  - `plots`, `water_logs`, `chemical_logs`, `pest_logs`, `harvest_logs`, `storage_logs`, `workers`, `cost_logs`, `gap_checklists`
+- มีระบบ Authentication / Authorization ด้วย JWT
+- มี API สำหรับจัดการ `products`, `customers`, `orders`
+- มี `LINE Webhook` route (`/api/line/webhook`) ที่อ่าน event จาก LINE Official Account
+- มี AI route ชุดหนึ่งที่รองรับ:
+  - `GET /api/ai/recommendations/:productId`
+  - `POST /api/ai/recommend`
+  - `GET /api/ai/clusters`  
+  - `POST /api/ai/cluster`
 
----
+### ✅ Frontend
+- ใช้ React + Vite + TailwindCSS (พร้อม routing)
+- หน้าหลัก Dashboard สรุป:
+  - จำนวนแปลงปลูก
+  - ผลผลิตรวม (kg)
+  - รายได้และต้นทุน
+  - เตือน PHI / น้ำไม่ปลอดภัย / สุขอนามัยคนงาน
+- มีหน้าสั่งซื้อผ่าน LIFF (`LiffOrder.jsx`)
+  - เชื่อม LIFF ในโหมดจริงและ mock mode
+  - โหลดสินค้าพร้อมขายจาก API
+  - สร้างตะกร้าและสั่งซื้อ
+  - อัปโหลดรูปสลิปชำระเงิน
+- มีระบบ AI Recommendation ในตะกร้า
+  - เมื่อเลือกสินค้าแล้ว ดึงคำแนะนำจาก `/api/ai/recommendations/:productId`
 
-## 🚀 วิธีรัน
+### ✅ AI / Recommendation
+- มี backend engine คำนวณ `product_recommendations` จากข้อมูล `order_items`
+  - ใช้ SQL คำนวณ co-occurrence matrix ของสินค้าที่ถูกซื้อคู่กัน
+- มีระบบ K-Means clustering สำหรับลูกค้า
+  - ดึงข้อมูล `order_count`, `total_spend`, `avg_order_value`, `total_items`
+  - ทำ normalization และ cluster แบบ vanilla JS
+  - อัปเดต `customers.cluster_id`
+- Dashboard มีปุ่ม `ประมวลผล K-Means` เพื่อรัน clustering และ recommendation ใหม่
 
-### 1. Database (MySQL)
-```bash
-mysql -u root -p < backend/db/schema.sql
-```
+### ✅ LINE / Gemini AI integration
+- `backend/src/routes/line.js` มีฟังก์ชัน `askGemini()` สำหรับเรียก Gemini API
+- ระบบสร้าง context จาก:
+  - สต็อกสินค้าใน `products`
+  - ข้อมูลแปลงใน `plots`
+- ถ้า `GEMINI_API_KEY` ไม่ถูกตั้งค่า จะ fallback เป็น mock responses ภาษาไทย
+- LINE webhook จะตอบ:
+  - เมื่อลูกค้าพิมพ์ `สั่งซื้อ` → ส่งเมนูสินค้า
+  - เมื่อลูกค้าพิมพ์ `เช็คสถานะ` → สรุปสถานะออเดอร์
+  - คำถามทั่วไป → ส่งไปถาม AI / Gemini fallback
 
-### 2. Backend
-```bash
-cd backend
-npm install
-cp .env.example .env   # แก้ DB credentials + JWT_SECRET
-npm run dev            # http://localhost:4000
-```
+### ✅ Customer sync
+- มี endpoint `/api/customers/sync` สำหรับ sync ข้อมูลลูกค้าจาก LINE LIFF
+- หน้า `LiffOrder` จะสร้างหรืออัปเดตลูกค้าด้วย `line_user_id`
 
-### 3. Frontend
-```bash
-cd frontend
-npm install
-cp .env.example .env   # ตั้ง VITE_API_URL=http://localhost:4000
-npm run dev            # http://localhost:5173
-```
+## 🧠 Feature ที่ทำได้แล้วตอนนี้
+- บันทึกทุกกิจกรรม GAP ตั้งแต่แปลงน้ำ สารเคมี ศัตรูพืช ถึงการเก็บเกี่ยวและขนส่ง
+- ดู dashboard สรุปภาพรวมฟาร์ม
+- แสดงเตือน PHI และน้ำ/สุขอนามัย
+- สร้างรายการสั่งซื้อ พร้อม upload slip
+- เชื่อม LIFF เพื่อดึง profile ลูกค้าและ sync เข้าฐานข้อมูล
+- วิเคราะห์ลูกค้า K-Means และบันทึกกลุ่ม customer clusters
+- คำนวณสินค้า recommend จาก order history
+- LINE webhook มีระบบตอบกลับอัตโนมัติและ AI fallback
 
-### 4. เปิดใช้งาน
-1. เข้า http://localhost:5173
-2. สมัครสมาชิก (กรอกชื่อฟาร์ม)
-3. เพิ่มแปลงปลูก → เริ่มบันทึกข้อมูล
-4. ไปหน้า "รายงาน" → กด Export PDF
+## 🛠️ สิ่งที่ยังต้องปรับปรุง / ต้องทดสอบเพิ่มเติม
+- Gemini AI ยังต้องมี `GEMINI_API_KEY` เพื่อใช้งานจริง
+- ระบบ LINE webhook ต้องทดสอบกับ LINE Official Account จริง
+- ยังไม่มีหน้าแดชบอร์ดแยก `AiDashboard.jsx` แต่ฟีเจอร์ AI อยู่ใน `Dashboard.jsx`
+- ควรเพิ่ม validation และ error handling ฝั่ง backend ให้ครอบคลุมมากขึ้น
+- ระบบ order/stock อาจต้องปรับให้ลดสต็อกอัตโนมัติหลังสั่งซื้อ
 
----
-
-## 📁 โครงสร้าง
+## 📦 โครงสร้างโครงการปัจจุบัน
 ```
 farmgap/
 ├── backend/
-│   ├── db/schema.sql           # DDL + seed
+│   ├── db/schema.sql
 │   ├── src/
-│   │   ├── index.js            # Express entry
-│   │   ├── db.js               # MySQL pool
-│   │   ├── middleware/auth.js  # JWT verify
-│   │   └── routes/             # auth, plots, water, chemicals, ...
+│   │   ├── index.js
+│   │   ├── db.js
+│   │   ├── middleware/auth.js
+│   │   ├── routes/
+│   │   │   ├── auth.js
+│   │   │   ├── crud.js
+│   │   │   ├── customers.js
+│   │   │   ├── line.js
+│   │   │   ├── orders.js
+│   │   │   ├── products.js
+│   │   │   ├── report.js
+│   │   │   ├── trace.js
+│   │   │   └── ai.js
 │   ├── package.json
 │   └── .env.example
 ├── frontend/
 │   ├── src/
 │   │   ├── main.jsx
-│   │   ├── App.jsx             # Router
-│   │   ├── lib/api.js          # axios + token
-│   │   ├── lib/auth.jsx        # AuthContext
-│   │   ├── components/         # Sidebar, LogManager, ui/*
-│   │   └── pages/              # Login, Dashboard, Plots, Water, ...
-│   ├── index.html
+│   │   ├── App.jsx
+│   │   ├── lib/api.js
+│   │   ├── lib/auth.jsx
+│   │   ├── pages/
+│   │   │   ├── Dashboard.jsx
+│   │   │   ├── LiffOrder.jsx
+│   │   │   ├── Login.jsx
+│   │   │   ├── Checklists.jsx
+│   │   │   ├── Chemicals.jsx
+│   │   │   ├── Costs.jsx
+│   │   │   ├── Harvest.jsx
+│   │   │   ├── Pests.jsx
+│   │   │   ├── Plots.jsx
+│   │   │   ├── Products.jsx
+│   │   │   ├── Report.jsx
+│   │   │   ├── Storage.jsx
+│   │   │   ├── Trace.jsx
+│   │   │   ├── Water.jsx
+│   │   │   └── Workers.jsx
 │   ├── package.json
 │   ├── vite.config.js
-│   ├── tailwind.config.js (v4 ใช้ @import in css)
+│   ├── tailwind.config.js
 │   └── .env.example
 └── README.md
 ```
 
-## 🔑 GAP 7 หมวดหลักในระบบ
-| GAP | หน้าในระบบ | ตาราง DB |
-|-----|-----------|---------|
-| 1. แหล่งน้ำ | /water | water_logs |
-| 2. พื้นที่ปลูก | /plots | plots |
-| 3. สารเคมี | /chemicals | chemical_logs |
-| 4. ศัตรูพืช | /pests | pest_logs |
-| 5. เก็บเกี่ยว | /harvest | harvest_logs |
-| 6. ขนส่ง | /storage | storage_logs |
-| 7. ผู้ปฏิบัติงาน | /workers | workers |
+## 🚀 วิธีรันตอนนี้
+### Backend
+```bash
+cd backend
+npm install
+cp .env.example .env
+# ตั้งค่า DB_HOST, DB_USER, DB_PASS, DB_NAME, JWT_SECRET, LINE_CHANNEL_ACCESS_TOKEN, LINE_CHANNEL_SECRET
+npm run dev
+```
 
-## ⚠️ Notes
-- PHI Alert: ระบบจะเตือนถ้าเก็บเกี่ยวก่อนครบ PHI หลังพ่นยา
-- QR Code: ทุก lot_code จะ generate URL `/trace/:lot` ให้ลูกค้าสแกน
-- รองรับหลาย user (แต่ละฟาร์มเห็นข้อมูลตัวเอง)
+### Frontend
+```bash
+cd frontend
+npm install
+cp .env.example .env
+# ตั้ง VITE_API_URL=http://localhost:4000
+# ตั้ง VITE_LIFF_ID=xxx หากทดสอบ LIFF
+npm run dev
+```
+
+## 📌 ข้อสังเกตสำคัญ
+- หากไม่มี `GEMINI_API_KEY` ระบบจะใช้ mock AI response ภาษาไทยแทน
+- `LINE_CHANNEL_ACCESS_TOKEN` และ `LINE_CHANNEL_SECRET` ต้องตั้งค่าให้ถูกต้องหากใช้งาน LINE webhook
+- `LiffOrder` มี mock mode รองรับการทดสอบนอก LINE client
+
+---
+
+## 🎯 สรุป
+ตอนนี้ระบบ FarmGAP ทำงานได้ในระดับ core farm management + e-commerce + AI recommendation และมีโครงสร้าง LINE/AI integration อยู่แล้ว หากต้องการเดินต่อ ควรเน้น:
+1. เชื่อม LINE OA ของจริง และทดสอบ webhook
+2. เติมค่า `GEMINI_API_KEY` เพื่อเรียก AI จริง
+3. ตรวจสอบ stock update หลังออเดอร์
+4. ปรับปรุง UX / error handling ใน frontend
 

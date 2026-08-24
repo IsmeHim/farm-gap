@@ -44,16 +44,18 @@ export default function Report() {
 
       section('1. Plots', ['Name','Crop','Area','Planted','Status'],
         data.plots.map(p => [p.name, p.crop_name, p.area_sqm ?? '-', p.planting_date, p.status]));
-      section('2. Water (GAP #1)', ['Date','Plot','Source','Liters','Worker'],
-        data.water.map(w => [w.log_date, plotName(w.plot_id), w.water_source ?? '-', w.amount_liters ?? '-', w.worker_name ?? '-']));
-      section('3. Chemicals (GAP #3)', ['Date','Plot','Type','Product','Amount','PHI','Worker'],
-        data.chems.map(c => [c.log_date, plotName(c.plot_id), c.chem_type, c.product_name, `${c.amount ?? ''} ${c.unit ?? ''}`, c.phi_days ?? 0, c.worker_name ?? '-']));
+      section('2. Water (GAP #1)', ['Date','Plot','Source','Type','Quality','Liters','Worker'],
+        data.water.map(w => [w.log_date, plotName(w.plot_id), w.water_source ?? '-', w.water_source_type ?? '-', w.water_quality ?? '-', w.amount_liters ?? '-', w.worker_name ?? '-']));
+      section('3. Chemicals (GAP #3)', ['Date','Plot','Type','Product','Amount','PPE','PHI','Worker'],
+        data.chems.map(c => [c.log_date, plotName(c.plot_id), c.chem_type, c.product_name, `${c.amount ?? ''} ${c.unit ?? ''}`, c.safety_ppe ? 'Yes' : 'No', c.phi_days ?? 0, c.worker_name ?? '-']));
       section('4. Pests', ['Date','Plot','Pest','Severity','Treatment'],
         data.pests.map(p => [p.log_date, plotName(p.plot_id), p.pest_or_disease, p.severity ?? '-', p.treatment_method ?? '-']));
-      section('5. Harvest (GAP #5)', ['Date','Plot','Qty','Unit','Grade','Lot','Revenue'],
-        data.harvest.map(h => [h.harvest_date, plotName(h.plot_id), h.quantity, h.unit, h.quality_grade ?? '-', h.lot_code ?? '-', h.revenue ?? '-']));
-      section('6. Storage/Transport (GAP #6)', ['Date','Storage','Shipped To','Buyer','Vehicle'],
-        data.storage.map(s => [s.log_date, s.storage_location ?? '-', s.shipped_to ?? '-', s.buyer ?? '-', s.vehicle ?? '-']));
+      section('5. Harvest (GAP #5)', ['Date','Plot','Qty','Unit','Grade','Lot','Hygiene','Postharvest','Revenue'],
+        data.harvest.map(h => [h.harvest_date, plotName(h.plot_id), h.quantity, h.unit, h.quality_grade ?? '-', h.lot_code ?? '-', h.harvest_hygiene ?? '-', h.postharvest_handling ?? '-', h.revenue ?? '-']));
+      section('6. Storage/Transport (GAP #6)', ['Date','Storage','Shipped To','Buyer','Vehicle','Vehicle Clean','Condition','Delivery'],
+        data.storage.map(s => [s.log_date, s.storage_location ?? '-', s.shipped_to ?? '-', s.buyer ?? '-', s.vehicle ?? '-', s.vehicle_clean_status ? 'Yes' : 'No', s.storage_conditions ?? '-', s.delivery_condition ?? '-']));
+      section('7. Checklists', ['Date','Plot','Inspector','Field OK','Clean','Pest','Water','Chemical','Hygiene'],
+        data.checklists.map(c => [c.check_date, plotName(c.plot_id), c.inspector_name ?? '-', c.field_inspection_pass ? 'Yes' : 'No', c.cleaning_check ? 'Yes' : 'No', c.pest_management_check ? 'Yes' : 'No', c.water_quality_check ? 'Yes' : 'No', c.chemical_usage_check ? 'Yes' : 'No', c.hygiene_check ? 'Yes' : 'No']));
       section('7. Workers (GAP #7)', ['Name','Role','Phone','Hygiene'],
         data.workers.map(w => [w.name, w.role ?? '-', w.phone ?? '-', w.hygiene_training ? 'Yes' : 'No']));
 

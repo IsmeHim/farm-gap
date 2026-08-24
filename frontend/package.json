@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@line/liff": "^2.29.2",
     "axios": "^1.7.7",
     "date-fns": "^3.6.0",
     "jspdf": "^2.5.1",
