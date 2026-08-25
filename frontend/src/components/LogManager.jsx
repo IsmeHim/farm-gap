@@ -1,26 +1,36 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { api } from '../lib/api';
 import { toast } from 'sonner';
-import { Plus, Trash2, Pencil, X } from 'lucide-react';
+import { Plus, Trash2, Pencil, X, Search, Calendar, MapPin, CheckCircle2, AlertCircle, RefreshCw, Filter } from 'lucide-react';
 import { format } from 'date-fns';
 
-// Generic CRUD UI for any /api/<endpoint>
 export default function LogManager({ title, endpoint, fields, plotsLookup, renderRowAction }) {
-
   const [rows, setRows] = useState([]);
   const [plots, setPlots] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({});
   const [editingId, setEditingId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
 
   const load = async () => {
-    const { data } = await api.get(`/api/${endpoint}`);
-    setRows(data);
+    setLoading(true);
+    try {
+      const { data } = await api.get(`/api/${endpoint}`);
+      setRows(data);
+    } catch (e) {
+      toast.error('ไม่สามารถโหลดข้อมูลได้');
+    } finally {
+      setLoading(false);
+    }
   };
+
   useEffect(() => {
     load();
-    if (plotsLookup) api.get('/api/plots').then(({data}) => setPlots(data));
-  }, []);
+    if (plotsLookup) {
+      api.get('/api/plots').then(({ data }) => setPlots(data)).catch(() => {});
+    }
+  }, [endpoint]);
 
   const openNew = () => {
     const init = {};
@@ -59,10 +69,11 @@ export default function LogManager({ title, endpoint, fields, plotsLookup, rende
       });
       if (editingId) {
         await api.put(`/api/${endpoint}/${editingId}`, payload);
+        toast.success('บันทึกการแก้ไขเรียบร้อยแล้ว');
       } else {
         await api.post(`/api/${endpoint}`, payload);
+        toast.success('เพิ่มรายการใหม่สำเร็จ');
       }
-      toast.success('บันทึกแล้ว');
       setOpen(false);
       setEditingId(null);
       load();
@@ -72,101 +83,396 @@ export default function LogManager({ title, endpoint, fields, plotsLookup, rende
   };
 
   const del = async (id) => {
-    if (!confirm('ลบรายการนี้?')) return;
-    await api.delete(`/api/${endpoint}/${id}`);
-    load();
+    if (!confirm('คุณต้องการลบรายการนี้ใช่หรือไม่?')) return;
+    try {
+      await api.delete(`/api/${endpoint}/${id}`);
+      toast.success('ลบรายการเรียบร้อย');
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'เกิดข้อผิดพลาดในการลบ');
+    }
   };
 
   const plotName = (id) => plots.find(p => p.id === id)?.name || '—';
   const visible = fields.filter(f => !f.hideInTable);
 
+  const filteredRows = useMemo(() => {
+    if (!search.trim()) return rows;
+    const q = search.toLowerCase().trim();
+    return rows.filter(r => {
+      return Object.entries(r).some(([key, val]) => {
+        if (val === null || val === undefined) return false;
+        if (key === 'plot_id') {
+          const pName = plotName(val).toLowerCase();
+          return pName.includes(q);
+        }
+        return String(val).toLowerCase().includes(q);
+      });
+    });
+  }, [rows, search, plots]);
+
+  const renderBadge = (f, val) => {
+    if (f.type === 'bool') {
+      return val ? (
+        <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md font-bold text-[11px]">
+          <CheckCircle2 className="w-3 h-3 text-emerald-600" /> ผ่าน/สะอาด
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md text-[11px]">
+          —
+        </span>
+      );
+    }
+    if (f.key === 'quality_grade') {
+      return (
+        <span className="inline-block bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-md font-black text-[11px]">
+          เกรด {val || '-'}
+        </span>
+      );
+    }
+    if (f.key === 'field_safety_status' || f.key === 'harvest_hygiene' || f.key === 'water_quality') {
+      const isGood = String(val).includes('สะอาด') || String(val).includes('ปลอดภัย') || String(val).includes('ผ่าน');
+      return (
+        <span className={`inline-block px-2 py-0.5 rounded-md font-bold text-[11px] border ${isGood ? 'bg-green-50 text-green-800 border-green-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
+          {val || '-'}
+        </span>
+      );
+    }
+    if (f.key === 'status') {
+      return (
+        <span className="inline-block bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md font-bold text-[10px] uppercase">
+          {val || 'active'}
+        </span>
+      );
+    }
+    return null;
+  };
+
   return (
-    <div>
-      <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center mb-4">
-        <h1 className="text-2xl font-bold">{title}</h1>
-        <button className="btn w-full md:w-auto" onClick={openNew}><Plus className="w-4 h-4" /> เพิ่ม</button>
+    <div className="space-y-4">
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-black text-[#173f2a] flex items-center gap-2">
+            {title}
+            <span className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-0.5 rounded-full font-bold">
+              {filteredRows.length}
+            </span>
+          </h1>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Quick Search */}
+          <div className="relative flex-1 sm:w-64">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="ค้นหาในตาราง..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="input pl-9 text-xs w-full py-2 px-3 rounded-xl border border-slate-200 bg-white"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={openNew}
+            className="inline-flex items-center justify-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 active:scale-98 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow-md shrink-0 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>เพิ่มรายการ</span>
+          </button>
+        </div>
       </div>
 
-      <div className="card p-0 overflow-hidden">
+      {/* MOBILE VIEW: High-End Responsive Cards (block on md:hidden) */}
+      <div className="block md:hidden space-y-3">
+        {loading ? (
+          <div className="surface rounded-2xl p-12 text-center bg-white border border-slate-200/80 space-y-2">
+            <div className="animate-spin text-2xl">🌱</div>
+            <p className="text-xs text-slate-500 font-medium">กำลังโหลดข้อมูล...</p>
+          </div>
+        ) : filteredRows.length === 0 ? (
+          <div className="surface rounded-2xl p-12 text-center bg-white border border-slate-200/80 space-y-2">
+            <div className="text-3xl">📭</div>
+            <p className="text-xs font-bold text-slate-600">ไม่พบรายการข้อมูล</p>
+            <p className="text-[11px] text-slate-400">กดปุ่ม "+ เพิ่มรายการ" เพื่อเริ่มบันทึกข้อมูลแรกของคุณ</p>
+          </div>
+        ) : (
+          filteredRows.map(r => (
+            <div
+              key={r.id}
+              className="surface rounded-2xl p-4 bg-white border border-slate-200/80 shadow-xs space-y-3 transition hover:shadow-md"
+            >
+              {/* Card Header: First 2 fields */}
+              <div className="flex items-start justify-between border-b border-slate-100 pb-2.5">
+                <div>
+                  <div className="font-bold text-sm text-[#173f2a]">
+                    {visible[1]?.key === 'plot_id' ? plotName(r.plot_id) : (r[visible[0]?.key] ?? 'รายการ')}
+                  </div>
+                  {visible[0]?.type === 'date' && r[visible[0]?.key] && (
+                    <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                      <Calendar className="w-3 h-3 text-emerald-600" />
+                      {format(new Date(r[visible[0]?.key]), 'dd/MM/yyyy')}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  {visible.map(f => {
+                    const badge = renderBadge(f, r[f.key]);
+                    return badge ? <div key={f.key}>{badge}</div> : null;
+                  })}
+                </div>
+              </div>
+
+              {/* Card Content Grid: Key-Value details */}
+              <div className="grid grid-cols-2 gap-2 text-xs py-1">
+                {visible.slice(visible[0]?.type === 'date' ? 1 : 0).map(f => {
+                  if (renderBadge(f, r[f.key])) return null;
+                  return (
+                    <div key={f.key} className="space-y-0.5">
+                      <span className="text-[10px] uppercase font-bold text-slate-400">{f.label}:</span>
+                      <div className="font-semibold text-slate-700 truncate">
+                        {f.key === 'plot_id' ? plotName(r[f.key])
+                          : f.key === 'image_url' && r[f.key] ? (
+                            <img src={r[f.key]} alt="รูป" className="w-16 h-12 rounded-lg object-cover border border-slate-200 mt-1" />
+                          ) : r[f.key] ?? '—'}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Card Footer: Large, Touch-Friendly Action Buttons */}
+              <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+                {renderRowAction && (
+                  <div className="shrink-0">
+                    {renderRowAction(r)}
+                  </div>
+                )}
+
+                <button
+                  onClick={() => openEdit(r)}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 active:scale-98 text-blue-700 font-bold py-2 px-3 rounded-xl text-xs border border-blue-200 transition cursor-pointer"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>แก้ไข</span>
+                </button>
+
+                <button
+                  onClick={() => del(r.id)}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 bg-rose-50 hover:bg-rose-100 active:scale-98 text-rose-700 font-bold py-2 px-3 rounded-xl text-xs border border-rose-200 transition cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>ลบ</span>
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* DESKTOP VIEW: Sleek Table (hidden on mobile, block on md:) */}
+      <div className="hidden md:block surface rounded-2xl bg-white border border-slate-200/80 shadow-xs overflow-hidden">
         <div className="table-responsive">
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr>{visible.map(f => <th key={f.key} className="text-left px-4 py-3 font-medium text-gray-600">{f.label}</th>)}<th className="w-12"></th></tr>
+          <table className="min-w-full text-xs">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                {visible.map(f => (
+                  <th key={f.key} className="text-left px-4 py-3.5 font-bold text-slate-600">
+                    {f.label}
+                  </th>
+                ))}
+                <th className="text-right px-4 py-3.5 font-bold text-slate-600 w-36">การจัดการ</th>
+              </tr>
             </thead>
-            <tbody>
-              {rows.length === 0 && <tr><td colSpan={visible.length+1} className="text-center py-12 text-gray-400">ยังไม่มีข้อมูล</td></tr>}
-              {rows.map(r => (
-                <tr key={r.id} className="border-b last:border-0 hover:bg-slate-50">
-                  {visible.map(f => (
-                    <td key={f.key} className="px-4 py-3 align-top">
-                      {f.type === 'date' && r[f.key] ? format(new Date(r[f.key]), 'dd/MM/yyyy')
-                        : f.key === 'plot_id' ? plotName(r[f.key])
-                        : f.key === 'image_url' && r[f.key] ? (
-                          <img src={r[f.key]} alt="รูปสินค้า" className="w-24 h-16 rounded-xl object-cover border border-slate-200" />
-                        ) : f.type === 'bool' ? (r[f.key] ? '✓' : '—')
-                        : r[f.key] ?? '—'}
-                    </td>
-                  ))}
-                  <td className="px-4 py-3 text-right flex gap-2 justify-end items-center">
-                    {renderRowAction && renderRowAction(r)}
-                    <button onClick={() => openEdit(r)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"><Pencil className="w-4 h-4" /></button>
-                    <button onClick={() => del(r.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-full"><Trash2 className="w-4 h-4" /></button>
+            <tbody className="divide-y divide-slate-100">
+              {loading ? (
+                <tr>
+                  <td colSpan={visible.length + 1} className="text-center py-16 text-slate-400">
+                    <div className="animate-spin text-2xl mb-2">🌱</div>
+                    <span>กำลังโหลดข้อมูล...</span>
                   </td>
                 </tr>
-              ))}
+              ) : filteredRows.length === 0 ? (
+                <tr>
+                  <td colSpan={visible.length + 1} className="text-center py-16 text-slate-400">
+                    <div className="text-3xl mb-2">📭</div>
+                    <span className="font-bold text-slate-600">ไม่พบรายการข้อมูล</span>
+                  </td>
+                </tr>
+              ) : (
+                filteredRows.map(r => (
+                  <tr key={r.id} className="hover:bg-slate-50/80 transition">
+                    {visible.map(f => (
+                      <td key={f.key} className="px-4 py-3 text-slate-700 font-medium align-middle">
+                        {renderBadge(f, r[f.key]) || (
+                          f.type === 'date' && r[f.key] ? (
+                            <span className="font-mono text-slate-600">{format(new Date(r[f.key]), 'dd/MM/yyyy')}</span>
+                          ) : f.key === 'plot_id' ? (
+                            <span className="font-bold text-emerald-900">{plotName(r[f.key])}</span>
+                          ) : f.key === 'image_url' && r[f.key] ? (
+                            <img src={r[f.key]} alt="รูป" className="w-16 h-12 rounded-xl object-cover border border-slate-200" />
+                          ) : (
+                            r[f.key] ?? '—'
+                          )
+                        )}
+                      </td>
+                    ))}
+
+                    <td className="px-4 py-3 text-right align-middle">
+                      <div className="inline-flex items-center gap-1.5">
+                        {renderRowAction && renderRowAction(r)}
+
+                        <button
+                          onClick={() => openEdit(r)}
+                          className="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 active:scale-95 text-blue-700 font-bold px-2.5 py-1.5 rounded-xl text-xs border border-blue-200/80 transition cursor-pointer shadow-xs"
+                          title="แก้ไขรายการ"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          <span>แก้ไข</span>
+                        </button>
+
+                        <button
+                          onClick={() => del(r.id)}
+                          className="inline-flex items-center gap-1 bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-700 font-bold px-2.5 py-1.5 rounded-xl text-xs border border-rose-200/80 transition cursor-pointer shadow-xs"
+                          title="ลบรายการ"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>ลบ</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
+      {/* Universal Edit / Add Modal */}
       {open && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setOpen(false)}>
-          <div className="bg-white rounded-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold">{editingId ? 'แก้ไขข้อมูล' : 'เพิ่มข้อมูลใหม่'}</h2>
-              <button onClick={() => setOpen(false)}><X className="w-5 h-5" /></button>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => setOpen(false)}>
+          <div
+            className="bg-white rounded-t-3xl sm:rounded-3xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto space-y-5 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3.5">
+              <div>
+                <h2 className="text-base font-black text-[#173f2a]">
+                  {editingId ? '✏️ แก้ไขข้อมูล' : '➕ เพิ่มรายการใหม่'}
+                </h2>
+                <p className="text-[11px] text-slate-400 mt-0.5">{title}</p>
+              </div>
+              <button onClick={() => setOpen(false)} className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <div className="space-y-3">
+
+            <div className="space-y-3.5 text-xs">
               {fields.map(f => (
-                <div key={f.key}>
-                  <label className="label">{f.label}{f.required && ' *'}</label>
+                <div key={f.key} className="space-y-1">
+                  <label className="font-bold text-slate-700 flex items-center justify-between">
+                    <span>{f.label} {f.required && <span className="text-rose-500">*</span>}</span>
+                  </label>
+
                   {f.type === 'textarea' ? (
-                    <textarea className="input" rows={3} value={form[f.key] ?? ''} placeholder={f.placeholder} onChange={e => setForm({...form, [f.key]: e.target.value})} />
+                    <textarea
+                      className="input text-xs w-full rounded-xl"
+                      rows={3}
+                      value={form[f.key] ?? ''}
+                      placeholder={f.placeholder}
+                      onChange={e => setForm({ ...form, [f.key]: e.target.value })}
+                    />
                   ) : f.key === 'plot_id' ? (
-                    <select className="input" value={form[f.key] ?? ''} onChange={e => setForm({...form, [f.key]: Number(e.target.value)})}>
+                    <select
+                      className="input text-xs w-full rounded-xl font-medium"
+                      value={form[f.key] ?? ''}
+                      onChange={e => setForm({ ...form, [f.key]: Number(e.target.value) })}
+                    >
                       <option value="">{f.placeholder || '-- เลือกแปลง --'}</option>
-                      {plots.map(p => <option key={p.id} value={p.id}>{p.name} ({p.crop_name})</option>)}
+                      {plots.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.crop_name})
+                        </option>
+                      ))}
                     </select>
                   ) : f.type === 'select' && f.allowCustom ? (
                     <div className="space-y-2">
-                      <select className="input" value={form[f.key] ?? ''} onChange={e => setForm({...form, [f.key]: e.target.value})}>
+                      <select
+                        className="input text-xs w-full rounded-xl font-medium"
+                        value={form[f.key] ?? ''}
+                        onChange={e => setForm({ ...form, [f.key]: e.target.value })}
+                      >
                         <option value="">{f.placeholder || '-- เลือก --'}</option>
-                        {f.options.map(o => <option key={o} value={o}>{o}</option>)}
+                        {f.options.map(o => (
+                          <option key={o} value={o}>{o}</option>
+                        ))}
                       </select>
                       <input
-                        className="input"
+                        className="input text-xs w-full rounded-xl"
                         type="text"
                         value={form[`custom_${f.key}`] ?? ''}
-                        placeholder={`เพิ่ม${f.label.toLowerCase()}ใหม่`}
-                        onChange={e => setForm({...form, [`custom_${f.key}`]: e.target.value})}
+                        placeholder={`พิมพ์${f.label.toLowerCase()}ใหม่`}
+                        onChange={e => setForm({ ...form, [`custom_${f.key}`]: e.target.value })}
                       />
                     </div>
                   ) : f.type === 'select' ? (
-                    <select className="input" value={form[f.key] ?? ''} onChange={e => setForm({...form, [f.key]: e.target.value})}>
+                    <select
+                      className="input text-xs w-full rounded-xl font-medium"
+                      value={form[f.key] ?? ''}
+                      onChange={e => setForm({ ...form, [f.key]: e.target.value })}
+                    >
                       <option value="">{f.placeholder || '-- เลือก --'}</option>
-                      {f.options.map(o => <option key={o} value={o}>{o}</option>)}
+                      {f.options.map(o => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
                     </select>
                   ) : f.type === 'bool' ? (
-                    <input type="checkbox" checked={!!form[f.key]} onChange={e => setForm({...form, [f.key]: e.target.checked})} />
+                    <label className="flex items-center gap-2.5 p-3 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer hover:bg-slate-100 transition">
+                      <input
+                        type="checkbox"
+                        checked={!!form[f.key]}
+                        onChange={e => setForm({ ...form, [f.key]: e.target.checked })}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <span className="text-xs font-semibold text-slate-700">ผ่านการตรวจสอบ / ปลอดภัย</span>
+                    </label>
                   ) : (
-                    <input className="input" type={f.type || 'text'} step="any" value={form[f.key] ?? ''} placeholder={f.placeholder} onChange={e => setForm({...form, [f.key]: e.target.value})} />
+                    <input
+                      className="input text-xs w-full rounded-xl"
+                      type={f.type || 'text'}
+                      step="any"
+                      value={form[f.key] ?? ''}
+                      placeholder={f.placeholder}
+                      onChange={e => setForm({ ...form, [f.key]: e.target.value })}
+                    />
                   )}
                 </div>
               ))}
             </div>
-            <div className="flex justify-end gap-2 mt-6">
-              <button className="btn btn-outline" onClick={() => setOpen(false)}>ยกเลิก</button>
-              <button className="btn" onClick={save}>บันทึก</button>
+
+            <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                className="btn btn-outline text-xs px-4 py-2.5 rounded-xl cursor-pointer"
+                onClick={() => setOpen(false)}
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                className="btn text-xs px-6 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold cursor-pointer shadow-md"
+                onClick={save}
+              >
+                บันทึกข้อมูล
+              </button>
             </div>
           </div>
         </div>

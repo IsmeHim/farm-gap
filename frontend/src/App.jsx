@@ -18,6 +18,7 @@ import Checklists from './pages/Checklists.jsx';
 import Orders from './pages/Orders.jsx';
 import LiffOrder from './pages/LiffOrder.jsx';
 import LiffHistory from './pages/LiffHistory.jsx';
+import Profile from './pages/Profile.jsx';
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="costs" element={<Costs />} />
         <Route path="checklists" element={<Checklists />} />
         <Route path="report" element={<Report />} />
+        <Route path="profile" element={<Profile />} />
       </Route>
     </Routes>
   );

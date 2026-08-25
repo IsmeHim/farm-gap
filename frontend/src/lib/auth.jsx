@@ -9,8 +9,19 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const u = localStorage.getItem('user');
+    const token = localStorage.getItem('token');
     if (u) setUser(JSON.parse(u));
-    setLoading(false);
+    if (token) {
+      api.get('/api/auth/me')
+        .then(res => {
+          localStorage.setItem('user', JSON.stringify(res.data));
+          setUser(res.data);
+        })
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
   }, []);
 
   const login = async (email, password) => {
@@ -25,13 +36,18 @@ export function AuthProvider({ children }) {
     localStorage.setItem('user', JSON.stringify(data.user));
     setUser(data.user);
   };
+  const updateProfile = (updatedUser, token) => {
+    if (token) localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+    setUser(updatedUser);
+  };
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
   };
 
-  return <Ctx.Provider value={{ user, loading, login, register, logout }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, loading, login, register, logout, updateProfile }}>{children}</Ctx.Provider>;
 }
 
 export const useAuth = () => useContext(Ctx);

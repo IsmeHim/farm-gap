@@ -19,6 +19,7 @@ import {
   ReceiptText,
   ShoppingBag,
   Sparkles,
+  UserCog,
   Users,
   Wallet,
   X,
@@ -38,6 +39,7 @@ const items = [
   { to: '/costs', icon: Wallet, label: 'ต้นทุน' },
   { to: '/checklists', icon: ClipboardList, label: 'Checklist GAP' },
   { to: '/report', icon: FileText, label: 'รายงาน GAP' },
+  { to: '/profile', icon: UserCog, label: 'ตั้งค่าฟาร์ม & บัญชี' },
 ];
 
 function BrandMark({ compact = false }) {
@@ -56,8 +58,9 @@ export default function Layout() {
   const nav = useNavigate();
 
   return (
-    <div className="min-h-screen flex flex-col bg-transparent">
-      <header className="md:hidden bg-white/90 backdrop-blur border-b border-emerald-100 px-4 py-3 flex items-center justify-between">
+    <div className="h-screen flex flex-col overflow-hidden bg-transparent print:h-auto print:overflow-visible print:block">
+      {/* Mobile Header - Hidden in Print */}
+      <header className="md:hidden print:hidden bg-white/90 backdrop-blur border-b border-emerald-100 px-4 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <BrandMark compact />
           <div>
@@ -70,9 +73,11 @@ export default function Layout() {
         </button>
       </header>
 
-      <div className="flex flex-1">
-        <aside className={`fixed inset-y-0 left-0 z-50 w-72 transform bg-[#fdfef9]/95 backdrop-blur-xl border-r border-emerald-100 p-4 flex flex-col transition duration-200 ease-out md:static md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-          <div className="surface relative rounded-2xl p-4 mb-5">
+      {/* Main Layout Body */}
+      <div className="flex flex-1 h-full overflow-hidden print:h-auto print:overflow-visible print:block">
+        {/* Sticky/Fixed Sidebar - Independent Scroll */}
+        <aside className={`fixed inset-y-0 left-0 z-50 w-72 transform bg-[#fdfef9]/95 backdrop-blur-xl border-r border-emerald-100 p-4 flex flex-col shrink-0 h-full overflow-y-auto transition duration-200 ease-out md:static md:translate-x-0 print:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+          <div className="surface relative rounded-2xl p-4 mb-4 shrink-0">
             <div className="flex items-center gap-3">
               <BrandMark />
               <div>
@@ -89,23 +94,23 @@ export default function Layout() {
             </button>
           </div>
 
-          <nav className="flex-1 space-y-1">
+          <nav className="flex-1 space-y-1 overflow-y-auto pr-1">
             {items.map(it => (
               <NavLink
                 key={it.to}
                 to={it.to}
                 end={it.end}
                 onClick={() => setSidebarOpen(false)}
-                className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition ${isActive ? 'bg-[#173f2a] text-white shadow-lg shadow-emerald-900/10' : 'text-slate-700 hover:bg-emerald-50 hover:text-[#173f2a]'}`}
+                className={({ isActive }) => `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${isActive ? 'bg-[#173f2a] text-white shadow-lg shadow-emerald-900/10' : 'text-slate-700 hover:bg-emerald-50 hover:text-[#173f2a]'}`}
               >
-                <it.icon className="w-5 h-5" />
+                <it.icon className="w-4 h-4" />
                 <span>{it.label}</span>
               </NavLink>
             ))}
           </nav>
 
           {/* LINE OA LIFF Hub */}
-          <div className="mt-4 pt-3 border-t border-emerald-100">
+          <div className="mt-3 pt-3 border-t border-emerald-100 shrink-0">
             <div className="px-3 mb-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-emerald-800">
               <span className="flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5 text-green-600" /> LINE OA & หน้าร้าน</span>
               <span className="bg-green-100 text-green-700 text-[9px] px-1.5 py-0.5 rounded font-bold">LIFF</span>
@@ -115,7 +120,7 @@ export default function Layout() {
                 href="/liff/order"
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-green-50 hover:text-green-800 transition group"
+                className="flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-green-50 hover:text-green-800 transition group"
               >
                 <span className="flex items-center gap-2">🛒 หน้าร้านสั่งซื้อผัก</span>
                 <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-green-600" />
@@ -124,7 +129,7 @@ export default function Layout() {
                 href="/liff/history"
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-green-50 hover:text-green-800 transition group"
+                className="flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-green-50 hover:text-green-800 transition group"
               >
                 <span className="flex items-center gap-2">📦 ติดตามออเดอร์ลูกค้า</span>
                 <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-green-600" />
@@ -132,14 +137,15 @@ export default function Layout() {
             </div>
           </div>
 
-          <button onClick={() => { logout(); nav('/login'); }} className="mt-3 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-rose-50 hover:text-rose-700">
+          <button onClick={() => { logout(); nav('/login'); }} className="mt-2 flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-rose-50 hover:text-rose-700 shrink-0">
             <LogOut className="w-4 h-4" /> ออกจากระบบ
           </button>
         </aside>
 
-        {sidebarOpen && <div className="fixed inset-0 z-40 bg-black/30 md:hidden" onClick={() => setSidebarOpen(false)} />}
+        {sidebarOpen && <div className="fixed inset-0 z-40 bg-black/30 md:hidden print:hidden" onClick={() => setSidebarOpen(false)} />}
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+        {/* Scrollable Main Content Area */}
+        <main className="flex-1 h-full overflow-y-auto p-4 md:p-8 print:p-0 print:overflow-visible print:h-auto">
           <Outlet />
         </main>
       </div>

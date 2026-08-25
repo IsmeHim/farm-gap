@@ -13,9 +13,10 @@ import {
   User, 
   Phone, 
   MapPin, 
-  FileText, 
   RefreshCw,
-  Receipt
+  Receipt,
+  Check,
+  ChevronRight
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -51,10 +52,9 @@ export default function Orders() {
       await api.patch(`/api/orders/${orderId}/status`, { status: newStatus });
       toast.success(`อัปเดตสถานะออเดอร์เป็น "${getStatusText(newStatus)}" สำเร็จ`);
       
-      // Update local state
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus, payment_status: newStatus === 'pending' ? 'unpaid' : (newStatus === 'cancelled' ? 'unpaid' : 'paid') } : o));
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
       if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder(prev => ({ ...prev, status: newStatus, payment_status: newStatus === 'pending' ? 'unpaid' : (newStatus === 'cancelled' ? 'unpaid' : 'paid') }));
+        setSelectedOrder(prev => ({ ...prev, status: newStatus }));
       }
     } catch (err) {
       console.error(err);
@@ -120,15 +120,15 @@ export default function Orders() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-[#173f2a] flex items-center gap-2">
-            <ShoppingBag className="w-7 h-7 text-[#2e7d32]" />
+          <h1 className="text-xl sm:text-2xl font-black text-[#173f2a] flex items-center gap-2">
+            <ShoppingBag className="w-6 h-6 sm:w-7 sm:h-7 text-[#2e7d32]" />
             รายการคำสั่งซื้อจาก LINE OA
           </h1>
           <p className="text-xs text-slate-500 mt-1">จัดการออเดอร์ผักสด ตรวจสอบสลิปโอนเงิน และอัปเดตสถานะจัดส่ง</p>
         </div>
         <button
           onClick={fetchOrders}
-          className="inline-flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-2 rounded-xl border border-emerald-200 transition"
+          className="inline-flex items-center justify-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold px-3.5 py-2 rounded-xl border border-emerald-200 transition cursor-pointer"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           รีเฟรชข้อมูล
@@ -136,33 +136,33 @@ export default function Orders() {
       </div>
 
       {/* Overview Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="surface rounded-2xl p-4 border border-emerald-100/60 bg-white">
-          <div className="text-xs text-slate-500 font-semibold mb-1">คำสั่งซื้อทั้งหมด</div>
-          <div className="text-2xl font-black text-[#173f2a]">{orders.length} <span className="text-xs font-normal text-slate-400">รายการ</span></div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="surface rounded-2xl p-4 border border-emerald-100/60 bg-white shadow-xs">
+          <div className="text-[11px] text-slate-500 font-semibold mb-1">คำสั่งซื้อทั้งหมด</div>
+          <div className="text-xl sm:text-2xl font-black text-[#173f2a]">{orders.length} <span className="text-xs font-normal text-slate-400">รายการ</span></div>
         </div>
-        <div className="surface rounded-2xl p-4 border border-amber-200/60 bg-amber-50/40">
-          <div className="text-xs text-amber-700 font-semibold mb-1 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> รอตรวจสอบสลิป</div>
-          <div className="text-2xl font-black text-amber-800">{pendingCount} <span className="text-xs font-normal text-amber-600">ออเดอร์</span></div>
+        <div className="surface rounded-2xl p-4 border border-amber-200/60 bg-amber-50/40 shadow-xs">
+          <div className="text-[11px] text-amber-700 font-semibold mb-1 flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> รอตรวจสลิป</div>
+          <div className="text-xl sm:text-2xl font-black text-amber-800">{pendingCount} <span className="text-xs font-normal text-amber-600">ออเดอร์</span></div>
         </div>
-        <div className="surface rounded-2xl p-4 border border-purple-200/60 bg-purple-50/40">
-          <div className="text-xs text-purple-700 font-semibold mb-1 flex items-center gap-1.5"><Truck className="w-3.5 h-3.5" /> กำลังจัดส่งวันนี้</div>
-          <div className="text-2xl font-black text-purple-800">{shippingCount} <span className="text-xs font-normal text-purple-600">ออเดอร์</span></div>
+        <div className="surface rounded-2xl p-4 border border-purple-200/60 bg-purple-50/40 shadow-xs">
+          <div className="text-[11px] text-purple-700 font-semibold mb-1 flex items-center gap-1"><Truck className="w-3.5 h-3.5" /> กำลังจัดส่ง</div>
+          <div className="text-xl sm:text-2xl font-black text-purple-800">{shippingCount} <span className="text-xs font-normal text-purple-600">ออเดอร์</span></div>
         </div>
-        <div className="surface rounded-2xl p-4 border border-emerald-200/60 bg-emerald-50/40">
-          <div className="text-xs text-emerald-700 font-semibold mb-1">ยอดขายรวมจาก LINE</div>
-          <div className="text-2xl font-black text-[#173f2a]">฿{totalRevenue.toLocaleString()}</div>
+        <div className="surface rounded-2xl p-4 border border-emerald-200/60 bg-emerald-50/40 shadow-xs">
+          <div className="text-[11px] text-emerald-700 font-semibold mb-1">ยอดขายรวมจาก LINE</div>
+          <div className="text-xl sm:text-2xl font-black text-[#173f2a]">฿{totalRevenue.toLocaleString()}</div>
         </div>
       </div>
 
       {/* Tabs & Search */}
-      <div className="surface rounded-2xl p-4 bg-white border border-slate-200/80 space-y-4">
+      <div className="surface rounded-2xl p-4 bg-white border border-slate-200/80 space-y-4 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           {/* Status Tabs */}
           <div className="flex flex-wrap gap-1.5 text-xs font-bold">
             {[
               { key: 'all', label: 'ทั้งหมด', count: orders.length },
-              { key: 'pending', label: 'รอตรวจสลิป', count: pendingCount, color: 'text-amber-700 bg-amber-50' },
+              { key: 'pending', label: 'รอตรวจสลิป', count: pendingCount },
               { key: 'paid', label: 'ชำระแล้ว', count: orders.filter(o => o.status === 'paid').length },
               { key: 'shipping', label: 'กำลังส่ง', count: shippingCount },
               { key: 'completed', label: 'สำเร็จ', count: orders.filter(o => o.status === 'completed').length },
@@ -171,7 +171,7 @@ export default function Orders() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`px-3 py-1.5 rounded-xl transition ${activeTab === tab.key ? 'bg-[#173f2a] text-white shadow' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${activeTab === tab.key ? 'bg-[#173f2a] text-white shadow' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
               >
                 {tab.label} ({tab.count})
               </button>
@@ -184,16 +184,116 @@ export default function Orders() {
             <input
               type="text"
               placeholder="ค้นหาเลขออเดอร์ / ชื่อลูกค้า..."
-              style={{ paddingLeft: '2.5rem' }}
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="input pl-9 text-xs w-full"
+              className="input pl-9 text-xs w-full py-2 px-3 rounded-xl border border-slate-200"
             />
           </div>
         </div>
 
-        {/* Orders Table */}
-        <div className="table-responsive">
+        {/* MOBILE VIEW: Mobile Order Cards (block md:hidden) */}
+        <div className="block md:hidden space-y-3">
+          {loading ? (
+            <div className="py-12 text-center text-slate-400">
+              <div className="animate-spin text-2xl mb-1">🌱</div>
+              <span className="text-xs">กำลังโหลดคำสั่งซื้อ...</span>
+            </div>
+          ) : filteredOrders.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 text-xs font-bold">ไม่พบรายการคำสั่งซื้อ</div>
+          ) : (
+            filteredOrders.map(o => (
+              <div key={o.id} className="surface rounded-2xl p-4 bg-white border border-slate-200/80 shadow-xs space-y-3">
+                <div className="flex items-start justify-between border-b border-slate-100 pb-2.5">
+                  <div>
+                    <div className="font-mono font-bold text-sm text-[#173f2a]">{o.order_code}</div>
+                    <div className="text-xs font-bold text-slate-800 mt-0.5">{o.customer_name}</div>
+                    <div className="text-[11px] text-slate-400">{o.customer_phone || '-'}</div>
+                  </div>
+                  <div>
+                    {getStatusBadge(o.status)}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs py-1">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400">การจัดส่ง:</span>
+                    <div className="font-semibold text-slate-700 mt-0.5">
+                      {o.delivery_type === 'delivery' ? '🚚 ส่งตามที่อยู่' : '🏡 รับเองที่ฟาร์ม'}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400">นัดหมาย:</span>
+                    <div className="font-semibold text-emerald-800 mt-0.5">
+                      {o.delivery_date || '-'}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400">ยอดชำระสุทธิ:</span>
+                    <div className="text-sm font-black text-slate-900 mt-0.5">
+                      ฿{Number(o.total_amount).toLocaleString()}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400">สลิปโอนเงิน:</span>
+                    <div className="mt-0.5">
+                      {o.slip_image_url ? (
+                        <button
+                          onClick={() => setSlipModalImage(o.slip_image_url)}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-200 cursor-pointer"
+                        >
+                          <Receipt className="w-3 h-3" /> ดูสลิป
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-slate-400">ยังไม่แนบ</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mobile Card Action Buttons */}
+                <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+                  <button
+                    onClick={() => viewOrderDetails(o)}
+                    className="flex-1 inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold py-2 px-3 rounded-xl transition cursor-pointer"
+                  >
+                    <Eye className="w-3.5 h-3.5" /> รายละเอียด
+                  </button>
+
+                  {o.status === 'pending' && (
+                    <button
+                      onClick={() => handleUpdateStatus(o.id, 'paid')}
+                      disabled={updatingId === o.id}
+                      className="flex-1 inline-flex items-center justify-center gap-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded-xl transition shadow-xs cursor-pointer"
+                    >
+                      <Check className="w-3.5 h-3.5" /> อนุมัติสลิป
+                    </button>
+                  )}
+                  {o.status === 'paid' && (
+                    <button
+                      onClick={() => handleUpdateStatus(o.id, 'shipping')}
+                      disabled={updatingId === o.id}
+                      className="flex-1 inline-flex items-center justify-center gap-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold py-2 px-3 rounded-xl transition shadow-xs cursor-pointer"
+                    >
+                      <Truck className="w-3.5 h-3.5" /> ส่งของ
+                    </button>
+                  )}
+                  {o.status === 'shipping' && (
+                    <button
+                      onClick={() => handleUpdateStatus(o.id, 'completed')}
+                      disabled={updatingId === o.id}
+                      className="flex-1 inline-flex items-center justify-center gap-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold py-2 px-3 rounded-xl transition shadow-xs cursor-pointer"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" /> สำเร็จ
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* DESKTOP VIEW: Sleek Table (hidden md:block) */}
+        <div className="hidden md:block table-responsive">
           <table className="min-w-full text-xs">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
@@ -218,7 +318,7 @@ export default function Orders() {
                     <td className="px-4 py-3 font-bold text-[#173f2a]">
                       <button 
                         onClick={() => viewOrderDetails(o)}
-                        className="text-left hover:underline text-emerald-800 font-mono"
+                        className="text-left hover:underline text-emerald-800 font-mono cursor-pointer"
                       >
                         {o.order_code}
                       </button>
@@ -243,7 +343,7 @@ export default function Orders() {
                       {o.slip_image_url ? (
                         <button
                           onClick={() => setSlipModalImage(o.slip_image_url)}
-                          className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200"
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200 cursor-pointer"
                         >
                           <Receipt className="w-3 h-3" /> ดูสลิป
                         </button>
@@ -258,7 +358,7 @@ export default function Orders() {
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => viewOrderDetails(o)}
-                          className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition"
+                          className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
                           title="ดูรายละเอียดออเดอร์"
                         >
                           <Eye className="w-4 h-4" />
@@ -269,7 +369,7 @@ export default function Orders() {
                           <button
                             onClick={() => handleUpdateStatus(o.id, 'paid')}
                             disabled={updatingId === o.id}
-                            className="bg-green-600 hover:bg-green-700 text-white text-[11px] font-bold px-2 py-1 rounded-lg transition"
+                            className="bg-green-600 hover:bg-green-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer"
                           >
                             อนุมัติสลิป
                           </button>
@@ -278,7 +378,7 @@ export default function Orders() {
                           <button
                             onClick={() => handleUpdateStatus(o.id, 'shipping')}
                             disabled={updatingId === o.id}
-                            className="bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold px-2 py-1 rounded-lg transition"
+                            className="bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer"
                           >
                             ส่งของ
                           </button>
@@ -287,7 +387,7 @@ export default function Orders() {
                           <button
                             onClick={() => handleUpdateStatus(o.id, 'completed')}
                             disabled={updatingId === o.id}
-                            className="bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold px-2 py-1 rounded-lg transition"
+                            className="bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer"
                           >
                             สำเร็จ
                           </button>
@@ -304,8 +404,8 @@ export default function Orders() {
 
       {/* Order Detail Modal */}
       {selectedOrder && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4" onClick={() => setSelectedOrder(null)}>
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => setSelectedOrder(null)}>
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 shadow-2xl border border-slate-100" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b pb-4">
               <div>
                 <h2 className="text-lg font-black text-[#173f2a]">{selectedOrder.order_code}</h2>
@@ -313,7 +413,7 @@ export default function Orders() {
               </div>
               <div className="flex items-center gap-2">
                 {getStatusBadge(selectedOrder.status)}
-                <button onClick={() => setSelectedOrder(null)} className="p-1 rounded-lg hover:bg-slate-100 text-slate-500"><XCircle className="w-5 h-5" /></button>
+                <button onClick={() => setSelectedOrder(null)} className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 cursor-pointer"><XCircle className="w-5 h-5" /></button>
               </div>
             </div>
 
@@ -339,7 +439,7 @@ export default function Orders() {
                   <div key={it.id} className="p-3 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       {it.image_url ? (
-                        <img src={it.image_url} alt={it.product_name} className="w-10 h-10 rounded-lg object-cover" />
+                        <img src={it.image_url} alt={it.product_name} className="w-10 h-10 rounded-lg object-cover border border-slate-200" />
                       ) : (
                         <div className="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">🥦</div>
                       )}
@@ -380,25 +480,25 @@ export default function Orders() {
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => handleUpdateStatus(selectedOrder.id, 'paid')}
-                  className="btn bg-blue-600 hover:bg-blue-700 text-white text-xs py-1.5"
+                  className="btn bg-blue-600 hover:bg-blue-700 text-white text-xs py-1.5 cursor-pointer"
                 >
                   ✅ อนุมัติสลิป (ชำระแล้ว)
                 </button>
                 <button
                   onClick={() => handleUpdateStatus(selectedOrder.id, 'shipping')}
-                  className="btn bg-purple-600 hover:bg-purple-700 text-white text-xs py-1.5"
+                  className="btn bg-purple-600 hover:bg-purple-700 text-white text-xs py-1.5 cursor-pointer"
                 >
                   🚚 กำลังจัดส่ง
                 </button>
                 <button
                   onClick={() => handleUpdateStatus(selectedOrder.id, 'completed')}
-                  className="btn bg-emerald-700 hover:bg-emerald-800 text-white text-xs py-1.5"
+                  className="btn bg-emerald-700 hover:bg-emerald-800 text-white text-xs py-1.5 cursor-pointer"
                 >
                   🎉 จัดส่งสำเร็จ
                 </button>
                 <button
                   onClick={() => handleUpdateStatus(selectedOrder.id, 'cancelled')}
-                  className="btn btn-outline text-rose-600 hover:bg-rose-50 text-xs py-1.5"
+                  className="btn btn-outline text-rose-600 hover:bg-rose-50 text-xs py-1.5 cursor-pointer"
                 >
                   ❌ ยกเลิก
                 </button>
@@ -414,7 +514,7 @@ export default function Orders() {
           <div className="relative max-w-md w-full bg-white rounded-2xl p-4 space-y-3" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center">
               <h3 className="font-bold text-sm text-slate-800">รูปภาพสลิปโอนเงิน</h3>
-              <button onClick={() => setSlipModalImage(null)} className="p-1 text-slate-400 hover:text-slate-600"><XCircle className="w-5 h-5" /></button>
+              <button onClick={() => setSlipModalImage(null)} className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"><XCircle className="w-5 h-5" /></button>
             </div>
             <div className="max-h-[75vh] overflow-auto rounded-xl border border-slate-100 flex items-center justify-center bg-slate-900">
               <img src={slipModalImage} alt="สลิปโอนเงินขยายใหญ่" className="max-h-[70vh] object-contain" />

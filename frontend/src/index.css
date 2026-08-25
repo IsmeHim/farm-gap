@@ -140,3 +140,70 @@ tbody tr:hover {
     width: 100%;
   }
 }
+
+/* Print Specific Rules for True Multi-Page Document Export */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 10mm 12mm 10mm;
+  }
+
+  *, *::before, *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  html, body, #root, #root > div, #root > div > div {
+    background: #ffffff !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: block !important;
+    position: static !important;
+  }
+
+  aside, header, nav, .print\:hidden, button, .no-print {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+    position: static !important;
+  }
+
+  #gap-report-print-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    display: block !important;
+  }
+
+  .gap-section {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-bottom: 1.25rem !important;
+  }
+
+  table {
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+    width: 100% !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+}
