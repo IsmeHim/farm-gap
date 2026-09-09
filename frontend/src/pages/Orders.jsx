@@ -180,13 +180,13 @@ export default function Orders() {
 
           {/* Search Input */}
           <div className="relative min-w-[240px]">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
             <input
               type="text"
               placeholder="ค้นหาเลขออเดอร์ / ชื่อลูกค้า..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="input pl-9 text-xs w-full py-2 px-3 rounded-xl border border-slate-200"
+              className="input !pl-9.5 !pr-3 text-xs w-full !py-2 rounded-xl border border-slate-200"
             />
           </div>
         </div>

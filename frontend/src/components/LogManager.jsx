@@ -164,13 +164,13 @@ export default function LogManager({ title, endpoint, fields, plotsLookup, rende
         <div className="flex items-center gap-2">
           {/* Quick Search */}
           <div className="relative flex-1 sm:w-64">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
             <input
               type="text"
               placeholder="ค้นหาในตาราง..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="input pl-9 text-xs w-full py-2 px-3 rounded-xl border border-slate-200 bg-white"
+              className="input !pl-9.5 !pr-8 text-xs w-full !py-2 rounded-xl border border-slate-200 bg-white"
             />
             {search && (
               <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">

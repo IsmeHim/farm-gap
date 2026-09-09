@@ -152,13 +152,12 @@ export default function Products() {
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="relative md:w-96">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
           <input
-            className="input"
-            style={{ paddingLeft: '2.5rem' }}
+            className="input !pl-10 text-xs md:text-sm"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="ค้นหาสินค้า หมวด แปลง หรือสถานะ"
+            placeholder="ค้นหาสินค้า หมวด แปลง หรือสถานะ..."
           />
         </div>
         <button className="btn" onClick={openNew}>
