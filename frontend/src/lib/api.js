@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getApiUrl } from './config.js';
 
 export const api = axios.create();
 
@@ -6,18 +7,13 @@ api.interceptors.request.use((cfg) => {
   const token = localStorage.getItem('token');
   if (token) cfg.headers.Authorization = `Bearer ${token}`;
 
-  // If on Vite dev server (localhost:5173), target backend at localhost:4000
-  // Otherwise (e.g. ngrok, production, or served via Express), use relative URL (current origin)
+  // Dynamically resolve baseURL on every request from window.__RUNTIME_CONFIG__ (via getApiUrl())
   if (!cfg.baseURL) {
-    if (typeof window !== 'undefined') {
-      if (window.location.hostname === 'localhost' && window.location.port === '5173') {
-        cfg.baseURL = 'http://localhost:4000';
-      } else {
-        cfg.baseURL = '';
-      }
+    const resolvedUrl = getApiUrl();
+    if (resolvedUrl) {
+      cfg.baseURL = resolvedUrl;
     }
   }
 
   return cfg;
 });
-

@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import axios from 'axios';
+import { api } from '../lib/api';
 import { Sprout } from 'lucide-react';
 import { format } from 'date-fns';
-import { config } from '../lib/config.js';
 
 export default function Trace() {
   const { lot } = useParams();
@@ -11,8 +10,7 @@ export default function Trace() {
   const [err, setErr] = useState(null);
 
   useEffect(() => {
-    const url = `${config.apiUrl}/api/trace/${lot}`;
-    axios.get(url).then(r => setData(r.data)).catch(e => setErr(e.response?.data?.error || e.message));
+    api.get(`/api/trace/${lot}`).then(r => setData(r.data)).catch(e => setErr(e.response?.data?.error || e.message));
   }, [lot]);
 
   if (err) return <div className="min-h-screen flex items-center justify-center text-red-500">ไม่พบ Lot นี้</div>;

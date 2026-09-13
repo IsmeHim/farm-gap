@@ -20,13 +20,14 @@ import {
 } from 'lucide-react';
 
 const getClusterBadgeStyle = (clusterName = '') => {
-  if (clusterName.includes('B2B') || clusterName.includes('ค้าส่ง') || clusterName.includes('ร้านอาหาร')) {
+  const name = String(clusterName || '');
+  if (name.includes('B2B') || name.includes('ค้าส่ง') || name.includes('ร้านอาหาร')) {
     return 'bg-amber-50 text-amber-900 border-amber-200';
   }
-  if (clusterName.includes('สุขภาพ') || clusterName.includes('Regulars')) {
+  if (name.includes('สุขภาพ') || name.includes('Regulars')) {
     return 'bg-emerald-50 text-emerald-900 border-emerald-200';
   }
-  if (clusterName.includes('ใหม่') || clusterName.includes('New')) {
+  if (name.includes('ใหม่') || name.includes('New')) {
     return 'bg-sky-50 text-sky-900 border-sky-200';
   }
   return 'bg-teal-50 text-teal-900 border-teal-200';

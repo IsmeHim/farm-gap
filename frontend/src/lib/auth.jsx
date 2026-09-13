@@ -10,37 +10,68 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const u = localStorage.getItem('user');
     const token = localStorage.getItem('token');
-    if (u) setUser(JSON.parse(u));
-    if (token) {
+
+    // Safely parse user from localStorage and guard against "undefined" or corrupted JSON
+    if (u && u !== 'undefined' && u !== 'null') {
+      try {
+        setUser(JSON.parse(u));
+      } catch (err) {
+        console.warn('Corrupted user in localStorage, clearing:', err);
+        localStorage.removeItem('user');
+      }
+    } else if (u === 'undefined' || u === 'null') {
+      localStorage.removeItem('user');
+    }
+
+    if (token && token !== 'undefined' && token !== 'null') {
       api.get('/api/auth/me')
         .then(res => {
-          localStorage.setItem('user', JSON.stringify(res.data));
-          setUser(res.data);
+          if (res?.data) {
+            localStorage.setItem('user', JSON.stringify(res.data));
+            setUser(res.data);
+          }
         })
-        .catch(() => {})
+        .catch(() => {
+          // If token is invalid or expired
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setUser(null);
+        })
         .finally(() => setLoading(false));
     } else {
+      if (token === 'undefined' || token === 'null') {
+        localStorage.removeItem('token');
+      }
       setLoading(false);
     }
   }, []);
 
   const login = async (email, password) => {
     const { data } = await api.post('/api/auth/login', { email, password });
-    localStorage.setItem('token', data.token);
-    localStorage.setItem('user', JSON.stringify(data.user));
-    setUser(data.user);
+    if (data?.token) localStorage.setItem('token', data.token);
+    if (data?.user) {
+      localStorage.setItem('user', JSON.stringify(data.user));
+      setUser(data.user);
+    }
   };
+
   const register = async (payload) => {
     const { data } = await api.post('/api/auth/register', payload);
-    localStorage.setItem('token', data.token);
-    localStorage.setItem('user', JSON.stringify(data.user));
-    setUser(data.user);
+    if (data?.token) localStorage.setItem('token', data.token);
+    if (data?.user) {
+      localStorage.setItem('user', JSON.stringify(data.user));
+      setUser(data.user);
+    }
   };
+
   const updateProfile = (updatedUser, token) => {
     if (token) localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(updatedUser));
-    setUser(updatedUser);
+    if (updatedUser) {
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+    }
   };
+
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
