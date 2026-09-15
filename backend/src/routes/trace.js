@@ -6,7 +6,7 @@ const r = Router();
 
 r.get('/:lot', async (req, res) => {
   const [rows] = await pool.query(
-    `SELECT h.*, p.name AS plot_name, p.crop_name, u.farm_name
+    `SELECT h.*, p.name AS plot_name, p.crop_name, p.cycle_number, u.farm_name
      FROM harvest_logs h
      JOIN plots p ON p.id = h.plot_id
      JOIN users u ON u.id = h.user_id

@@ -17,7 +17,9 @@ import {
   Sparkles,
   Users,
   Wallet,
+  Zap,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 const getClusterBadgeStyle = (clusterName = '') => {
   const name = String(clusterName || '');
@@ -57,6 +59,9 @@ export default function Dashboard() {
   const [clusters, setClusters] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [runningAi, setRunningAi] = useState(false);
+  const [todayWater, setTodayWater] = useState({ wateredPlotIds: [] });
+  const [activePlots, setActivePlots] = useState([]);
+  const [wateringLoading, setWateringLoading] = useState(false);
 
   const fetchAiData = async () => {
     try {
@@ -65,6 +70,15 @@ export default function Dashboard() {
       setCustomers(aiRes.data.customers || []);
     } catch (err) {
       console.warn('Failed to load AI data:', err.message);
+    }
+  };
+
+  const fetchWaterStatus = async () => {
+    try {
+      const res = await api.get('/api/water/today-status');
+      setTodayWater(res.data);
+    } catch (e) {
+      console.warn('Water status fetch error:', e.message);
     }
   };
 
@@ -80,6 +94,9 @@ export default function Dashboard() {
         api.get('/api/checklists'),
         api.get('/api/products').catch(() => ({ data: [] })),
       ]);
+
+      const actPlots = plots.data.filter(p => p.status === 'active');
+      setActivePlots(actPlots);
 
       const rev = harvest.data.reduce((s, h) => s + Number(h.revenue || 0), 0);
       const cost = costs.data.reduce((s, c) => s + Number(c.amount || 0), 0);
@@ -111,8 +128,26 @@ export default function Dashboard() {
       const hygieneList = workers.data.filter(w => !w.hygiene_training || !w.personal_hygiene_check);
       setHygieneAlerts(hygieneList);
       fetchAiData();
+      fetchWaterStatus();
     })();
   }, []);
+
+  const handleWaterAllToday = async () => {
+    setWateringLoading(true);
+    try {
+      const res = await api.post('/api/water/quick-all');
+      if (res.data.already_watered) {
+        toast.info(res.data.message);
+      } else {
+        toast.success(res.data.message || 'บันทึกรดน้ำทุกแปลงสำเร็จ!');
+      }
+      await fetchWaterStatus();
+    } catch (e) {
+      toast.error('ไม่สามารถบันทึกรดน้ำได้');
+    } finally {
+      setWateringLoading(false);
+    }
+  };
 
   const totalAlerts = phiAlerts.length + waterAlerts.length + hygieneAlerts.length + stats.checklistFails;
   const profit = stats.revenue - stats.cost;
@@ -176,6 +211,52 @@ export default function Dashboard() {
           </div>
         </div>
       </section>
+
+      {/* Daily Routine Quick Action Bar */}
+      {activePlots.length > 0 && (
+        <section className="surface rounded-3xl p-5 bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-900 text-white shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="p-3 rounded-2xl bg-emerald-700/60 border border-emerald-500/30 text-amber-300 shrink-0">
+              <Droplets className="w-6 h-6 text-sky-300" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm sm:text-base tracking-tight">
+                  ⚡ กิจวัตรการให้น้ำประจำวัน (Daily Watering Routine)
+                </h3>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-700/80 text-emerald-200 border border-emerald-500/30">
+                  รดแล้ว {(todayWater.wateredPlotIds || []).length} / {activePlots.length} แปลง
+                </span>
+              </div>
+              <p className="text-xs text-emerald-150/90 mt-0.5">
+                กดบันทึกรดน้ำทุกแปลงที่กำลังปลูกด้วยค่า Preset อัตโนมัติ โดยไม่ต้องเข้าไปจดทีละแปลง
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleWaterAllToday}
+            disabled={wateringLoading || (todayWater.wateredPlotIds || []).length >= activePlots.length}
+            className={`inline-flex items-center justify-center gap-2 font-bold px-5 py-3 rounded-2xl text-xs sm:text-sm shadow-md transition active:scale-95 cursor-pointer whitespace-nowrap shrink-0 ${
+              (todayWater.wateredPlotIds || []).length >= activePlots.length
+                ? 'bg-emerald-800/60 text-emerald-300 border border-emerald-600/40 cursor-not-allowed'
+                : 'bg-amber-400 hover:bg-amber-300 text-slate-900 shadow-amber-900/20'
+            }`}
+          >
+            {(todayWater.wateredPlotIds || []).length >= activePlots.length ? (
+              <>
+                <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                <span>รดน้ำครบทุกแปลงแล้ววันนี้</span>
+              </>
+            ) : (
+              <>
+                <Zap className="w-4 h-4 fill-current text-slate-900" />
+                <span>⚡ รดน้ำทุกแปลงวันนี้ ({activePlots.length - (todayWater.wateredPlotIds || []).length} แปลง)</span>
+              </>
+            )}
+          </button>
+        </section>
+      )}
 
       {/* KPI Cards */}
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

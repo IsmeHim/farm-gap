@@ -25,6 +25,12 @@ export default function Trace() {
         <div className="text-left space-y-2 text-sm">
           <div><b>ฟาร์ม:</b> {data.farm_name || '-'}</div>
           <div><b>แปลง:</b> {data.plot_name}</div>
+          <div>
+            <b>รอบการปลูก (Crop Cycle):</b>{' '}
+            <span className="font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-xs">
+              #BATCH-{(data.plot_name || '').replace(/แปลง|\s|\(.*?\)/g, '') || 'P'}-R{data.cycle_number || 1} (รอบที่ {data.cycle_number || 1})
+            </span>
+          </div>
           <div><b>วันเก็บเกี่ยว:</b> {format(new Date(data.harvest_date), 'dd/MM/yyyy')}</div>
           <div><b>เกรด:</b> {data.quality_grade || '-'}</div>
           <div><b>ปริมาณ:</b> {data.quantity} {data.unit}</div>

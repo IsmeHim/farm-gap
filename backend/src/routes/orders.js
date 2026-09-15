@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import jwt from 'jsonwebtoken';
 import { pool } from '../db.js';
 
 export const ordersRouter = Router();
@@ -118,7 +119,7 @@ ordersRouter.get('/', async (req, res) => {
   try {
     const { status, customer_id, line_user_id, phone } = req.query;
     let query = `
-      SELECT o.*, c.display_name AS customer_name, c.phone AS customer_phone, c.line_user_id
+      SELECT o.*, c.display_name AS customer_name, c.phone AS customer_phone, c.address AS customer_address, c.line_user_id
       FROM orders o
       JOIN customers c ON o.customer_id = c.id
       WHERE 1=1
@@ -225,6 +226,112 @@ ordersRouter.post('/:id/slip', async (req, res) => {
     const [updated] = await pool.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
     res.json(updated[0]);
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// บันทึกการจัดส่งสินค้าอัจฉริยะ (Smart Dispatch & Auto-Sync to GAP #6 Storage Logs)
+ordersRouter.post('/:id/dispatch', async (req, res) => {
+  const {
+    log_date,
+    storage_location,
+    shipped_to,
+    buyer,
+    vehicle,
+    vehicle_clean_status,
+    storage_conditions,
+    transport_time,
+    delivery_condition,
+    worker_name,
+    notes,
+    sync_to_storage = true,
+  } = req.body;
+
+  try {
+    // ดึงข้อมูลออเดอร์พร้อมลูกค้า
+    const [orderRows] = await pool.query(
+      `SELECT o.*, c.display_name AS customer_name, c.address AS customer_address, c.phone AS customer_phone
+       FROM orders o
+       JOIN customers c ON o.customer_id = c.id
+       WHERE o.id = ?`,
+      [req.params.id]
+    );
+    if (orderRows.length === 0) return res.status(404).json({ error: 'ไม่พบออเดอร์นี้' });
+    const order = orderRows[0];
+
+    // ตรวจสอบ JWT auth หากมี
+    const authHeader = req.headers.authorization;
+    let authUser = null;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        authUser = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET || 'farmgap_secret_key_2026');
+      } catch (e) {
+        // ignore token decode errors for optional auth
+      }
+    }
+    const userId = authUser?.id || 1;
+    const userEmail = authUser?.email || 'admin@farmgap.com';
+
+    // 1. อัปเดตสถานะออเดอร์เป็น 'shipping' (กำลังจัดส่ง)
+    await pool.query("UPDATE orders SET status = 'shipping' WHERE id = ?", [req.params.id]);
+
+    let storageLogId = null;
+
+    // 2. บันทึกลงสมุด ขนส่ง/เก็บรักษา (GAP #6 storage_logs) หากเลือก sync_to_storage
+    if (sync_to_storage) {
+      // ดึงรายการสินค้าเพื่อนำมาสรุปในหมายเหตุ
+      const [itemRows] = await pool.query(
+        `SELECT oi.*, p.name AS product_name, p.unit
+         FROM order_items oi
+         JOIN products p ON oi.product_id = p.id
+         WHERE oi.order_id = ?`,
+        [req.params.id]
+      );
+      const itemsSummary = itemRows.map(i => `${i.product_name} x ${i.quantity} ${i.unit}`).join(', ');
+      const finalNotes = notes || `จัดส่งออเดอร์ #${order.order_code} [${itemsSummary}]`;
+
+      const targetShippedTo = shipped_to || order.customer_address || (order.delivery_type === 'pickup' ? 'รับเองที่ฟาร์ม' : 'ที่อยู่ตามคำสั่งซื้อ');
+      const targetBuyer = buyer || order.customer_name;
+      const targetWorker = worker_name || authUser?.display_name || 'ผู้ดูแลฟาร์ม';
+      const cleanBool = vehicle_clean_status === undefined || vehicle_clean_status === null ? 1 : (vehicle_clean_status ? 1 : 0);
+
+      const [sRes] = await pool.query(
+        `INSERT INTO storage_logs (
+          user_id, log_date, storage_location, shipped_to, buyer,
+          vehicle, vehicle_clean_status, storage_conditions,
+          transport_time, delivery_condition, worker_name, notes,
+          created_by, updated_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          userId,
+          log_date || new Date().toISOString().split('T')[0],
+          storage_location || 'ห้องเย็นฟาร์ม Temp 4°C',
+          targetShippedTo,
+          targetBuyer,
+          vehicle || 'รถส่วนตัว',
+          cleanBool,
+          storage_conditions || 'คุมความเย็น 4°C ตลอดการเดินทาง',
+          transport_time || new Date().toTimeString().split(' ')[0],
+          delivery_condition || 'ดี',
+          targetWorker,
+          finalNotes,
+          userEmail,
+          userEmail
+        ]
+      );
+      storageLogId = sRes.insertId;
+    }
+
+    const [updatedOrder] = await pool.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
+
+    res.json({
+      success: true,
+      order: updatedOrder[0],
+      storage_log_id: storageLogId,
+      message: `บันทึกการจัดส่งออเดอร์ #${order.order_code} ${storageLogId ? 'และลงบันทึก ขนส่ง/เก็บรักษา (GAP #6) สำเร็จ!' : 'เรียบร้อย'}`
+    });
+  } catch (error) {
+    console.error('Dispatch error:', error);
     res.status(500).json({ error: error.message });
   }
 });

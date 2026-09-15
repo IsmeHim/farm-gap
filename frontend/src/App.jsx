@@ -16,6 +16,7 @@ import Report from './pages/Report.jsx';
 import Trace from './pages/Trace.jsx';
 import Checklists from './pages/Checklists.jsx';
 import Orders from './pages/Orders.jsx';
+import SalesReport from './pages/SalesReport.jsx';
 import LiffOrder from './pages/LiffOrder.jsx';
 import LiffHistory from './pages/LiffHistory.jsx';
 import Profile from './pages/Profile.jsx';
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="harvest" element={<Harvest />} />
         <Route path="products" element={<Products />} />
         <Route path="orders" element={<Orders />} />
+        <Route path="sales-report" element={<SalesReport />} />
         <Route path="storage" element={<Storage />} />
         <Route path="workers" element={<Workers />} />
         <Route path="costs" element={<Costs />} />

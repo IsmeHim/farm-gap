@@ -235,12 +235,13 @@ export default function Report() {
                     <th className="py-2 px-3 text-right">พื้นที่ (ตร.ม.)</th>
                     <th className="py-2 px-3 text-left">วันที่เริ่มปลูก</th>
                     <th className="py-2 px-3 text-left">แหล่งน้ำ</th>
+                    <th className="py-2 px-3 text-left">การเตรียมดิน/วัสดุปลูก (GAP)</th>
                     <th className="py-2 px-3 text-center">สถานะความปลอดภัย</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {!reportData?.plots?.length ? (
-                    <tr><td colSpan={6} className="text-center py-4 text-slate-400">ไม่มีข้อมูลแปลงปลูก</td></tr>
+                    <tr><td colSpan={7} className="text-center py-4 text-slate-400">ไม่มีข้อมูลแปลงปลูก</td></tr>
                   ) : (
                     reportData.plots.map(p => (
                       <tr key={p.id} className="hover:bg-slate-50">
@@ -249,6 +250,14 @@ export default function Report() {
                         <td className="py-2 px-3 text-right">{Number(p.area_sqm || 0).toLocaleString()}</td>
                         <td className="py-2 px-3">{p.planting_date ? format(new Date(p.planting_date), 'dd/MM/yyyy') : '-'}</td>
                         <td className="py-2 px-3">{p.water_source || '-'}</td>
+                        <td className="py-2 px-3 text-slate-700">
+                          <div>{p.soil_notes || p.soil_test_result || 'ดินอินทรีย์ สะอาด ปลอดภัย'}</div>
+                          {p.soil_test_date && (
+                            <div className="text-[10px] text-slate-400">
+                              (ตรวจ: {format(new Date(p.soil_test_date), 'dd/MM/yy')})
+                            </div>
+                          )}
+                        </td>
                         <td className="py-2 px-3 text-center">
                           <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded text-[10px] font-bold">
                             {p.field_safety_status || 'ปลอดภัย'}
@@ -272,6 +281,7 @@ export default function Report() {
                 <thead className="bg-slate-100 text-slate-700 font-bold">
                   <tr>
                     <th className="py-2 px-3 text-left">วันที่บันทึก</th>
+                    <th className="py-2 px-3 text-left">รอบให้น้ำ</th>
                     <th className="py-2 px-3 text-left">แปลง</th>
                     <th className="py-2 px-3 text-left">แหล่งน้ำ</th>
                     <th className="py-2 px-3 text-left">ผลตรวจคุณภาพน้ำ</th>
@@ -281,11 +291,18 @@ export default function Report() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {!reportData?.water?.length ? (
-                    <tr><td colSpan={6} className="text-center py-4 text-slate-400">ไม่มีข้อมูลบันทึกการให้น้ำ</td></tr>
+                    <tr><td colSpan={7} className="text-center py-4 text-slate-400">ไม่มีข้อมูลบันทึกการให้น้ำ</td></tr>
                   ) : (
                     reportData.water.map(w => (
                       <tr key={w.id}>
                         <td className="py-1.5 px-3">{format(new Date(w.log_date), 'dd/MM/yyyy')}</td>
+                        <td className="py-1.5 px-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            w.session === 'เย็น' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-amber-50 text-amber-800 border border-amber-200'
+                          }`}>
+                            {w.session || 'เช้า'}
+                          </span>
+                        </td>
                         <td className="py-1.5 px-3 font-medium">{plotName(w.plot_id)}</td>
                         <td className="py-1.5 px-3">{w.water_source}</td>
                         <td className="py-1.5 px-3 text-emerald-700 font-semibold">{w.water_quality}</td>

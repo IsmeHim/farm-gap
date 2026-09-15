@@ -198,9 +198,105 @@ async function getFarmContext() {
   }
 }
 
+// Helper: สกัดคีย์เวิร์ดชื่อผักทั้งไทย/อังกฤษ/คำย่อสำหรับสินค้าทุกตัวในระบบ
+function getProductKeywords(productName) {
+  const lower = productName.toLowerCase();
+  const keywords = [];
+
+  // 1. ดึงชื่อภาษาอังกฤษในวงเล็บ เช่น (Chinese Cabbage), (Green Oak)
+  const enMatch = lower.match(/\(([^)]+)\)/);
+  if (enMatch && enMatch[1]) {
+    const en = enMatch[1].trim();
+    keywords.push(en);
+    en.split(/[\s-]+/).forEach(w => {
+      if (w.length >= 3) keywords.push(w);
+    });
+  }
+
+  // 2. ดึงชื่อภาษาไทยหลัก ตัดคำตกแต่ง (เช่น ปลอดสาร, สด, GAP, อินทรีย์, พรีเมียม ฯลฯ)
+  const cleanThai = lower
+    .replace(/\([^)]*\)/g, '')
+    .replace(/ปลอดสาร|สด|gap|อินทรีย์|ซูเปอร์ฟู้ด|โฮมเมด|กรอบพรีเมียม|เนื้อนุ่ม|พรีเมียม/g, '')
+    .trim();
+
+  if (cleanThai) {
+    keywords.push(cleanThai);
+    if (cleanThai.startsWith('ผัก')) {
+      const withoutPhak = cleanThai.replace(/^ผัก/, '').trim();
+      if (withoutPhak.length >= 2) keywords.push(withoutPhak);
+    }
+  }
+
+  // 3. คีย์เวิร์ดภาษาไทยที่ผู้ใช้งานมักพิมพ์บ่อย
+  if (lower.includes('กาดขาว') || lower.includes('cabbage')) {
+    keywords.push('ผักกาดขาว', 'กาดขาว', 'cabbage');
+  }
+  if (lower.includes('กาดหอม') || lower.includes('lettuce')) {
+    keywords.push('ผักกาดหอม', 'กาดหอม');
+  }
+  if (lower.includes('ฟิล') || lower.includes('ฟิน') || lower.includes('frillice')) {
+    keywords.push('ฟิลเล่ย์', 'ฟินเล่ย์', 'ฟิลเลย์', 'ฟินเลย์', 'ไอซ์เบิร์ก', 'frillice');
+  }
+  if (lower.includes('กรีน') || lower.includes('green')) {
+    keywords.push('กรีนโอ๊ค', 'กรีนโอค', 'กรีน', 'green oak');
+  }
+  if (lower.includes('เรด') || lower.includes('red')) {
+    keywords.push('เรดโอ๊ค', 'เรดโอค', 'เรด', 'red oak');
+  }
+  if (lower.includes('คอส') || lower.includes('cos')) {
+    keywords.push('คอส', 'cos');
+  }
+  if (lower.includes('บัตเตอร์') || lower.includes('butter')) {
+    keywords.push('บัตเตอร์เฮด', 'บัตเตอร์', 'butterhead');
+  }
+  if (lower.includes('เคล') || lower.includes('kale')) {
+    keywords.push('ผักเคล', 'เคล', 'kale');
+  }
+  if (lower.includes('น้ำสลัด') || lower.includes('sesame')) {
+    keywords.push('น้ำสลัด', 'งาคั่ว', 'dressing');
+  }
+
+  return [...new Set(keywords.filter(k => k.length >= 2))];
+}
+
+// Helper: ใช้ Gemini AI สกัดคำสั่งซื้อกรณีผู้ใช้พิมพ์ภาษาพูดซับซ้อน
+async function extractOrderWithGemini(userText, availableProducts) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === 'dummy_key') return null;
+
+  const productListDesc = availableProducts.map(p => `ID: ${p.id}, ชื่อ: ${p.name}, ราคา: ${p.price}`).join('\n');
+  const prompt = `คุณคือระบบวิเคราะห์คำสั่งซื้อสินค้าเกษตร FarmGAP
+ข้อความของลูกค้า:
+"${userText}"
+
+รายการสินค้าที่มีในระบบ:
+${productListDesc}
+
+หากข้อความนี้เป็นการสั่งซื้อหรือต้องการซื้อสินค้า ให้สกัดออกมาเป็น JSON โครงสร้างนี้เท่านั้น (ห้ามใส่คำอธิบายอื่น):
+{
+  "isOrder": true,
+  "items": [
+    { "product_id": <id ตัวเลข>, "quantity": <จำนวนตัวเลข> }
+  ]
+}
+หากไม่ใช่การสั่งซื้อ ให้ตอบ:
+{ "isOrder": false }`;
+
+  try {
+    const raw = await askGemini(prompt, "ตอบเฉพาะ JSON ตามโครงสร้างที่กำหนดเท่านั้น");
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+  } catch (err) {
+    console.warn('Gemini order extraction error:', err.message);
+  }
+  return null;
+}
+
 // 3. วิเคราะห์เจตนาและสกัดคำสั่งซื้อจากข้อความธรรมชาติ (Order Intent & Entity Extraction)
 async function extractOrderIntent(text) {
-  const buyKeywords = ['สั่ง', 'ซื้อ', 'เอา', 'รับ', 'จอง', 'order', 'ขอ'];
+  const buyKeywords = ['สั่ง', 'ซื้อ', 'เอา', 'รับ', 'จอง', 'order', 'ขอ', 'กิโล', 'กีโล', 'โล', 'แพ็ค', 'แพค', 'ถุง', 'กก'];
   const hasBuyKeyword = buyKeywords.some(k => text.includes(k));
 
   const [products] = await pool.query(
@@ -211,57 +307,84 @@ async function extractOrderIntent(text) {
     return { isOrder: false };
   }
 
-  const matchedItems = [];
+  let matchedItems = [];
   const lowerText = text.toLowerCase();
 
-  for (const product of products) {
-    const cleanProdName = product.name.trim();
-    const lowerProd = cleanProdName.toLowerCase();
+  // 1. ถ้ามีเจตนาซื้อ ให้ใช้ Gemini AI สกัดเป็นอันดับแรก เพื่อความเข้าใจภาษามนุษย์สูงสุด (ดักจับคำพิมพ์ผิด เช่น 10 กีโล, สิบโล)
+  if (hasBuyKeyword) {
+    const geminiResult = await extractOrderWithGemini(text, products);
+    if (geminiResult && geminiResult.isOrder && Array.isArray(geminiResult.items) && geminiResult.items.length > 0) {
+      for (const gItem of geminiResult.items) {
+        const prod = products.find(p => p.id === gItem.product_id);
+        if (prod) {
+          const qty = Number(gItem.quantity) || 1;
+          matchedItems.push({
+            product_id: prod.id,
+            name: prod.name,
+            price: Number(prod.price),
+            unit: prod.unit || 'กก.',
+            quantity: qty,
+            stock_quantity: Number(prod.stock_quantity),
+            subtotal: Number(prod.price) * qty,
+          });
+        }
+      }
+    }
+  }
 
-    const isFrillice = (lowerProd.includes('ฟิล') || lowerProd.includes('ฟิน') || lowerProd.includes('ไอซ์เบิร์ก') || lowerProd.includes('frillice')) &&
-      (lowerText.includes('ฟิน') || lowerText.includes('ฟิล') || lowerText.includes('ไอซ์เบิร์ก') || lowerText.includes('frillice'));
-    const isGreenOak = (lowerProd.includes('กรีน') || lowerProd.includes('green')) && (lowerText.includes('กรีน') || lowerText.includes('green'));
-    const isRedOak = (lowerProd.includes('เรด') || lowerProd.includes('red')) && (lowerText.includes('เรด') || lowerText.includes('red'));
-    const isCos = (lowerProd.includes('คอส') || lowerProd.includes('cos')) && (lowerText.includes('คอส') || lowerText.includes('cos'));
-    const isButterhead = (lowerProd.includes('บัตเตอร์') || lowerProd.includes('butter')) && (lowerText.includes('บัตเตอร์') || lowerText.includes('butter'));
-    const isDirectMatch = lowerText.includes(lowerProd);
+  // 2. ถ้า Gemini ไม่ได้ผล หรือไม่ได้ต่อเน็ต ให้ใช้ Regex Keyword Matching อัจฉริยะ (Local Fallback)
+  if (matchedItems.length === 0) {
+    for (const product of products) {
+      const keywords = getProductKeywords(product.name);
+      const matchedKw = keywords.find(kw => lowerText.includes(kw));
 
-    if (isDirectMatch || isFrillice || isGreenOak || isRedOak || isCos || isButterhead) {
-      let qty = 1;
-      const regexPatterns = [
-        new RegExp(`${cleanProdName}[^0-9]{0,8}([0-9]+(?:\\.[0-9]+)?)`, 'i'),
-        new RegExp(`([0-9]+(?:\\.[0-9]+)?)[^0-9]{0,8}${cleanProdName}`, 'i'),
-        new RegExp(`(กรีน|เรด|คอส|ฟิน|ฟิล|บัตเตอร์)[^0-9]{0,8}([0-9]+(?:\\.[0-9]+)?)`, 'i'),
-        new RegExp(`([0-9]+(?:\\.[0-9]+)?)[^0-9]{0,8}(กรีน|เรด|คอส|ฟิน|ฟิล|บัตเตอร์)`, 'i'),
-      ];
+      if (matchedKw) {
+        let qty = 1;
+        // ขยายระยะห่างคำเป็น 30 ตัวอักษร เพื่อครอบคลุมคำขยาย (เช่น "ผักกาดขาว ปลอดสาร 10 กิโล")
+        const regexPatterns = [
+          new RegExp(`${matchedKw}[^0-9]{0,30}([0-9]+(?:\\.[0-9]+)?)`, 'i'),
+          new RegExp(`([0-9]+(?:\\.[0-9]+)?)[^0-9]{0,30}${matchedKw}`, 'i'),
+        ];
 
-      for (const rx of regexPatterns) {
-        const match = text.match(rx);
-        if (match && match[1]) {
-          const parsed = parseFloat(match[1]);
-          if (!isNaN(parsed) && parsed > 0) {
-            qty = parsed;
-            break;
+        for (const rx of regexPatterns) {
+          const match = text.match(rx);
+          if (match && match[1]) {
+            const parsed = parseFloat(match[1]);
+            if (!isNaN(parsed) && parsed > 0) {
+              qty = parsed;
+              break;
+            }
           }
         }
-      }
 
-      if (qty === 1) {
-        const generalDigit = text.match(/\b([1-9][0-9]*)\b/);
-        if (generalDigit && generalDigit[1]) {
-          qty = parseInt(generalDigit[1], 10);
+        if (qty === 1) {
+          // รองรับหน่วยต่างๆ รวมทั้งคำสะกดผิด เช่น กีโล, กก, โล
+          const unitDigitMatch = text.match(new RegExp(`([0-9]+(?:\\.[0-9]+)?)\\s*(?:กิโล|กีโล|กก|ก\\.ก\\.|โล|แพ็ค|แพค|ถุง|ชิ้น|หัว|ชุด)[^0-9]*${matchedKw}`, 'i')) ||
+                                 text.match(new RegExp(`${matchedKw}[^0-9]*([0-9]+(?:\\.[0-9]+)?)\\s*(?:กิโล|กีโล|กก|ก\\.ก\\.|โล|แพ็ค|แพค|ถุง|ชิ้น|หัว|ชุด)`, 'i'));
+          if (unitDigitMatch && unitDigitMatch[1]) {
+            qty = parseFloat(unitDigitMatch[1]);
+          }
         }
-      }
 
-      matchedItems.push({
-        product_id: product.id,
-        name: product.name,
-        price: Number(product.price),
-        unit: product.unit || 'กก.',
-        quantity: qty,
-        stock_quantity: Number(product.stock_quantity),
-        subtotal: Number(product.price) * qty,
-      });
+        matchedItems.push({
+          product_id: product.id,
+          name: product.name,
+          price: Number(product.price),
+          unit: product.unit || 'กก.',
+          quantity: qty,
+          stock_quantity: Number(product.stock_quantity),
+          subtotal: Number(product.price) * qty,
+        });
+      }
+    }
+
+    // กรณีสั่งผักรายการเดียว และในประโยคมีตัวเลขโดดๆ (เช่น "ขอสั่งผักกาดขาว 10")
+    if (matchedItems.length === 1 && matchedItems[0].quantity === 1) {
+      const singleDigitMatch = text.match(/\b([1-9][0-9]*)\b/);
+      if (singleDigitMatch && singleDigitMatch[1]) {
+        matchedItems[0].quantity = parseInt(singleDigitMatch[1], 10);
+        matchedItems[0].subtotal = matchedItems[0].price * matchedItems[0].quantity;
+      }
     }
   }
 
@@ -273,6 +396,7 @@ async function extractOrderIntent(text) {
     return { isOrder: false };
   }
 
+  // ตรวจสอบสต็อก
   for (const item of matchedItems) {
     if (item.stock_quantity <= 0) {
       return {
@@ -422,6 +546,47 @@ async function replyOrderDraftConfirmation(replyToken, items, totalAmount) {
 
 // 5. Flex Message: ใบแจ้งหนี้และช่องทางโอนเงิน (Invoice & Payment)
 async function replyInvoiceAndPayment(replyToken, orderCode, totalAmount, items, addressText) {
+  let bankInfoLines = [
+    '• ธนาคาร: ธนาคารกสิกรไทย (KBANK)',
+    '• เลขที่บัญชี: 098-2-34567-8',
+    '• ชื่อบัญชี: ฟาร์มผัก FarmGAP AI',
+    '• พร้อมเพย์: 081-234-5678',
+  ];
+  let qrImageElement = null;
+
+  try {
+    const [owners] = await pool.query(
+      "SELECT farm_name, display_name, bank_name, bank_account_no, bank_account_name, promptpay_number, promptpay_qr_url FROM users WHERE role = 'owner' LIMIT 1"
+    );
+    if (owners && owners[0]) {
+      const o = owners[0];
+      const customLines = [];
+      if (o.bank_name) customLines.push(`• ธนาคาร: ${o.bank_name}`);
+      if (o.bank_account_no) customLines.push(`• เลขบัญชี: ${o.bank_account_no}`);
+      if (o.bank_account_name || o.display_name) customLines.push(`• ชื่อบัญชี: ${o.bank_account_name || o.display_name}`);
+      if (o.promptpay_number) customLines.push(`• พร้อมเพย์: ${o.promptpay_number}`);
+
+      if (customLines.length > 0) {
+        bankInfoLines = customLines;
+      }
+
+      // Check if farm owner provided a valid HTTPS QR code URL
+      if (o.promptpay_qr_url && o.promptpay_qr_url.startsWith('https://')) {
+        qrImageElement = {
+          type: 'image',
+          url: o.promptpay_qr_url,
+          size: 'md',
+          aspectRatio: '1:1',
+          aspectMode: 'cover',
+          margin: 'sm',
+          align: 'center',
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Could not load owner bank info for invoice:', err.message);
+  }
+
   const itemsRows = items.map(it => ({
     type: 'box',
     layout: 'horizontal',
@@ -558,11 +723,12 @@ async function replyInvoiceAndPayment(replyToken, orderCode, totalAmount, items,
               },
               {
                 type: 'text',
-                text: '• ธนาคารกสิกรไทย (KBANK)\n• เลขที่บัญชี: 098-2-34567-8\n• ชื่อบัญชี: ฟาร์มผัก FarmGAP AI\n• พร้อมเพย์ (PromptPay): 081-234-5678',
+                text: bankInfoLines.join('\n'),
                 wrap: true,
                 size: 'xs',
                 color: '#333333',
               },
+              ...(qrImageElement ? [qrImageElement] : []),
               {
                 type: 'text',
                 text: '📸 โอนแล้วส่งรูปสลิปเข้ามาในแชทนี้ได้เลยครับ!',
@@ -1263,14 +1429,55 @@ async function handleEvent(event) {
       });
     }
 
+// Helper: สกัดชื่อผู้รับ เบอร์โทรศัพท์ และที่อยู่จัดส่ง จากข้อความที่ผู้ใช้พิมพ์
+function parseCustomerContact(text) {
+  let name = null;
+  let phone = null;
+  let address = null;
+
+  // 1. สกัดเบอร์โทรศัพท์ (รองรับทั้ง 08x, 09x, 06x มีหรือไม่มีขีด/วรรค)
+  const phoneMatch = text.match(/0[0-9]{1,2}[- ]?[0-9]{3,4}[- ]?[0-9]{3,4}/);
+  if (phoneMatch) {
+    phone = phoneMatch[0].replace(/[- ]/g, '');
+  }
+
+  // 2. สกัดชื่อผู้รับ
+  const nameMatch = text.match(/(?:ชื่อ|ผู้รับ|คุณ)\s*[:\-]?\s*([^\n,]+)/i);
+  if (nameMatch && nameMatch[1]) {
+    name = nameMatch[1].trim();
+  }
+
+  // 3. สกัดที่อยู่จัดส่ง
+  const addrMatch = text.match(/(?:ที่อยู่|ส่งที่|จัดส่ง|บ้านเลขที่)\s*[:\-]?\s*([\s\S]+?)(?=(?:เบอร์|โทร|ชื่อ|$))/i);
+  if (addrMatch && addrMatch[1]) {
+    address = addrMatch[1].trim();
+  } else {
+    // กรณีพิมพ์แบบแยกบรรทัด ไม่มีคำว่าที่อยู่ ให้นำบรรทัดที่ไม่ใช่ชื่อและเบอร์มาเป็นที่อยู่
+    address = text
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l && !l.match(/^(?:ชื่อ|เบอร์|โทร|tel)/i) && !l.match(/0[0-9]{8,9}/))
+      .join(' ')
+      .trim();
+  }
+
+  return {
+    name: name || null,
+    phone: phone || null,
+    address: address || text.trim(),
+  };
+}
+
     // STATE: AWAITING_ADDRESS (Customer is providing shipping address & phone)
     if (session.state === 'AWAITING_ADDRESS' && session.draft_data?.items) {
       const items = session.draft_data.items;
       const totalAmount = session.draft_data.totalAmount || session.draft_data.total_amount;
 
-      // Extract phone number from text
-      const phoneMatch = text.match(/0[0-9]{8,9}/);
-      const phone = phoneMatch ? phoneMatch[0] : null;
+      // Extract clean name, phone, address
+      const contact = parseCustomerContact(text);
+      const phone = contact.phone;
+      const customerName = contact.name;
+      const cleanAddress = contact.address;
 
       const connection = await pool.getConnection();
       try {
@@ -1280,10 +1487,10 @@ async function handleEvent(event) {
         const [customers] = await connection.query('SELECT * FROM customers WHERE line_user_id = ?', [userId]);
         const customer = customers[0];
 
-        // 2. Update customer phone and address
+        // 2. Update customer phone, address, and display_name
         await connection.query(
-          'UPDATE customers SET address = ?, phone = COALESCE(?, phone) WHERE id = ?',
-          [text, phone, customer.id]
+          'UPDATE customers SET address = ?, phone = COALESCE(?, phone), display_name = COALESCE(?, display_name) WHERE id = ?',
+          [cleanAddress, phone, customerName, customer.id]
         );
 
         // 3. Check stock again and deduct
@@ -1314,10 +1521,11 @@ async function handleEvent(event) {
 
         // 4. Create Order
         const orderCode = generateOrderCode();
+        const noteDetail = `ผู้รับ: ${customerName || customer.display_name} | โทร: ${phone || customer.phone || '-'} | ที่อยู่: ${cleanAddress}`;
         const [orderResult] = await connection.query(
           `INSERT INTO orders (order_code, customer_id, total_amount, status, delivery_type, notes)
            VALUES (?, ?, ?, 'pending', 'delivery', ?)`,
-          [orderCode, customer.id, totalAmount, text]
+          [orderCode, customer.id, totalAmount, noteDetail]
         );
         const orderId = orderResult.insertId;
 
@@ -1336,11 +1544,14 @@ async function handleEvent(event) {
           order_code: orderCode,
           total_amount: totalAmount,
           items,
-          address: text,
+          address: cleanAddress,
+          customer_name: customerName,
+          phone,
         });
 
         // 7. Send invoice & bank details
-        await replyInvoiceAndPayment(replyToken, orderCode, totalAmount, items, text);
+        const formattedAddressDisplay = `ชื่อผู้รับ: ${customerName || customer.display_name || 'คุณลูกค้า'}\nเบอร์โทร: ${phone || customer.phone || '-'}\nที่อยู่: ${cleanAddress}`;
+        await replyInvoiceAndPayment(replyToken, orderCode, totalAmount, items, formattedAddressDisplay);
         return;
       } catch (orderErr) {
         await connection.rollback();
@@ -1402,6 +1613,27 @@ async function handleEvent(event) {
 
         return replyOrderDraftConfirmation(replyToken, orderIntent.items, orderIntent.totalAmount);
       }
+    }
+
+    // Safety Net: หากผู้ใช้พิมพ์ข้อมูลติดต่อ/ที่อยู่ แต่ไม่ได้อยู่ในสถานะ AWAITING_ADDRESS
+    const contactInfo = parseCustomerContact(text);
+    if (contactInfo.phone || (contactInfo.name && contactInfo.address && (text.includes('ที่อยู่') || text.includes('เบอร์')))) {
+      try {
+        await pool.query(
+          'UPDATE customers SET address = COALESCE(?, address), phone = COALESCE(?, phone), display_name = COALESCE(?, display_name) WHERE line_user_id = ?',
+          [contactInfo.address, contactInfo.phone, contactInfo.name, userId]
+        );
+      } catch (_) {}
+
+      return client.replyMessage({
+        replyToken: replyToken,
+        messages: [
+          {
+            type: 'text',
+            text: `ฟาร์มได้รับข้อมูลจัดส่งเรียบร้อยแล้วครับ ${contactInfo.name ? `(คุณ${contactInfo.name})` : ''} 📦🌱\n\nแต่ขณะนี้ยังไม่พบรายการผักสดที่ต้องการสั่งซื้อ รบกวนคุณลูกค้าพิมพ์บอกผักและจำนวนที่ต้องการสั่งได้เลยครับ เช่น:\n• "ขอสั่งผักกาดขาว 10 กิโล"\n• "สั่งกรีนโอ๊ค 2 แพ็ค"\n\nหรือพิมพ์ "เมนูผัก" เพื่อเลือกชมสินค้าทั้งหมดได้เลยครับ!`,
+          },
+        ],
+      });
     }
 
     // Default conversational AI fallback (Gemini with farm context)

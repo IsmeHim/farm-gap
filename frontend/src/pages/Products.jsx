@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { api } from '../lib/api';
 import { toast } from 'sonner';
-import { Image, Leaf, PackageCheck, Pencil, Plus, Search, ShoppingBag, Trash2, X } from 'lucide-react';
+import { Image, Leaf, PackageCheck, Pencil, Plus, Search, ShoppingBag, Trash2, X, Camera } from 'lucide-react';
 
 const emptyForm = {
   plot_id: '',
@@ -252,9 +252,41 @@ function Metric({ label, value }) {
 }
 
 function ProductDialog({ form, setForm, plots, editing, onClose, onSave }) {
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
+
+  const VEG_PRESETS = [
+    { label: 'เรดโอ๊ค', url: 'https://images.unsplash.com/photo-1622206151226-18ca2c9ab4a1?q=80&w=600&auto=format&fit=crop' },
+    { label: 'กรีนโอ๊ค', url: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?q=80&w=600&auto=format&fit=crop' },
+    { label: 'ผักกาดขาว', url: 'https://images.unsplash.com/photo-1597362925123-77861d3fbac7?q=80&w=600&auto=format&fit=crop' },
+    { label: 'ผักคอส', url: 'https://images.unsplash.com/photo-1508747703725-719777637510?q=80&w=600&auto=format&fit=crop' },
+    { label: 'ฟิลเล่ย์', url: 'https://images.unsplash.com/photo-1556801712-76c8eb07bbc9?q=80&w=600&auto=format&fit=crop' },
+    { label: 'ผักเคล', url: 'https://images.unsplash.com/photo-1524179091875-bf99a9a6af57?q=80&w=600&auto=format&fit=crop' },
+    { label: 'บัตเตอร์เฮด', url: 'https://images.unsplash.com/photo-1622206151226-18ca2c9ab4a1?q=80&w=600&auto=format&fit=crop' },
+  ];
+
+  const handleFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const res = await api.post('/api/upload', { data: ev.target.result, filename: file.name });
+        setForm(prev => ({ ...prev, image_url: res.data.url }));
+        toast.success('อัปโหลดรูปภาพสินค้าสำเร็จ!');
+      } catch (err) {
+        toast.error('อัปโหลดรูปไม่สำเร็จ: ' + (err.response?.data?.error || err.message));
+      } finally {
+        setUploading(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="mb-5 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-black text-[#173f2a]">{editing ? 'แก้ไขสินค้า' : 'เพิ่มสินค้าใหม่'}</h2>
@@ -303,9 +335,83 @@ function ProductDialog({ form, setForm, plots, editing, onClose, onSave }) {
           <Field label="จำนวนคงเหลือ">
             <input className="input" type="number" step="any" value={form.stock_quantity} onChange={e => setForm({ ...form, stock_quantity: e.target.value })} placeholder="จำนวนสินค้า" />
           </Field>
-          <Field label="URL รูปภาพ">
-            <input className="input" value={form.image_url} onChange={e => setForm({ ...form, image_url: e.target.value })} placeholder="https://..." />
-          </Field>
+
+          {/* Image Uploader & Preview */}
+          <div className="md:col-span-2 space-y-2 pt-2 border-t border-slate-100">
+            <span className="label">รูปภาพสินค้า</span>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              {/* Preview Thumbnail */}
+              <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
+                {form.image_url ? (
+                  <img src={form.image_url} alt="รูปสินค้า" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="text-center p-2 text-slate-400">
+                    <Camera className="w-6 h-6 mx-auto mb-1 text-slate-300" />
+                    <span className="text-[10px] block">ไม่มีรูป</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Controls */}
+              <div className="space-y-2 flex-1 w-full">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    ref={fileRef}
+                    accept="image/*"
+                    onChange={handleFile}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    disabled={uploading}
+                    onClick={() => fileRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition active:scale-95 cursor-pointer disabled:opacity-50"
+                  >
+                    <Camera className="w-4 h-4" />
+                    <span>{uploading ? 'กำลังอัปโหลด...' : '📷 ถ่ายรูป / อัปโหลดไฟล์รูปภาพ'}</span>
+                  </button>
+                  {form.image_url && (
+                    <button
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, image_url: '' }))}
+                      className="text-xs text-rose-600 hover:underline px-2 py-1"
+                    >
+                      ลบรูป
+                    </button>
+                  )}
+                </div>
+
+                {/* Preset Image Chips */}
+                <div className="space-y-1">
+                  <span className="text-[10px] text-slate-400 font-semibold block">หรือเลือกรูปภาพผักสดตัวอย่าง:</span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {VEG_PRESETS.map(preset => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => setForm(prev => ({ ...prev, image_url: preset.url }))}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer ${
+                          form.image_url === preset.url
+                            ? 'bg-emerald-100 text-emerald-900 border-emerald-400'
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <input
+                  className="input text-xs"
+                  value={form.image_url}
+                  onChange={e => setForm(prev => ({ ...prev, image_url: e.target.value }))}
+                  placeholder="หรือวางลิงก์รูปภาพ: https://..."
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

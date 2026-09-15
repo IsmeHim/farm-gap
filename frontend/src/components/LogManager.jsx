@@ -4,7 +4,18 @@ import { toast } from 'sonner';
 import { Plus, Trash2, Pencil, X, Search, Calendar, MapPin, CheckCircle2, AlertCircle, RefreshCw, Filter } from 'lucide-react';
 import { format } from 'date-fns';
 
-export default function LogManager({ title, endpoint, fields, plotsLookup, renderRowAction }) {
+export default function LogManager({
+  title,
+  endpoint,
+  fields,
+  plotsLookup,
+  renderRowAction,
+  renderCard,
+  renderTopBanner,
+  renderHeaderExtra,
+  reloadTrigger,
+  onDataLoaded,
+}) {
   const [rows, setRows] = useState([]);
   const [plots, setPlots] = useState([]);
   const [open, setOpen] = useState(false);
@@ -18,6 +29,7 @@ export default function LogManager({ title, endpoint, fields, plotsLookup, rende
     try {
       const { data } = await api.get(`/api/${endpoint}`);
       setRows(data);
+      if (onDataLoaded) onDataLoaded(data);
     } catch (e) {
       toast.error('ไม่สามารถโหลดข้อมูลได้');
     } finally {
@@ -30,7 +42,7 @@ export default function LogManager({ title, endpoint, fields, plotsLookup, rende
     if (plotsLookup) {
       api.get('/api/plots').then(({ data }) => setPlots(data)).catch(() => {});
     }
-  }, [endpoint]);
+  }, [endpoint, reloadTrigger]);
 
   const openNew = () => {
     const init = {};
@@ -93,7 +105,13 @@ export default function LogManager({ title, endpoint, fields, plotsLookup, rende
     }
   };
 
-  const plotName = (id) => plots.find(p => p.id === id)?.name || '—';
+  const plotName = (id) => {
+    const p = plots.find(plot => plot.id === id);
+    if (!p) return '—';
+    const cleanName = (p.name || '').replace(/แปลง|\s|\(.*?\)/g, '').trim() || `P${p.id}`;
+    const cycle = p.cycle_number || 1;
+    return `${p.name} [#BATCH-${cleanName}-R${cycle}]`;
+  };
   const visible = fields.filter(f => !f.hideInTable);
 
   const filteredRows = useMemo(() => {
@@ -120,6 +138,24 @@ export default function LogManager({ title, endpoint, fields, plotsLookup, rende
       ) : (
         <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md text-[11px]">
           —
+        </span>
+      );
+    }
+    if (f.key === 'cycle_number') {
+      return (
+        <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-md font-mono font-bold text-[11px]">
+          รอบที่ {val || 1}
+        </span>
+      );
+    }
+    if (f.key === 'session') {
+      return (
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold text-[11px] border ${
+          val === 'เย็น'
+            ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+            : 'bg-amber-50 text-amber-800 border-amber-200'
+        }`}>
+          {val === 'เย็น' ? '🌇 รอบเย็น' : '🌅 รอบเช้า'}
         </span>
       );
     }
@@ -179,6 +215,8 @@ export default function LogManager({ title, endpoint, fields, plotsLookup, rende
             )}
           </div>
 
+          {renderHeaderExtra && renderHeaderExtra({ load, openNew, plots, rows })}
+
           <button
             onClick={openNew}
             className="inline-flex items-center justify-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 active:scale-98 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow-md shrink-0 cursor-pointer"
@@ -188,6 +226,9 @@ export default function LogManager({ title, endpoint, fields, plotsLookup, rende
           </button>
         </div>
       </div>
+
+      {/* Optional Top Banner (e.g. Daily Routine or Quick Action Bar) */}
+      {renderTopBanner && renderTopBanner({ load, openNew, plots, rows })}
 
       {/* MOBILE VIEW: High-End Responsive Cards (block on md:hidden) */}
       <div className="block md:hidden space-y-3">
@@ -203,7 +244,17 @@ export default function LogManager({ title, endpoint, fields, plotsLookup, rende
             <p className="text-[11px] text-slate-400">กดปุ่ม "+ เพิ่มรายการ" เพื่อเริ่มบันทึกข้อมูลแรกของคุณ</p>
           </div>
         ) : (
-          filteredRows.map(r => (
+          filteredRows.map(r => renderCard ? (
+            <div key={r.id}>
+              {renderCard({
+                item: r,
+                openEdit: () => openEdit(r),
+                del: () => del(r.id),
+                plotName,
+                renderBadge,
+              })}
+            </div>
+          ) : (
             <div
               key={r.id}
               className="surface rounded-2xl p-4 bg-white border border-slate-200/80 shadow-xs space-y-3 transition hover:shadow-md"
@@ -249,28 +300,30 @@ export default function LogManager({ title, endpoint, fields, plotsLookup, rende
               </div>
 
               {/* Card Footer: Large, Touch-Friendly Action Buttons */}
-              <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+              <div className="pt-2.5 border-t border-slate-100 flex items-center gap-2 flex-wrap sm:flex-nowrap">
                 {renderRowAction && (
-                  <div className="shrink-0">
+                  <div className="w-full sm:w-auto shrink-0">
                     {renderRowAction(r)}
                   </div>
                 )}
 
-                <button
-                  onClick={() => openEdit(r)}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 active:scale-98 text-blue-700 font-bold py-2 px-3 rounded-xl text-xs border border-blue-200 transition cursor-pointer"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                  <span>แก้ไข</span>
-                </button>
+                <div className="flex items-center gap-2 w-full sm:w-auto flex-1">
+                  <button
+                    onClick={() => openEdit(r)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 active:scale-98 text-blue-700 font-bold py-2 px-3 rounded-xl text-xs border border-blue-200 transition cursor-pointer"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    <span>แก้ไข</span>
+                  </button>
 
-                <button
-                  onClick={() => del(r.id)}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 bg-rose-50 hover:bg-rose-100 active:scale-98 text-rose-700 font-bold py-2 px-3 rounded-xl text-xs border border-rose-200 transition cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>ลบ</span>
-                </button>
+                  <button
+                    onClick={() => del(r.id)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 bg-rose-50 hover:bg-rose-100 active:scale-98 text-rose-700 font-bold py-2 px-3 rounded-xl text-xs border border-rose-200 transition cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>ลบ</span>
+                  </button>
+                </div>
               </div>
             </div>
           ))
@@ -284,11 +337,11 @@ export default function LogManager({ title, endpoint, fields, plotsLookup, rende
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 {visible.map(f => (
-                  <th key={f.key} className="text-left px-4 py-3.5 font-bold text-slate-600">
+                  <th key={f.key} className="text-left px-4 py-3.5 font-bold text-slate-600 whitespace-nowrap">
                     {f.label}
                   </th>
                 ))}
-                <th className="text-right px-4 py-3.5 font-bold text-slate-600 w-36">การจัดการ</th>
+                <th className="text-right px-4 py-3.5 font-bold text-slate-600 whitespace-nowrap">การจัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -311,27 +364,29 @@ export default function LogManager({ title, endpoint, fields, plotsLookup, rende
                   <tr key={r.id} className="hover:bg-slate-50/80 transition">
                     {visible.map(f => (
                       <td key={f.key} className="px-4 py-3 text-slate-700 font-medium align-middle">
-                        {renderBadge(f, r[f.key]) || (
-                          f.type === 'date' && r[f.key] ? (
-                            <span className="font-mono text-slate-600">{format(new Date(r[f.key]), 'dd/MM/yyyy')}</span>
-                          ) : f.key === 'plot_id' ? (
-                            <span className="font-bold text-emerald-900">{plotName(r[f.key])}</span>
-                          ) : f.key === 'image_url' && r[f.key] ? (
-                            <img src={r[f.key]} alt="รูป" className="w-16 h-12 rounded-xl object-cover border border-slate-200" />
-                          ) : (
-                            r[f.key] ?? '—'
+                        {f.render ? f.render(r[f.key], r) : (
+                          renderBadge(f, r[f.key]) || (
+                            f.type === 'date' && r[f.key] ? (
+                              <span className="font-mono text-slate-600">{format(new Date(r[f.key]), 'dd/MM/yyyy')}</span>
+                            ) : f.key === 'plot_id' ? (
+                              <span className="font-bold text-emerald-900">{plotName(r[f.key])}</span>
+                            ) : f.key === 'image_url' && r[f.key] ? (
+                              <img src={r[f.key]} alt="รูป" className="w-16 h-12 rounded-xl object-cover border border-slate-200" />
+                            ) : (
+                              r[f.key] ?? '—'
+                            )
                           )
                         )}
                       </td>
                     ))}
 
-                    <td className="px-4 py-3 text-right align-middle">
-                      <div className="inline-flex items-center gap-1.5">
+                    <td className="px-4 py-3 text-right align-middle whitespace-nowrap">
+                      <div className="inline-flex items-center justify-end gap-1.5 flex-nowrap">
                         {renderRowAction && renderRowAction(r)}
 
                         <button
                           onClick={() => openEdit(r)}
-                          className="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 active:scale-95 text-blue-700 font-bold px-2.5 py-1.5 rounded-xl text-xs border border-blue-200/80 transition cursor-pointer shadow-xs"
+                          className="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 active:scale-95 text-blue-700 font-bold px-2.5 py-1.5 rounded-xl text-xs border border-blue-200/80 transition cursor-pointer shadow-2xs"
                           title="แก้ไขรายการ"
                         >
                           <Pencil className="w-3.5 h-3.5" />
@@ -340,7 +395,7 @@ export default function LogManager({ title, endpoint, fields, plotsLookup, rende
 
                         <button
                           onClick={() => del(r.id)}
-                          className="inline-flex items-center gap-1 bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-700 font-bold px-2.5 py-1.5 rounded-xl text-xs border border-rose-200/80 transition cursor-pointer shadow-xs"
+                          className="inline-flex items-center gap-1 bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-700 font-bold px-2.5 py-1.5 rounded-xl text-xs border border-rose-200/80 transition cursor-pointer shadow-2xs"
                           title="ลบรายการ"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -376,7 +431,7 @@ export default function LogManager({ title, endpoint, fields, plotsLookup, rende
             </div>
 
             <div className="space-y-3.5 text-xs">
-              {fields.map(f => (
+              {fields.filter(f => !f.hideInForm).map(f => (
                 <div key={f.key} className="space-y-1">
                   <label className="font-bold text-slate-700 flex items-center justify-between">
                     <span>{f.label} {f.required && <span className="text-rose-500">*</span>}</span>

@@ -23,6 +23,12 @@ export function crudRouter(table, fields) {
     res.json(rows);
   });
 
+  r.get('/:id', async (req, res) => {
+    const [rows] = await pool.query(`SELECT * FROM \`${table}\` WHERE id=? AND user_id=?`, [req.params.id, req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'not found' });
+    res.json(rows[0]);
+  });
+
   r.post('/', async (req, res) => {
     const cols = ['user_id', 'created_by', 'updated_by', ...fields];
     const vals = [req.user.id, req.user.email, req.user.email, ...fields.map(f => req.body[f] ?? null)];

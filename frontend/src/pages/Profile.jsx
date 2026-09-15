@@ -2,8 +2,21 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../lib/auth.jsx';
 import { api } from '../lib/api';
 import { toast } from 'sonner';
-import { Building, User, Mail, Lock, ShieldCheck, Save, Sparkles, CheckCircle2, Leaf, QrCode } from 'lucide-react';
+import { Building, User, Mail, Lock, ShieldCheck, Save, Sparkles, CheckCircle2, Leaf, QrCode, CreditCard, Wallet, ExternalLink, Image as ImageIcon } from 'lucide-react';
 import { format } from 'date-fns';
+
+const BANK_OPTIONS = [
+  'ธนาคารกสิกรไทย (KBANK)',
+  'ธนาคารไทยพาณิชย์ (SCB)',
+  'ธนาคารกรุงเทพ (BBL)',
+  'ธนาคารกรุงไทย (KTB)',
+  'ธนาคารทหารไทยธนชาต (TTB)',
+  'ธนาคารกรุงศรีอยุธยา (BAY)',
+  'ธนาคารออมสิน (GSB)',
+  'ธนาคารเพื่อการเกษตรและสหกรณ์การเกษตร (ธ.ก.ส.)',
+  'พร้อมเพย์ (PromptPay)',
+  'อื่นๆ',
+];
 
 export default function Profile() {
   const { user, updateProfile } = useAuth();
@@ -14,6 +27,11 @@ export default function Profile() {
     email: '',
     password: '',
     confirmPassword: '',
+    bankName: '',
+    bankAccountNo: '',
+    bankAccountName: '',
+    promptpayNumber: '',
+    promptpayQrUrl: '',
   });
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
@@ -30,6 +48,11 @@ export default function Profile() {
           email: res.data.email || '',
           password: '',
           confirmPassword: '',
+          bankName: res.data.bank_name || '',
+          bankAccountNo: res.data.bank_account_no || '',
+          bankAccountName: res.data.bank_account_name || '',
+          promptpayNumber: res.data.promptpay_number || '',
+          promptpayQrUrl: res.data.promptpay_qr_url || '',
         });
       } catch (e) {
         if (user) {
@@ -38,6 +61,11 @@ export default function Profile() {
             displayName: user.display_name || '',
             farmName: user.farm_name || '',
             email: user.email || '',
+            bankName: user.bank_name || '',
+            bankAccountNo: user.bank_account_no || '',
+            bankAccountName: user.bank_account_name || '',
+            promptpayNumber: user.promptpay_number || '',
+            promptpayQrUrl: user.promptpay_qr_url || '',
           }));
         }
       } finally {
@@ -45,6 +73,17 @@ export default function Profile() {
       }
     })();
   }, [user]);
+
+  const handleGeneratePromptPayQr = () => {
+    const rawNumber = (form.promptpayNumber || '').replace(/[^0-9]/g, '');
+    if (!rawNumber || (rawNumber.length !== 10 && rawNumber.length !== 13)) {
+      toast.error('กรุณากรอกเบอร์พร้อมเพย์ 10 หลัก หรือเลขบัตรประชาชน 13 หลักให้ถูกต้องก่อน');
+      return;
+    }
+    const autoQrUrl = `https://promptpay.io/${rawNumber}.png`;
+    setForm(prev => ({ ...prev, promptpayQrUrl: autoQrUrl }));
+    toast.success('สร้างลิงก์ QR Code พร้อมเพย์อัตโนมัติสำเร็จ!');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -63,6 +102,11 @@ export default function Profile() {
       const payload = {
         display_name: form.displayName,
         farm_name: form.farmName,
+        bank_name: form.bankName,
+        bank_account_no: form.bankAccountNo,
+        bank_account_name: form.bankAccountName,
+        promptpay_number: form.promptpayNumber,
+        promptpay_qr_url: form.promptpayQrUrl,
       };
       if (form.password) {
         payload.password = form.password;
@@ -72,7 +116,7 @@ export default function Profile() {
       updateProfile(res.data.user, res.data.token);
       setUserData(res.data.user);
       setForm(prev => ({ ...prev, password: '', confirmPassword: '' }));
-      toast.success('บันทึกการตั้งค่าโปรไฟล์และชื่อฟาร์มสำเร็จ!');
+      toast.success('บันทึกการตั้งค่าข้อมูลฟาร์มและบัญชีธนาคารสำเร็จ!');
     } catch (err) {
       toast.error(err.response?.data?.error || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
     } finally {
@@ -98,7 +142,7 @@ export default function Profile() {
           ตั้งค่าฟาร์มและข้อมูลผู้ใช้งาน
         </h1>
         <p className="text-xs text-slate-500 mt-1">
-          กำหนดชื่อฟาร์ม ข้อมูลเจ้าของแปลง เพื่อนำไปใช้ออกเอกสารมาตรฐาน GAP รายงานประจำปี และระบบสั่งซื้อออนไลน์
+          กำหนดชื่อฟาร์ม บัญชีธนาคารรับเงิน สำหรับออกเอกสารมาตรฐาน GAP และระบบสั่งซื้อผักทาง LINE
         </p>
       </div>
 
@@ -143,13 +187,34 @@ export default function Profile() {
               </div>
             </div>
 
+            {/* Bank Summary Badge */}
+            <div className="border-t border-slate-100 pt-3 space-y-1.5 text-xs">
+              <div className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+                <CreditCard className="w-3.5 h-3.5 text-emerald-700" />
+                บัญชีรับเงินปัจจุบัน:
+              </div>
+              {userData?.bank_account_no || userData?.promptpay_number ? (
+                <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-200/70 text-[11px] space-y-0.5 text-slate-700">
+                  <div className="font-semibold text-emerald-800">{userData.bank_name || 'ธนาคารทั่วไป'}</div>
+                  <div>เลขบัญชี: <span className="font-mono font-medium">{userData.bank_account_no || '-'}</span></div>
+                  {userData.promptpay_number && (
+                    <div>พร้อมเพย์: <span className="font-mono font-medium">{userData.promptpay_number}</span></div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-[11px] text-amber-600 bg-amber-50 rounded-xl p-2.5 border border-amber-100">
+                  ยังไม่ได้ตั้งค่าบัญชีรับเงิน (จะใช้บัญชีเริ่มต้นของระบบ)
+                </div>
+              )}
+            </div>
+
             <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-4 space-y-2">
               <div className="flex items-center gap-2 text-emerald-900 font-bold text-xs">
                 <ShieldCheck className="w-4 h-4 text-emerald-700" />
                 สถานะความปลอดภัยฟาร์ม
               </div>
               <p className="text-[11px] text-emerald-800 leading-relaxed">
-                ชื่อฟาร์มและชื่อเจ้าของแปลงนี้จะแสดงในหัวเอกสาร <strong>แบบบันทึกมาตรฐาน GAP</strong> และรายงานการตรวจรับรองประจำปีโดยอัตโนมัติ
+                ชื่อฟาร์มและข้อมูลบัญชีธนาคารนี้จะแสดงบน <strong>ใบแจ้งหนี้ใน LINE บอท</strong> และหน้า <strong>LINE LIFF สำหรับลูกค้า</strong> โดยอัตโนมัติ
               </p>
             </div>
           </div>
@@ -210,6 +275,143 @@ export default function Profile() {
               />
             </div>
 
+            {/* Bank & Payment Information Section */}
+            <div className="border-t border-slate-100 pt-5 space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-emerald-700" />
+                  ช่องทางการโอนเงินและชำระค่าสินค้า (Payment Settings)
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  ข้อมูลนี้จะแสดงในบิลแจ้งหนี้ที่ LINE บอทส่งให้ลูกค้า และหน้าร้านค้าออนไลน์ (LIFF)
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Bank Name */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700">ธนาคาร (Bank Name)</label>
+                  <select
+                    value={form.bankName}
+                    onChange={e => setForm(prev => ({ ...prev, bankName: e.target.value }))}
+                    className="input text-xs w-full py-2.5 px-3.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600 bg-white"
+                  >
+                    <option value="">-- เลือกธนาคาร --</option>
+                    {BANK_OPTIONS.map(b => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Bank Account No */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700">เลขที่บัญชีธนาคาร</label>
+                  <input
+                    type="text"
+                    value={form.bankAccountNo}
+                    onChange={e => setForm(prev => ({ ...prev, bankAccountNo: e.target.value }))}
+                    placeholder="เช่น 123-4-56789-0"
+                    className="input text-xs w-full py-2.5 px-3.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+
+                {/* Account Holder Name */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700">ชื่อเจ้าของบัญชี</label>
+                  <input
+                    type="text"
+                    value={form.bankAccountName}
+                    onChange={e => setForm(prev => ({ ...prev, bankAccountName: e.target.value }))}
+                    placeholder="เช่น นายสมชาย ใจดี หรือ ฟาร์มผักกรีน"
+                    className="input text-xs w-full py-2.5 px-3.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+
+                {/* PromptPay Number */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700">เบอร์พร้อมเพย์ (PromptPay)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={form.promptpayNumber}
+                      onChange={e => setForm(prev => ({ ...prev, promptpayNumber: e.target.value }))}
+                      placeholder="เช่น 0812345678 หรือ เลขบัตร ปชช."
+                      className="input text-xs flex-1 py-2.5 px-3.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleGeneratePromptPayQr}
+                      title="สร้าง QR Code อัตโนมัติจากเบอร์พร้อมเพย์"
+                      className="px-3 py-2 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-300 text-[11px] font-bold rounded-xl whitespace-nowrap transition"
+                    >
+                      ⚡ สร้าง QR
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* QR Code URL & Preview */}
+              <div className="space-y-2 pt-2">
+                <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                  <span>URL รูปภาพ QR Code ชำระเงิน (Direct Image Link)</span>
+                  {form.promptpayQrUrl && (
+                    <a
+                      href={form.promptpayQrUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-emerald-700 hover:underline flex items-center gap-1 font-normal"
+                    >
+                      เปิดดูรูปเต็ม <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={form.promptpayQrUrl}
+                    onChange={e => setForm(prev => ({ ...prev, promptpayQrUrl: e.target.value }))}
+                    placeholder="https://... (เช่น https://promptpay.io/0812345678.png)"
+                    className="input text-xs flex-1 py-2.5 px-3.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600 font-mono text-[11px]"
+                  />
+                  {form.promptpayQrUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, promptpayQrUrl: '' }))}
+                      className="px-3 py-2 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 text-[11px] font-semibold rounded-xl"
+                    >
+                      ลบรูป
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  * ต้องเป็น URL ที่ขึ้นต้นด้วย <code>https://</code> เพื่อให้ LINE Flex Message สามารถแสดงผล QR Code ในแชทได้ถูกต้อง
+                </p>
+
+                {/* QR Code Preview */}
+                {form.promptpayQrUrl && (
+                  <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-2xl inline-flex items-center gap-4">
+                    <img
+                      src={form.promptpayQrUrl}
+                      alt="Payment QR Preview"
+                      className="w-24 h-24 object-contain bg-white rounded-xl border border-slate-200 shadow-xs"
+                      onError={e => {
+                        e.target.style.display = 'none';
+                      }}
+                    />
+                    <div className="text-xs space-y-1">
+                      <div className="font-bold text-slate-800 flex items-center gap-1">
+                        <QrCode className="w-4 h-4 text-emerald-700" />
+                        ตัวอย่าง QR Code สำหรับสแกนจ่าย
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        รูปนี้จะปรากฏในใบแจ้งหนี้ให้ลูกค้าสแกนจ่ายได้ทันที
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Password Section */}
             <div className="border-t border-slate-100 pt-5 space-y-4">
               <div>
@@ -249,7 +451,7 @@ export default function Profile() {
               <button
                 type="submit"
                 disabled={loading}
-                className="inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-6 py-3 rounded-xl transition shadow-md disabled:opacity-50"
+                className="inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-6 py-3 rounded-xl transition shadow-md disabled:opacity-50 cursor-pointer"
               >
                 <Save className="w-4 h-4" />
                 {loading ? 'กำลังบันทึกข้อมูล...' : 'บันทึกการตั้งค่า'}

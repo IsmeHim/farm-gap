@@ -30,6 +30,19 @@ export default function LiffOrder() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(null);
+  const [paymentInfo, setPaymentInfo] = useState(null);
+
+  // 0. Fetch farm payment info
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.get('/api/auth/payment-info');
+        if (res.data) setPaymentInfo(res.data);
+      } catch (e) {
+        console.warn('Failed to load farm payment info:', e.message);
+      }
+    })();
+  }, []);
 
   // 1. Initialize LINE LIFF
   useEffect(() => {
@@ -483,13 +496,44 @@ export default function LiffOrder() {
             </div>
 
             {/* QR Payment Information */}
-            <div className="bg-slate-50 border border-slate-150 rounded-2xl p-4 space-y-3">
-              <h4 className="font-bold text-xs text-slate-600 uppercase tracking-wide">💳 โอนเงินชำระค่าผัก</h4>
-              <div className="text-xs text-slate-600 space-y-1">
-                <p>ธนาคารกสิกรไทย (KBANK)</p>
-                <p className="text-sm font-bold text-slate-800">เลขบัญชี: 123-4-56789-0</p>
-                <p>ชื่อบัญชี: บจก. ฟาร์มผักเกษตรดี (FarmGAP)</p>
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+              <h4 className="font-bold text-xs text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                💳 โอนเงินชำระค่าผัก
+              </h4>
+              <div className="text-xs text-slate-600 space-y-1 bg-white p-3 rounded-xl border border-slate-150">
+                <p className="font-semibold text-emerald-800">
+                  {paymentInfo?.bank_name || 'ธนาคารกสิกรไทย (KBANK)'}
+                </p>
+                <p className="text-sm font-bold text-slate-800">
+                  เลขบัญชี: <span className="font-mono">{paymentInfo?.bank_account_no || '123-4-56789-0'}</span>
+                </p>
+                <p className="text-slate-600">
+                  ชื่อบัญชี: {paymentInfo?.bank_account_name || paymentInfo?.display_name || 'บจก. ฟาร์มผักเกษตรดี (FarmGAP)'}
+                </p>
+                {paymentInfo?.promptpay_number && (
+                  <p className="text-slate-600">
+                    พร้อมเพย์: <span className="font-mono font-medium">{paymentInfo.promptpay_number}</span>
+                  </p>
+                )}
               </div>
+
+              {/* Display QR Code if available */}
+              {(paymentInfo?.promptpay_qr_url || (paymentInfo?.promptpay_number && paymentInfo.promptpay_number.trim())) && (
+                <div className="flex flex-col items-center justify-center p-3 bg-white rounded-xl border border-slate-150 text-center">
+                  <p className="text-[11px] font-semibold text-slate-500 mb-2">สแกน QR Code เพื่อชำระเงิน</p>
+                  <img
+                    src={
+                      paymentInfo?.promptpay_qr_url ||
+                      `https://promptpay.io/${paymentInfo.promptpay_number.replace(/[^0-9]/g, '')}${getCartTotal() > 0 ? '/' + getCartTotal() : ''}.png`
+                    }
+                    alt="PromptPay QR"
+                    className="w-36 h-36 object-contain rounded-lg border border-slate-100 shadow-xs"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
               
               <div className="border-t pt-3">
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">📷 แนบหลักฐานการโอนเงิน (สลิป) *</label>
