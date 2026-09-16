@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { pool } from '../db.js';
+import { notifyAdminNewOrder } from './line.js';
 
 export const ordersRouter = Router();
 
@@ -102,10 +103,18 @@ ordersRouter.post('/', async (req, res) => {
       [orderId]
     );
 
-    res.status(201).json({
+    const fullOrder = {
       ...newOrderRows[0],
+      customer_name: customerRows[0]?.display_name,
+      customer_phone: customerRows[0]?.phone,
+      customer_address: customerRows[0]?.address,
       items: newItemsRows,
-    });
+    };
+
+    // แจ้งเตือนเจ้าของฟาร์มเข้า LINE
+    notifyAdminNewOrder(fullOrder, 'NEW_ORDER').catch(e => console.error('notifyAdminNewOrder error:', e.message));
+
+    res.status(201).json(fullOrder);
   } catch (error) {
     await connection.rollback();
     res.status(500).json({ error: error.message });
@@ -223,7 +232,18 @@ ordersRouter.post('/:id/slip', async (req, res) => {
     if (existing.length === 0) return res.status(404).json({ error: 'Order not found' });
 
     await pool.query('UPDATE orders SET slip_image_url = ?, status = "paid" WHERE id = ?', [slip_image_url, req.params.id]);
-    const [updated] = await pool.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
+    const [updated] = await pool.query(
+      `SELECT o.*, c.display_name AS customer_name, c.phone AS customer_phone, c.address AS customer_address 
+       FROM orders o 
+       LEFT JOIN customers c ON o.customer_id = c.id 
+       WHERE o.id = ?`,
+      [req.params.id]
+    );
+
+    if (updated[0]) {
+      notifyAdminNewOrder(updated[0], 'SLIP_UPLOADED').catch(e => console.error('notifyAdmin slip error:', e.message));
+    }
+
     res.json(updated[0]);
   } catch (error) {
     res.status(500).json({ error: error.message });

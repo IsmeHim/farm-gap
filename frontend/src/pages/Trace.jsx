@@ -31,7 +31,7 @@ export default function Trace() {
               #BATCH-{(data.plot_name || '').replace(/แปลง|\s|\(.*?\)/g, '') || 'P'}-R{data.cycle_number || 1} (รอบที่ {data.cycle_number || 1})
             </span>
           </div>
-          <div><b>วันเก็บเกี่ยว:</b> {format(new Date(data.harvest_date), 'dd/MM/yyyy')}</div>
+          <div><b>วันเก็บผลผลิต:</b> {format(new Date(data.harvest_date), 'dd/MM/yyyy')}</div>
           <div><b>เกรด:</b> {data.quality_grade || '-'}</div>
           <div><b>ปริมาณ:</b> {data.quantity} {data.unit}</div>
         </div>

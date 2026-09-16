@@ -25,9 +25,406 @@ import {
   Award,
   Shovel,
   FlaskConical,
+  ShieldCheck,
+  User,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { getCropCycleId } from '../lib/cropCycle.js';
+
+// Calculate expected harvest date from planting date and number of days
+export const calculateHarvestDate = (plantDate, days) => {
+  if (!plantDate || !days || isNaN(days)) return '';
+  const d = new Date(plantDate);
+  if (isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() + parseInt(days, 10));
+  return d.toISOString().split('T')[0];
+};
+
+// Calculate difference in days between start and harvest date
+export const calculateDaysDiff = (plantDate, harvestDate) => {
+  if (!plantDate || !harvestDate) return '';
+  const start = new Date(plantDate);
+  const end = new Date(harvestDate);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return '';
+  const diffTime = end.getTime() - start.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
+  return diffDays > 0 ? diffDays : '';
+};
+
+export const formatThaiDateFull = (dateStr) => {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const thaiDays = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
+    const thaiMonths = [
+      'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+      'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+    ];
+    const dayName = thaiDays[d.getDay()];
+    const day = d.getDate();
+    const month = thaiMonths[d.getMonth()];
+    const year = d.getFullYear() + 543;
+    return `${dayName}ที่ ${day} ${month} ${year}`;
+  } catch {
+    return dateStr;
+  }
+};
+
+function PlotFormModal({
+  open,
+  setOpen,
+  editingId,
+  form,
+  setForm,
+  save,
+}) {
+  const [growthDays, setGrowthDays] = useState(45);
+
+  useEffect(() => {
+    const pDate = form.planting_date || format(new Date(), 'yyyy-MM-dd');
+    let days = 45;
+    if (form.planting_date && form.expected_harvest_date) {
+      const diff = calculateDaysDiff(form.planting_date, form.expected_harvest_date);
+      if (diff) days = diff;
+    }
+    setGrowthDays(days);
+    const expDate = calculateHarvestDate(pDate, days);
+    setForm(prev => ({
+      ...prev,
+      planting_date: pDate,
+      expected_harvest_date: prev.expected_harvest_date || expDate,
+    }));
+  }, [editingId]);
+
+  const handlePlantDateChange = (newDate) => {
+    const expDate = calculateHarvestDate(newDate, growthDays);
+    setForm(prev => ({
+      ...prev,
+      planting_date: newDate,
+      expected_harvest_date: expDate,
+    }));
+  };
+
+  const handleGrowthDaysChange = (daysVal) => {
+    setGrowthDays(daysVal);
+    const pDate = form.planting_date || format(new Date(), 'yyyy-MM-dd');
+    const expDate = calculateHarvestDate(pDate, daysVal);
+    setForm(prev => ({
+      ...prev,
+      planting_date: pDate,
+      expected_harvest_date: expDate,
+    }));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center z-50 p-0 sm:p-4 overflow-y-auto" onClick={() => setOpen(false)}>
+      <div
+        className="bg-white rounded-t-3xl sm:rounded-3xl max-w-2xl lg:max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex justify-between items-center px-5 sm:px-6 py-4 border-b border-slate-100 shrink-0 bg-white/95 rounded-t-3xl backdrop-blur-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-600 to-green-700 text-white flex items-center justify-center shadow-md shadow-emerald-700/20">
+              <Sprout className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-black text-[#173f2a]">
+                {editingId ? '✏️ แก้ไขข้อมูลแปลงปลูก' : '➕ เพิ่มแปลงปลูกใหม่'}
+              </h2>
+              <p className="text-[11px] text-slate-400">
+                ระบบจัดการแปลงเพาะปลูก & คำนวณวันเก็บผลผลิตอัจฉริยะ (Smart GAP)
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Form Body */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            save();
+          }}
+          className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 text-xs"
+        >
+          {/* Section 1: ข้อมูลแปลงและพืชเพาะปลูก */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+              <Sprout className="w-4 h-4 text-emerald-700" />
+              <h3 className="font-bold text-slate-800 text-xs sm:text-sm">
+                1. ข้อมูลแปลงและพืชเพาะปลูก (General Information)
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">
+                  ชื่อแปลงปลูก <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="input text-xs w-full rounded-xl border border-slate-200"
+                  placeholder="เช่น แปลง A1 (Hydro NFT)"
+                  value={form.name || ''}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">
+                  พืชที่ปลูกในแปลง <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="input text-xs w-full rounded-xl border border-slate-200"
+                  placeholder="เช่น ผักกรีนโอ๊ค (Green Oak)"
+                  value={form.crop_name || ''}
+                  onChange={e => setForm(f => ({ ...f, crop_name: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">สถานะแปลง</label>
+                <select
+                  className="input text-xs w-full rounded-xl border border-slate-200 font-medium"
+                  value={form.status || 'active'}
+                  onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+                >
+                  <option value="active">🌱 กำลังปลูก (Active)</option>
+                  <option value="harvested">🧺 เก็บผลผลิตแล้ว / รอเริ่มรอบใหม่ (Harvested)</option>
+                  <option value="fallow">⏸️ พักแปลง (Fallow)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">พื้นที่แปลง (ตร.ม.)</label>
+                <input
+                  type="number"
+                  step="any"
+                  className="input text-xs w-full rounded-xl border border-slate-200 font-mono"
+                  placeholder="เช่น 100"
+                  value={form.area_sqm || ''}
+                  onChange={e => setForm(f => ({ ...f, area_sqm: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: ระยะเวลาเพาะปลูก & คำนวณวันเก็บผลผลิตอัตโนมัติ */}
+          <div className="space-y-3 bg-slate-50/70 p-4 sm:p-5 rounded-2xl border border-slate-200/80">
+            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-emerald-700" />
+                <h3 className="font-bold text-slate-800 text-xs sm:text-sm">
+                  2. ระยะเวลาเพาะปลูก & คำนวณวันเก็บเกี่ยว (Smart Harvest Forecast)
+                </h3>
+              </div>
+              <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-full border border-emerald-300/60">
+                ระบบคำนวณให้อัตโนมัติ
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                  วันที่เริ่มปลูก <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  required
+                  className="input text-xs w-full rounded-xl border border-slate-200 font-mono"
+                  value={form.planting_date || format(new Date(), 'yyyy-MM-dd')}
+                  onChange={e => handlePlantDateChange(e.target.value)}
+                />
+                <span className="text-[10px] text-slate-400">เริ่มต้นคือวันที่ปัจจุบัน (ปรับเปลี่ยนได้หากปลูกไปก่อนหน้านี้)</span>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                    ระยะเวลาการปลูก (จำนวนวัน) <span className="text-rose-500">*</span>
+                  </span>
+                  <span className="text-[11px] font-mono font-black text-emerald-800 bg-emerald-100 px-2 py-0.2 rounded-md">
+                    {growthDays || 0} วัน
+                  </span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="1"
+                    max="365"
+                    required
+                    placeholder="กรอกจำนวนวัน เช่น 45"
+                    className="input text-xs w-full rounded-xl border border-slate-200 font-mono font-bold pr-12"
+                    value={growthDays}
+                    onChange={e => handleGrowthDaysChange(e.target.value)}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 pointer-events-none">
+                    วัน
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: แหล่งน้ำ & ผู้ดูแลแปลง */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+              <Droplets className="w-4 h-4 text-sky-600" />
+              <h3 className="font-bold text-slate-800 text-xs sm:text-sm">
+                3. การจัดการน้ำ & ผู้ดูแลแปลง (Water & Workers)
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">ปริมาณน้ำ Preset (ลิตร/ครั้ง)</label>
+                <input
+                  type="number"
+                  step="any"
+                  className="input text-xs w-full rounded-xl border border-slate-200"
+                  placeholder="เช่น 50"
+                  value={form.default_water_liters ?? 50}
+                  onChange={e => setForm(f => ({ ...f, default_water_liters: Number(e.target.value) }))}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">ผู้ดูแลประจำแปลง</label>
+                <input
+                  type="text"
+                  className="input text-xs w-full rounded-xl border border-slate-200"
+                  placeholder="เช่น นายสมชาย ใจดี"
+                  value={form.default_worker_name || ''}
+                  onChange={e => setForm(f => ({ ...f, default_worker_name: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">แหล่งน้ำที่ใช้ (GAP)</label>
+                <input
+                  type="text"
+                  className="input text-xs w-full rounded-xl border border-slate-200"
+                  placeholder="เช่น น้ำบาดาล, น้ำประปา, แหล่งน้ำผิวดิน"
+                  value={form.water_source || ''}
+                  onChange={e => setForm(f => ({ ...f, water_source: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">ประเภทแหล่งน้ำ</label>
+                <input
+                  type="text"
+                  className="input text-xs w-full rounded-xl border border-slate-200"
+                  placeholder="เช่น บาดาล / ประปา"
+                  value={form.water_source_type || ''}
+                  onChange={e => setForm(f => ({ ...f, water_source_type: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 4: มาตรฐานดิน & ความปลอดภัย GAP */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+              <Shovel className="w-4 h-4 text-amber-700" />
+              <h3 className="font-bold text-slate-800 text-xs sm:text-sm">
+                4. การเตรียมดิน & มาตรฐานความปลอดภัยแปลง (GAP Standards)
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="sm:col-span-2 space-y-1">
+                <label className="font-bold text-slate-700">การเตรียมดิน / วัสดุปลูก (GAP)</label>
+                <textarea
+                  rows={2}
+                  className="input text-xs w-full rounded-xl border border-slate-200"
+                  placeholder="เช่น ผสมดินในกระบะปูน ดินร่วน 2 ส่วน + ปุ๋ยหมัก 1 ส่วน + ขุยมะพร้าว 1 ส่วน, ตากดิน 7 วัน"
+                  value={form.soil_notes || ''}
+                  onChange={e => setForm(f => ({ ...f, soil_notes: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">ผลตรวจวิเคราะห์ดิน/วัสดุปลูก</label>
+                <input
+                  type="text"
+                  className="input text-xs w-full rounded-xl border border-slate-200"
+                  placeholder="เช่น ดินอินทรีย์ pH 6.5, ปลอดสารเคมี"
+                  value={form.soil_test_result || ''}
+                  onChange={e => setForm(f => ({ ...f, soil_test_result: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">วันที่ตรวจวิเคราะห์ดิน</label>
+                <input
+                  type="date"
+                  className="input text-xs w-full rounded-xl border border-slate-200 font-mono"
+                  value={form.soil_test_date || ''}
+                  onChange={e => setForm(f => ({ ...f, soil_test_date: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">สถานะความปลอดภัยแปลง</label>
+                <select
+                  className="input text-xs w-full rounded-xl border border-slate-200 font-medium"
+                  value={form.field_safety_status || 'ปลอดภัย'}
+                  onChange={e => setForm(f => ({ ...f, field_safety_status: e.target.value }))}
+                >
+                  <option value="ปลอดภัย">✅ ปลอดภัย (GAP Certified)</option>
+                  <option value="รอตรวจสอบ">⏳ รอตรวจสอบ</option>
+                  <option value="มีสารตกค้าง">⚠️ มีสารตกค้าง</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">หมายเหตุเพิ่มเติม</label>
+                <input
+                  type="text"
+                  className="input text-xs w-full rounded-xl border border-slate-200"
+                  placeholder="หมายเหตุอื่นๆ"
+                  value={form.notes || ''}
+                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Sticky Modal Footer */}
+          <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2.5">
+            <button
+              type="button"
+              className="btn btn-outline text-xs px-4 py-2.5 rounded-xl cursor-pointer"
+              onClick={() => setOpen(false)}
+            >
+              ยกเลิก
+            </button>
+            <button
+              type="submit"
+              className="btn text-xs px-6 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold cursor-pointer shadow-md flex items-center gap-1.5"
+            >
+              <span>💾 บันทึกข้อมูลแปลงปลูก</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 export default function Plots() {
   const [activeTab, setActiveTab] = useState('plots'); // 'plots' | 'cycles'
@@ -62,11 +459,15 @@ export default function Plots() {
   }, [historyModal]);
 
   const openNewCrop = (plot) => {
+    const defaultDays = 45;
+    const pDate = format(new Date(), 'yyyy-MM-dd');
+    const hDate = calculateHarvestDate(pDate, defaultDays);
     setNewCropModal(plot);
     setNewCropForm({
       crop_name: plot.crop_name || '',
-      planting_date: format(new Date(), 'yyyy-MM-dd'),
-      expected_harvest_date: '',
+      planting_date: pDate,
+      growth_days: defaultDays,
+      expected_harvest_date: hDate,
       default_water_liters: plot.default_water_liters || 50,
       soil_notes: plot.soil_notes || '',
       notes: '',
@@ -110,32 +511,36 @@ export default function Plots() {
           </div>
         </div>
 
-        {/* Tab Buttons */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-2xl border border-slate-200/80 shrink-0">
+        {/* Tab Buttons (Segmented Control) */}
+        <div className="grid grid-cols-2 sm:flex items-center gap-1 p-1 bg-slate-100/90 rounded-2xl border border-slate-200/80 w-full sm:w-auto shrink-0 shadow-2xs">
           <button
             type="button"
             onClick={() => setActiveTab('plots')}
-            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+            className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer select-none ${
               activeTab === 'plots'
-                ? 'bg-emerald-700 text-white shadow-sm'
+                ? 'bg-emerald-700 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
             }`}
           >
-            <Layers className="w-4 h-4" />
-            <span>แปลงปัจจุบัน (Active Plots)</span>
+            <Layers className="w-3.5 h-3.5 shrink-0" />
+            <span className="whitespace-nowrap">แปลงปัจจุบัน</span>
+            <span className="hidden md:inline text-[11px] opacity-80">(Active)</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('cycles')}
-            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+            className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer select-none ${
               activeTab === 'cycles'
-                ? 'bg-emerald-700 text-white shadow-sm'
+                ? 'bg-emerald-700 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
             }`}
           >
-            <History className="w-4 h-4 text-amber-300" />
-            <span>ประวัติรอบการปลูก (Cycle Archive)</span>
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500 text-slate-950 font-black">
+            <History className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'cycles' ? 'text-amber-300' : 'text-amber-600'}`} />
+            <span className="whitespace-nowrap">ประวัติรอบปลูก</span>
+            <span className="hidden md:inline text-[11px] opacity-80">(Archive)</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wide ${
+              activeTab === 'cycles' ? 'bg-amber-400 text-slate-950' : 'bg-amber-100 text-amber-800'
+            }`}>
               GAP
             </span>
           </button>
@@ -148,6 +553,7 @@ export default function Plots() {
           title="แปลงปลูก (GAP #2)"
           endpoint="plots"
           reloadTrigger={reloadKey}
+          renderModal={props => <PlotFormModal {...props} />}
           renderTopBanner={({ rows }) => {
             const total = rows.length;
             const active = rows.filter(r => r.status === 'active' || !r.status).length;
@@ -260,7 +666,7 @@ export default function Plots() {
                 {item.status === 'harvested' ? (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300/70 shrink-0">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                    เก็บเกี่ยวแล้ว
+                    เก็บผลผลิตแล้ว
                   </span>
                 ) : item.status === 'fallow' ? (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
@@ -301,7 +707,7 @@ export default function Plots() {
                 </div>
 
                 <div className="space-y-0.5">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">คาดเก็บเกี่ยว</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">คาดเก็บผลผลิต</span>
                   <span className="font-medium text-slate-700 block">
                     {item.expected_harvest_date ? format(new Date(item.expected_harvest_date), 'dd/MM/yyyy') : '—'}
                   </span>
@@ -335,54 +741,60 @@ export default function Plots() {
               )}
 
               {/* Action Buttons Footer */}
-              <div className="pt-2 border-t border-slate-100 flex items-center gap-2 flex-wrap sm:flex-nowrap">
+              <div className="pt-2.5 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                {/* Primary Action Button (ปลูกรอบใหม่ / เริ่มรอบการปลูกใหม่) */}
                 {item.status === 'harvested' ? (
                   <button
                     type="button"
                     onClick={() => openNewCrop(item)}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-black py-2.5 px-3 rounded-xl text-xs shadow-sm transition cursor-pointer"
+                    className="w-full sm:flex-1 inline-flex items-center justify-center gap-1.5 bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 active:scale-98 text-slate-950 font-black py-2.5 px-3.5 rounded-xl text-xs shadow-xs transition cursor-pointer"
                   >
-                    <Sprout className="w-4 h-4" />
-                    <span>🌱 เริ่มรอบการปลูกใหม่</span>
+                    <Sprout className="w-4 h-4 shrink-0 text-slate-950" />
+                    <span className="truncate">เริ่มรอบการปลูกใหม่</span>
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={() => openNewCrop(item)}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-emerald-800 font-bold py-2.5 px-3 rounded-xl text-xs border border-emerald-200 transition cursor-pointer"
+                    className="w-full sm:flex-1 inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold py-2.5 px-3.5 rounded-xl text-xs shadow-xs transition cursor-pointer"
                   >
-                    <RotateCcw className="w-4 h-4 text-emerald-600" />
-                    <span>ปลูกรอบใหม่</span>
+                    <RotateCcw className="w-4 h-4 shrink-0 text-emerald-100" />
+                    <span className="truncate">ปลูกรอบใหม่</span>
                   </button>
                 )}
 
-                <button
-                  type="button"
-                  onClick={() => setHistoryModal(item)}
-                  className="inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-medium py-2.5 px-3 rounded-xl text-xs border border-slate-200 transition cursor-pointer"
-                  title="ดูประวัติรอบปลูก"
-                >
-                  <History className="w-3.5 h-3.5" />
-                  <span>ประวัติ</span>
-                </button>
+                {/* Secondary Actions (History, Edit, Delete) */}
+                <div className="grid grid-cols-3 sm:flex sm:items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setHistoryModal(item)}
+                    className="inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-semibold py-2 sm:py-2.5 px-2.5 rounded-xl text-xs border border-slate-200/80 transition cursor-pointer"
+                    title="ดูประวัติรอบปลูก"
+                  >
+                    <History className="w-3.5 h-3.5 shrink-0 text-slate-500" />
+                    <span>ประวัติ</span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={openEdit}
-                  className="inline-flex items-center justify-center gap-1 bg-blue-50 hover:bg-blue-100 active:scale-95 text-blue-700 font-bold py-2.5 px-3 rounded-xl text-xs border border-blue-200 transition cursor-pointer"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                  <span>แก้ไข</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={openEdit}
+                    className="inline-flex items-center justify-center gap-1 bg-blue-50 hover:bg-blue-100 active:scale-95 text-blue-700 font-bold py-2 sm:py-2.5 px-2.5 rounded-xl text-xs border border-blue-200/80 transition cursor-pointer"
+                    title="แก้ไขข้อมูลแปลง"
+                  >
+                    <Pencil className="w-3.5 h-3.5 shrink-0 text-blue-600" />
+                    <span>แก้ไข</span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={del}
-                  className="inline-flex items-center justify-center gap-1 bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-700 font-bold py-2.5 px-3 rounded-xl text-xs border border-rose-200 transition cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>ลบ</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={del}
+                    className="inline-flex items-center justify-center gap-1 bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-700 font-bold py-2 sm:py-2.5 px-2.5 rounded-xl text-xs border border-rose-200/80 transition cursor-pointer"
+                    title="ลบแปลงปลูก"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 shrink-0 text-rose-600" />
+                    <span>ลบ</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -436,7 +848,7 @@ export default function Plots() {
                   return (
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100/90 text-amber-900 border border-amber-300/70 whitespace-nowrap">
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                      เก็บเกี่ยวแล้ว
+                      เก็บผลผลิตแล้ว
                     </span>
                   );
                 }
@@ -458,7 +870,7 @@ export default function Plots() {
             },
             {
               key: 'planting_date',
-              label: 'ระยะเวลาปลูก',
+              label: 'วันที่เริ่มปลูก',
               type: 'date',
               placeholder: 'เลือกวันปลูก',
               required: true,
@@ -510,7 +922,7 @@ export default function Plots() {
             },
             // Form fields - cycle_number is hidden completely from form because it auto-defaults to 1!
             { key: 'cycle_number', label: 'รอบปลูก', type: 'number', default: 1, hideInTable: true, hideInForm: true },
-            { key: 'expected_harvest_date', label: 'วันคาดเก็บ', type: 'date', placeholder: 'เลือกวันคาดเก็บ', hideInTable: true },
+            { key: 'expected_harvest_date', label: 'วันคาดเก็บ', type: 'date', placeholder: 'เลือกวันคาดเก็บ', hideInTable: true, hideInForm: true },
             { key: 'water_source', label: 'แหล่งน้ำ', placeholder: 'เช่น น้ำบาดาล / น้ำประปา', hideInTable: true },
             { key: 'water_source_type', label: 'ประเภทน้ำ', placeholder: 'เช่น บาดาล / ประปา', hideInTable: true },
             { key: 'default_worker_name', label: 'ผู้ดูแลประจำ', placeholder: 'ชื่อผู้ดูแลแปลง', hideInTable: true },
@@ -582,32 +994,57 @@ export default function Plots() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    วันที่เริ่มปลูกจริง <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={newCropForm.planting_date}
-                    onChange={e => setNewCropForm(f => ({ ...f, planting_date: e.target.value }))}
-                    className="input text-xs w-full rounded-xl border border-slate-200 font-mono"
-                  />
-                </div>
+              {/* Smart Harvest Forecast Section */}
+              <div className="space-y-3 bg-slate-50/80 p-3.5 sm:p-4 rounded-2xl border border-slate-200/80">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                      วันที่เริ่มปลูกจริง <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={newCropForm.planting_date}
+                      onChange={e => {
+                        const newPlantDate = e.target.value;
+                        const expDate = calculateHarvestDate(newPlantDate, newCropForm.growth_days || 45);
+                        setNewCropForm(f => ({ ...f, planting_date: newPlantDate, expected_harvest_date: expDate }));
+                      }}
+                      className="input text-xs w-full rounded-xl border border-slate-200 font-mono"
+                    />
+                  </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    วันที่คาดว่าจะเก็บเกี่ยว
-                  </label>
-                  <input
-                    type="date"
-                    value={newCropForm.expected_harvest_date}
-                    onChange={e => setNewCropForm(f => ({ ...f, expected_harvest_date: e.target.value }))}
-                    className="input text-xs w-full rounded-xl border border-slate-200 font-mono"
-                  />
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        ระยะเวลาการปลูก (วัน) <span className="text-rose-500">*</span>
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.2 rounded">
+                        {newCropForm.growth_days || 45} วัน
+                      </span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="1"
+                        max="365"
+                        required
+                        placeholder="กรอกจำนวนวัน เช่น 45"
+                        value={newCropForm.growth_days || 45}
+                        onChange={e => {
+                          const days = e.target.value;
+                          const expDate = calculateHarvestDate(newCropForm.planting_date, days);
+                          setNewCropForm(f => ({ ...f, growth_days: days, expected_harvest_date: expDate }));
+                        }}
+                        className="input text-xs w-full rounded-xl border border-slate-200 font-mono font-bold pr-10"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 pointer-events-none">
+                        วัน
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -745,7 +1182,7 @@ export default function Plots() {
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-200/80 text-slate-700 border border-slate-300/60">
-                            เก็บเกี่ยวแล้ว
+                            เก็บผลผลิตแล้ว
                           </span>
                         )}
                       </div>
@@ -760,7 +1197,7 @@ export default function Plots() {
                         </div>
                         <div>
                           <span className="text-slate-400 block text-[10px]">
-                            {c.status === 'harvested' ? 'วันเก็บเกี่ยวจริง' : 'วันคาดเก็บเกี่ยว'}
+                            {c.status === 'harvested' ? 'วันเก็บผลผลิตจริง' : 'วันคาดเก็บผลผลิต'}
                           </span>
                           <span className="font-mono font-medium">
                             {c.harvest_date
@@ -773,7 +1210,7 @@ export default function Plots() {
                         <div>
                           <span className="text-slate-400 block text-[10px]">ผลผลิตที่ได้</span>
                           <span className="font-bold text-emerald-900">
-                            {c.harvest_quantity ? `${c.harvest_quantity} ${c.harvest_unit || 'kg'}` : '— กำลังปลูก'}
+                            {c.harvest_quantity ? `${c.harvest_quantity} ${c.harvest_unit || 'kg'}` : c.status === 'harvested' ? '—' : '— กำลังปลูก'}
                           </span>
                         </div>
                       </div>
@@ -916,7 +1353,7 @@ function CropCyclesArchive({ onViewPlot }) {
             <Package className="w-5 h-5 text-sky-600" />
           </div>
           <div>
-            <div className="text-[10px] sm:text-[11px] font-bold text-sky-600 uppercase">เก็บเกี่ยวแล้ว</div>
+            <div className="text-[10px] sm:text-[11px] font-bold text-sky-600 uppercase">เก็บผลผลิตแล้ว</div>
             <div className="text-lg font-black text-sky-900">{harvestedCycles} รอบ</div>
           </div>
         </div>
@@ -936,13 +1373,13 @@ function CropCyclesArchive({ onViewPlot }) {
       <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
         {/* Search */}
         <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
           <input
             type="text"
             placeholder="ค้นหา: รหัสรอบ, พืช, แปลง, หรือล็อต..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="input !pl-9 !pr-8 text-xs w-full rounded-xl border border-slate-200"
+            className="input !pl-9.5 !pr-8 text-xs w-full rounded-xl border border-slate-200"
           />
           {search && (
             <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
@@ -975,7 +1412,7 @@ function CropCyclesArchive({ onViewPlot }) {
           >
             <option value="all">ทุกสถานะ</option>
             <option value="active">กำลังปลูก</option>
-            <option value="harvested">เก็บเกี่ยวแล้ว</option>
+            <option value="harvested">เก็บผลผลิตแล้ว</option>
           </select>
 
           <button
@@ -1003,15 +1440,15 @@ function CropCyclesArchive({ onViewPlot }) {
           </div>
         ) : (
           <>
-            {/* Desktop Table */}
-            <div className="hidden md:block overflow-x-auto">
+            {/* Desktop Table (lg+) */}
+            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full text-xs text-left">
                 <thead className="bg-slate-50/90 text-slate-500 font-bold border-b border-slate-200/80 uppercase text-[11px]">
                   <tr>
                     <th className="px-4 py-3.5 whitespace-nowrap">รหัสรอบ (Batch Code)</th>
                     <th className="px-4 py-3.5 whitespace-nowrap">แปลงปลูก</th>
                     <th className="px-4 py-3.5 whitespace-nowrap">พืชที่ปลูก</th>
-                    <th className="px-4 py-3.5 whitespace-nowrap">ระยะเวลาปลูก - เก็บเกี่ยว</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap">ระยะเวลาปลูก - เก็บผลผลิต</th>
                     <th className="px-4 py-3.5 whitespace-nowrap">ผลผลิตที่ได้</th>
                     <th className="px-4 py-3.5 whitespace-nowrap">รหัสล็อต (GAP Lot)</th>
                     <th className="px-4 py-3.5 whitespace-nowrap">สถานะ</th>
@@ -1078,6 +1515,8 @@ function CropCyclesArchive({ onViewPlot }) {
                               </span>
                             )}
                           </div>
+                        ) : c.status === 'harvested' ? (
+                          <span className="text-slate-400 font-mono text-[11px]">—</span>
                         ) : (
                           <span className="text-slate-400 italic text-[11px]">กำลังเพาะปลูก</span>
                         )}
@@ -1102,7 +1541,7 @@ function CropCyclesArchive({ onViewPlot }) {
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
                             <CheckCircle2 className="w-3.5 h-3.5 text-slate-500" />
-                            เก็บเกี่ยวแล้ว
+                            เก็บผลผลิตแล้ว
                           </span>
                         )}
                       </td>
@@ -1129,84 +1568,88 @@ function CropCyclesArchive({ onViewPlot }) {
               </table>
             </div>
 
-            {/* Mobile Cards */}
-            <div className="block md:hidden divide-y divide-slate-100 p-3 space-y-3">
-              {filteredCycles.map(c => (
-                <div key={c.id} className="bg-slate-50/70 rounded-2xl p-3.5 border border-slate-200/80 space-y-2.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="space-y-0.5">
-                      <div className="inline-flex items-center gap-1 bg-amber-50 text-amber-900 border border-amber-300/80 px-2 py-0.5 rounded-lg font-mono font-black text-xs">
-                        <Tag className="w-3 h-3 text-amber-700" />
-                        <span>#{c.cycle_code || `BATCH-R${c.cycle_number}`}</span>
+            {/* Mobile & Tablet Cards (<lg) */}
+            <div className="block lg:hidden p-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {filteredCycles.map(c => (
+                  <div key={c.id} className="bg-slate-50/70 rounded-2xl p-3.5 border border-slate-200/80 space-y-2.5 flex flex-col justify-between">
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-0.5">
+                          <div className="inline-flex items-center gap-1 bg-amber-50 text-amber-900 border border-amber-300/80 px-2 py-0.5 rounded-lg font-mono font-black text-xs">
+                            <Tag className="w-3 h-3 text-amber-700" />
+                            <span>#{c.cycle_code || `BATCH-R${c.cycle_number}`}</span>
+                          </div>
+                          <div className="font-black text-slate-900 text-base">{c.plot_name}</div>
+                          <div className="font-bold text-emerald-800 text-xs flex items-center gap-1">
+                            <Sprout className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>{c.crop_name} (รอบที่ {c.cycle_number})</span>
+                          </div>
+                        </div>
+
+                        {c.status === 'active' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            กำลังปลูก
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-200/80 text-slate-700 border border-slate-300/60 shrink-0">
+                            เก็บผลผลิตแล้ว
+                          </span>
+                        )}
                       </div>
-                      <div className="font-black text-slate-900 text-base">{c.plot_name}</div>
-                      <div className="font-bold text-emerald-800 text-xs flex items-center gap-1">
-                        <Sprout className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>{c.crop_name} (รอบที่ {c.cycle_number})</span>
+
+                      <div className="grid grid-cols-2 gap-2 text-[11px] bg-white p-2.5 rounded-xl border border-slate-100">
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">วันเริ่มปลูก</span>
+                          <span className="font-mono font-medium text-slate-700">
+                            {c.planting_date ? format(new Date(c.planting_date), 'dd/MM/yyyy') : '—'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">
+                            {c.status === 'harvested' ? 'วันเก็บผลผลิตจริง' : 'วันคาดเก็บ'}
+                          </span>
+                          <span className="font-mono font-medium text-slate-700">
+                            {c.harvest_date
+                              ? format(new Date(c.harvest_date), 'dd/MM/yyyy')
+                              : c.expected_harvest_date
+                              ? format(new Date(c.expected_harvest_date), 'dd/MM/yyyy')
+                              : '—'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">ผลผลิต</span>
+                          <span className="font-black text-slate-900">
+                            {c.harvest_quantity ? `${c.harvest_quantity} ${c.harvest_unit || 'kg'}` : '—'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">รหัสล็อต</span>
+                          <span className="font-mono text-slate-600 truncate block">
+                            {c.lot_code || '—'}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
-                    {c.status === 'active' ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        กำลังปลูก
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-200/80 text-slate-700 border border-slate-300/60 shrink-0">
-                        เก็บเกี่ยวแล้ว
-                      </span>
+                    {c.lot_code && (
+                      <div className="pt-2 border-t border-slate-200/60 flex justify-end">
+                        <a
+                          href={`/trace/${c.lot_code}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-emerald-700 hover:text-emerald-800 text-xs font-bold"
+                        >
+                          <QrCode className="w-3.5 h-3.5" />
+                          <span>สืบย้อนข้อมูล GAP (Traceability)</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
                     )}
                   </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-[11px] bg-white p-2.5 rounded-xl border border-slate-100">
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">วันเริ่มปลูก</span>
-                      <span className="font-mono font-medium text-slate-700">
-                        {c.planting_date ? format(new Date(c.planting_date), 'dd/MM/yyyy') : '—'}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">
-                        {c.status === 'harvested' ? 'วันเก็บเกี่ยวจริง' : 'วันคาดเก็บ'}
-                      </span>
-                      <span className="font-mono font-medium text-slate-700">
-                        {c.harvest_date
-                          ? format(new Date(c.harvest_date), 'dd/MM/yyyy')
-                          : c.expected_harvest_date
-                          ? format(new Date(c.expected_harvest_date), 'dd/MM/yyyy')
-                          : '—'}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">ผลผลิต</span>
-                      <span className="font-black text-slate-900">
-                        {c.harvest_quantity ? `${c.harvest_quantity} ${c.harvest_unit || 'kg'}` : '—'}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">รหัสล็อต</span>
-                      <span className="font-mono text-slate-600 truncate block">
-                        {c.lot_code || '—'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {c.lot_code && (
-                    <div className="pt-2 border-t border-slate-200/60 flex justify-end">
-                      <a
-                        href={`/trace/${c.lot_code}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-emerald-700 hover:text-emerald-800 text-xs font-bold"
-                      >
-                        <QrCode className="w-3.5 h-3.5" />
-                        <span>สืบย้อนข้อมูล GAP (Traceability)</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    </div>
-                  )}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </>
         )}

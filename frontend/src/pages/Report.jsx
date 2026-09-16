@@ -364,18 +364,18 @@ export default function Report() {
               <table className="min-w-full text-[11px]">
                 <thead className="bg-slate-100 text-slate-700 font-bold">
                   <tr>
-                    <th className="py-2 px-3 text-left">วันที่เก็บเกี่ยว</th>
+                    <th className="py-2 px-3 text-left">วันที่เก็บผลผลิต</th>
                     <th className="py-2 px-3 text-left">แปลง</th>
                     <th className="py-2 px-3 text-left">รหัสล็อต (Lot Code)</th>
                     <th className="py-2 px-3 text-right">ปริมาณ</th>
                     <th className="py-2 px-3 text-center">เกรด</th>
-                    <th className="py-2 px-3 text-left">สุขอนามัยหลังเก็บเกี่ยว</th>
+                    <th className="py-2 px-3 text-left">สุขอนามัยหลังเก็บผลผลิต</th>
                     <th className="py-2 px-3 text-right">มูลค่า (บาท)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {!reportData?.harvest?.length ? (
-                    <tr><td colSpan={7} className="text-center py-4 text-slate-400">ไม่มีข้อมูลการเก็บเกี่ยว</td></tr>
+                    <tr><td colSpan={7} className="text-center py-4 text-slate-400">ไม่มีข้อมูลการเก็บผลผลิต</td></tr>
                   ) : (
                     reportData.harvest.map(h => (
                       <tr key={h.id}>
@@ -543,10 +543,10 @@ export default function Report() {
           <div>
             <h2 className="text-base font-black text-[#173f2a] flex items-center gap-2">
               <QrCode className="w-5 h-5 text-emerald-700" />
-              QR Code ตรวจสอบย้อนกลับตามรหัสล็อตเก็บเกี่ยว (Traceability)
+              QR Code ตรวจสอบย้อนกลับตามรหัสล็อตเก็บผลผลิต (Traceability)
             </h2>
             <p className="text-xs text-slate-500">
-              ผู้บริโภคสามารถสแกน QR Code บนถุงผักเพื่อตรวจสอบแปลงปลูก วันที่เก็บเกี่ยว และมาตรฐานความปลอดภัย GAP ได้ทันที
+              ผู้บริโภคสามารถสแกน QR Code บนถุงผักเพื่อตรวจสอบแปลงปลูก วันที่เก็บผลผลิต และมาตรฐานความปลอดภัย GAP ได้ทันที
             </p>
           </div>
           <button

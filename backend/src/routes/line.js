@@ -1269,6 +1269,279 @@ async function replyOrderStatus(replyToken, userId) {
   }
 }
 
+// Helper: ส่งการแจ้งเตือนเข้า LINE ของเจ้าของฟาร์ม (Admin Push Notification)
+export async function notifyAdminNewOrder(orderData, eventType = 'NEW_ORDER') {
+  try {
+    // 1. ดึง LINE User ID ของเจ้าของฟาร์มจากตาราง users
+    const [owners] = await pool.query(
+      "SELECT line_user_id, farm_name, display_name FROM users WHERE (role = 'owner' OR role = 'admin') AND line_user_id IS NOT NULL AND TRIM(line_user_id) != '' ORDER BY id ASC"
+    );
+
+    if (owners.length === 0 || !owners[0].line_user_id) {
+      console.log('ℹ️ [Admin Notify] ไม่พบ LINE User ID ของเจ้าของฟาร์มในระบบ (สามารถตั้งค่าได้ที่หน้าโปรไฟล์บนเว็บ)');
+      return;
+    }
+
+    const adminLineId = owners[0].line_user_id.trim();
+    if (!adminLineId.startsWith('U')) {
+      console.warn('⚠️ [Admin Notify] LINE User ID รูปแบบไม่ถูกต้อง (ควรขึ้นต้นด้วย U):', adminLineId);
+      return;
+    }
+
+    if (!config.channelAccessToken || config.channelAccessToken === 'dummy_token') {
+      console.warn('⚠️ [Admin Notify] LINE_CHANNEL_ACCESS_TOKEN ยังไม่ได้ตั้งค่า');
+      return;
+    }
+
+    const isSlip = eventType === 'SLIP_UPLOADED';
+    const title = isSlip ? '💸 ลูกค้าแนบสลิปชำระเงินแล้ว!' : '🔔 มีคำสั่งซื้อใหม่เข้ามา!';
+    const badgeText = isSlip ? 'สลิปรอตรวจ' : 'ออเดอร์ใหม่';
+    const badgeBg = isSlip ? '#d97706' : '#15803d';
+    const headerBg = isSlip ? '#78350f' : '#14532d';
+
+    const orderCode = orderData.order_code || `ORD-${orderData.id || ''}`;
+    const totalAmount = Number(orderData.total_amount || 0).toLocaleString();
+    const customerName = orderData.customer_name || 'ลูกค้าทั่วไป';
+    const customerPhone = orderData.customer_phone || '-';
+    const customerAddress = orderData.customer_address || '-';
+
+    // เตรียมรายการสินค้า (ถ้ามี)
+    const items = orderData.items || [];
+    const itemRows = items.slice(0, 5).map(item => ({
+      type: 'box',
+      layout: 'horizontal',
+      contents: [
+        {
+          type: 'text',
+          text: `• ${item.product_name || item.name || 'ผักสด'} x${item.quantity}`,
+          size: 'xs',
+          color: '#374151',
+          flex: 8,
+          wrap: true,
+        },
+        {
+          type: 'text',
+          text: `฿${Number(item.subtotal || (item.quantity * (item.unit_price || item.price || 0))).toLocaleString()}`,
+          size: 'xs',
+          color: '#111827',
+          weight: 'bold',
+          align: 'end',
+          flex: 4,
+        },
+      ],
+    }));
+
+    const actionUri = process.env.DASHBOARD_ORDER_URL || process.env.LIFF_HISTORY_URL || 'https://liff.line.me/2011230817-SEPqghDg';
+
+    const flexContents = {
+      type: 'bubble',
+      size: 'mega',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: headerBg,
+        paddingAll: 'lg',
+        contents: [
+          {
+            type: 'box',
+            layout: 'horizontal',
+            alignItems: 'center',
+            contents: [
+              {
+                type: 'text',
+                text: title,
+                weight: 'bold',
+                size: 'md',
+                color: '#ffffff',
+                flex: 8,
+              },
+              {
+                type: 'box',
+                layout: 'horizontal',
+                backgroundColor: badgeBg,
+                cornerRadius: 'sm',
+                paddingStart: 'sm',
+                paddingEnd: 'sm',
+                paddingTop: 'xs',
+                paddingBottom: 'xs',
+                contents: [
+                  {
+                    type: 'text',
+                    text: badgeText,
+                    weight: 'bold',
+                    size: 'xxs',
+                    color: '#ffffff',
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            type: 'text',
+            text: `รหัสคำสั่งซื้อ: ${orderCode}`,
+            size: 'xs',
+            color: '#cbd5e1',
+            margin: 'sm',
+          },
+        ],
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'md',
+        paddingAll: 'lg',
+        contents: [
+          // กล่องยอดรวมเงิน
+          {
+            type: 'box',
+            layout: 'horizontal',
+            backgroundColor: '#f8fafc',
+            cornerRadius: 'md',
+            paddingAll: 'md',
+            borderColor: '#e2e8f0',
+            borderWidth: '1px',
+            alignItems: 'center',
+            contents: [
+              {
+                type: 'text',
+                text: 'ยอดรวมทั้งสิ้น',
+                size: 'sm',
+                color: '#64748b',
+                flex: 6,
+              },
+              {
+                type: 'text',
+                text: `฿${totalAmount} บาท`,
+                size: 'lg',
+                weight: 'bold',
+                color: '#059669',
+                align: 'end',
+                flex: 6,
+              },
+            ],
+          },
+          // ข้อมูลลูกค้า
+          {
+            type: 'box',
+            layout: 'vertical',
+            spacing: 'xs',
+            contents: [
+              {
+                type: 'text',
+                text: '👤 ข้อมูลลูกค้า:',
+                size: 'xs',
+                weight: 'bold',
+                color: '#475569',
+              },
+              {
+                type: 'text',
+                text: `ชื่อ: ${customerName}`,
+                size: 'xs',
+                color: '#1e293b',
+              },
+              {
+                type: 'text',
+                text: `โทร: ${customerPhone}`,
+                size: 'xs',
+                color: '#1e293b',
+              },
+              {
+                type: 'text',
+                text: `ที่อยู่: ${customerAddress}`,
+                size: 'xs',
+                color: '#64748b',
+                wrap: true,
+              },
+            ],
+          },
+          // รายการสินค้า
+          ...(itemRows.length > 0
+            ? [
+                {
+                  type: 'separator',
+                  margin: 'md',
+                },
+                {
+                  type: 'box',
+                  layout: 'vertical',
+                  spacing: 'xs',
+                  contents: [
+                    {
+                      type: 'text',
+                      text: '🥬 รายการผักที่สั่ง:',
+                      size: 'xs',
+                      weight: 'bold',
+                      color: '#475569',
+                    },
+                    ...itemRows,
+                  ],
+                },
+              ]
+            : []),
+          ...(isSlip
+            ? [
+                {
+                  type: 'separator',
+                  margin: 'md',
+                },
+                {
+                  type: 'box',
+                  layout: 'vertical',
+                  backgroundColor: '#fef3c7',
+                  cornerRadius: 'md',
+                  paddingAll: 'sm',
+                  contents: [
+                    {
+                      type: 'text',
+                      text: '📸 มีรูปสลิปแนบมาแล้ว กรุณาเข้าตรวจสอบความถูกต้องและอนุมัติสถานะบนระบบ FarmGAP ครับ',
+                      size: 'xs',
+                      color: '#92400e',
+                      wrap: true,
+                    },
+                  ],
+                },
+              ]
+            : []),
+        ],
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'xs',
+        paddingAll: 'md',
+        contents: [
+          {
+            type: 'button',
+            action: {
+              type: 'uri',
+              label: '📦 เปิดดูรายการออเดอร์',
+              uri: actionUri,
+            },
+            style: 'primary',
+            color: isSlip ? '#d97706' : '#16a34a',
+            height: 'sm',
+          },
+        ],
+      },
+    };
+
+    await client.pushMessage({
+      to: adminLineId,
+      messages: [
+        {
+          type: 'flex',
+          altText: isSlip ? `💸 สลิปโอนเงินใหม่: ${orderCode} (฿${totalAmount})` : `🔔 คำสั่งซื้อใหม่: ${orderCode} (฿${totalAmount})`,
+          contents: flexContents,
+        },
+      ],
+    });
+
+    console.log(`✅ [Admin Notify] ส่งการแจ้งเตือน ${eventType} ไปยัง LINE User ID: ${adminLineId} สำเร็จ`);
+  } catch (err) {
+    console.error('❌ [Admin Notify] ไม่สามารถส่งแจ้งเตือนเข้า LINE ได้:', err.message);
+  }
+}
+
 // Event parser and router
 async function handleEvent(event) {
   const userId = event.source?.userId;
@@ -1342,8 +1615,25 @@ async function handleEvent(event) {
       ]);
 
       const orderCode = session.draft_data?.order_code || 'ORD';
+      const orderIdForNotify = session.order_id;
       await clearChatSession(userId);
       await replySlipConfirmed(event.replyToken, orderCode);
+
+      // แจ้งเตือนเจ้าของฟาร์มเมื่อมีลูกค้าแนบสลิปผ่าน LINE Chat
+      try {
+        const [oRows] = await pool.query(
+          `SELECT o.*, c.display_name AS customer_name, c.phone AS customer_phone, c.address AS customer_address 
+           FROM orders o 
+           LEFT JOIN customers c ON o.customer_id = c.id 
+           WHERE o.id = ?`,
+          [orderIdForNotify]
+        );
+        if (oRows.length > 0) {
+          notifyAdminNewOrder(oRows[0], 'SLIP_UPLOADED').catch(e => console.error('notifyAdminNewOrder slip error:', e.message));
+        }
+      } catch (err) {
+        console.error('Error in notifyAdminNewOrder for chat slip:', err.message);
+      }
       return;
     }
 
@@ -1363,6 +1653,24 @@ async function handleEvent(event) {
   if (event.type === 'message' && event.message.type === 'text') {
     const text = event.message.text.trim();
     const replyToken = event.replyToken;
+
+    // คำสั่งพิเศษ: แสดง LINE User ID สำหรับนำไปผูกในหน้าตั้งค่าโปรไฟล์บนเว็บ FarmGAP
+    const lowerText = text.toLowerCase();
+    if (['myid', 'my id', 'id', 'ไอดี', 'admin', 'แอดมิน'].includes(lowerText)) {
+      return client.replyMessage({
+        replyToken: replyToken,
+        messages: [
+          {
+            type: 'text',
+            text: `🔑 LINE User ID ของคุณคือ:\n\n${userId}\n\n👉 แตะค้างที่ข้อความด้านล่างนี้เพื่อคัดลอกรหัส แล้วนำไปใส่ในหน้า "ตั้งค่าโปรไฟล์" บนเว็บไซต์ FarmGAP ได้เลยครับ 🌱`,
+          },
+          {
+            type: 'text',
+            text: userId,
+          },
+        ],
+      });
+    }
 
     // Ensure customer profile exists
     try {
@@ -1552,6 +1860,27 @@ function parseCustomerContact(text) {
         // 7. Send invoice & bank details
         const formattedAddressDisplay = `ชื่อผู้รับ: ${customerName || customer.display_name || 'คุณลูกค้า'}\nเบอร์โทร: ${phone || customer.phone || '-'}\nที่อยู่: ${cleanAddress}`;
         await replyInvoiceAndPayment(replyToken, orderCode, totalAmount, items, formattedAddressDisplay);
+
+        // แจ้งเตือนเจ้าของฟาร์มเมื่อมีออเดอร์ใหม่ผ่าน LINE Chat
+        try {
+          const newOrderData = {
+            id: orderId,
+            order_code: orderCode,
+            total_amount: totalAmount,
+            customer_name: customerName || customer.display_name || 'คุณลูกค้า',
+            customer_phone: phone || customer.phone || '-',
+            customer_address: cleanAddress,
+            items: items.map(it => ({
+              product_name: it.product?.name || it.name || 'ผักสด',
+              quantity: it.quantity,
+              unit: it.product?.unit || it.unit || 'กก.',
+              subtotal: it.subtotal || (it.quantity * (it.product?.price || it.price || 0)),
+            })),
+          };
+          notifyAdminNewOrder(newOrderData, 'NEW_ORDER').catch(e => console.error('notifyAdminNewOrder chat order error:', e.message));
+        } catch (err) {
+          console.error('Error triggering admin notification for chat order:', err.message);
+        }
         return;
       } catch (orderErr) {
         await connection.rollback();

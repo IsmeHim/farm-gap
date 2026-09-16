@@ -280,14 +280,14 @@ export default function LiffOrder() {
         {/* catalog */}
         <section>
           <h2 className="text-lg font-bold text-slate-700 mb-3 flex items-center gap-2">
-            🥬 สั่งผักสดเก็บเกี่ยววันนี้
+            🥬 สั่งผักสดเก็บผลผลิตวันนี้
           </h2>
 
           {loadingProducts ? (
             <div className="text-center py-8 text-sm text-slate-500">กำลังโหลดรายการผักสด...</div>
           ) : products.length === 0 ? (
             <div className="bg-white rounded-2xl p-8 text-center text-sm text-slate-400 border border-dashed">
-              วันนี้ไม่มีผักพร้อมเก็บเกี่ยวขายในระบบ
+              วันนี้ไม่มีผักพร้อมเก็บผลผลิตขายในระบบ
             </div>
           ) : (
             <div className="grid gap-4">

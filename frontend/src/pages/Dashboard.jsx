@@ -160,7 +160,7 @@ export default function Dashboard() {
 
   const cards = [
     { label: 'แปลงปลูก', value: stats.plots, detail: 'แปลงที่อยู่ในระบบ', icon: Map, accent: 'bg-emerald-100 text-emerald-800' },
-    { label: 'ผลผลิตรวม', value: `${stats.harvest.toFixed(1)} kg`, detail: 'จากบันทึกเก็บเกี่ยว', icon: Leaf, accent: 'bg-lime-100 text-lime-800' },
+    { label: 'ผลผลิตรวม', value: `${stats.harvest.toFixed(1)} kg`, detail: 'จากบันทึกเก็บผลผลิต', icon: Leaf, accent: 'bg-lime-100 text-lime-800' },
     { label: 'มูลค่าสต็อก', value: `฿${stats.stockValue.toLocaleString()}`, detail: 'สินค้าคงเหลือพร้อมขาย', icon: PackageCheck, accent: 'bg-amber-100 text-amber-800' },
     { label: 'จุดที่ต้องดูแล', value: totalAlerts, detail: 'รวม alert GAP และงานค้าง', icon: AlertTriangle, accent: 'bg-rose-100 text-rose-800' },
   ];
@@ -214,21 +214,21 @@ export default function Dashboard() {
 
       {/* Daily Routine Quick Action Bar */}
       {activePlots.length > 0 && (
-        <section className="surface rounded-3xl p-5 bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-900 text-white shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
+        <section className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <div className="p-3 rounded-2xl bg-emerald-700/60 border border-emerald-500/30 text-amber-300 shrink-0">
-              <Droplets className="w-6 h-6 text-sky-300" />
+            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-700 shrink-0">
+              <Droplets className="w-6 h-6 text-emerald-600" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-sm sm:text-base tracking-tight">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-black text-slate-900 text-sm sm:text-base tracking-tight flex items-center gap-2">
                   ⚡ กิจวัตรการให้น้ำประจำวัน (Daily Watering Routine)
                 </h3>
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-700/80 text-emerald-200 border border-emerald-500/30">
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
                   รดแล้ว {(todayWater.wateredPlotIds || []).length} / {activePlots.length} แปลง
                 </span>
               </div>
-              <p className="text-xs text-emerald-150/90 mt-0.5">
+              <p className="text-xs text-slate-600 font-medium mt-1">
                 กดบันทึกรดน้ำทุกแปลงที่กำลังปลูกด้วยค่า Preset อัตโนมัติ โดยไม่ต้องเข้าไปจดทีละแปลง
               </p>
             </div>
@@ -237,20 +237,20 @@ export default function Dashboard() {
           <button
             onClick={handleWaterAllToday}
             disabled={wateringLoading || (todayWater.wateredPlotIds || []).length >= activePlots.length}
-            className={`inline-flex items-center justify-center gap-2 font-bold px-5 py-3 rounded-2xl text-xs sm:text-sm shadow-md transition active:scale-95 cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`inline-flex items-center justify-center gap-2 font-black px-5 py-3 rounded-2xl text-xs sm:text-sm shadow-sm transition active:scale-95 cursor-pointer whitespace-nowrap shrink-0 ${
               (todayWater.wateredPlotIds || []).length >= activePlots.length
-                ? 'bg-emerald-800/60 text-emerald-300 border border-emerald-600/40 cursor-not-allowed'
-                : 'bg-amber-400 hover:bg-amber-300 text-slate-900 shadow-amber-900/20'
+                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 cursor-not-allowed'
+                : 'bg-amber-400 hover:bg-amber-500 text-slate-950 shadow-amber-200'
             }`}
           >
             {(todayWater.wateredPlotIds || []).length >= activePlots.length ? (
               <>
-                <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-700" />
                 <span>รดน้ำครบทุกแปลงแล้ววันนี้</span>
               </>
             ) : (
               <>
-                <Zap className="w-4 h-4 fill-current text-slate-900" />
+                <Zap className="w-4 h-4 fill-current text-slate-950" />
                 <span>⚡ รดน้ำทุกแปลงวันนี้ ({activePlots.length - (todayWater.wateredPlotIds || []).length} แปลง)</span>
               </>
             )}
@@ -259,7 +259,7 @@ export default function Dashboard() {
       )}
 
       {/* KPI Cards */}
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map(card => (
           <div key={card.label} className="premium-panel rounded-3xl p-5 shadow-xs transition hover:shadow-md hover:-translate-y-0.5">
             <div className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl ${card.accent} shadow-2xs`}>
@@ -273,12 +273,12 @@ export default function Dashboard() {
       </section>
 
       {/* Charts Section */}
-      <section className="grid gap-6 xl:grid-cols-[1.2fr_.8fr]">
+      <section className="grid gap-6 lg:grid-cols-2 xl:grid-cols-[1.2fr_.8fr]">
         <div className="premium-panel rounded-3xl p-6 shadow-xs">
           <div className="mb-5 flex items-center justify-between">
             <div>
               <h2 className="text-xl font-black text-[#173f2a]">ผลผลิตรายเดือน</h2>
-              <p className="text-sm text-slate-500">น้ำหนักเก็บเกี่ยวเทียบตามเดือน</p>
+              <p className="text-sm text-slate-500">น้ำหนักเก็บผลผลิตเทียบตามเดือน</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
               <Leaf className="h-5 w-5" />
@@ -286,7 +286,7 @@ export default function Dashboard() {
           </div>
           <div className="h-[300px]">
             {chart.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-sm text-slate-400">ยังไม่มีข้อมูลเก็บเกี่ยว</div>
+              <div className="flex h-full items-center justify-center text-sm text-slate-400">ยังไม่มีข้อมูลเก็บผลผลิต</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chart}>
@@ -304,7 +304,7 @@ export default function Dashboard() {
         <div className="premium-panel rounded-3xl p-6 shadow-xs">
           <div className="mb-5 flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-black text-[#173f2a]">รายได้จากการเก็บเกี่ยว</h2>
+              <h2 className="text-xl font-black text-[#173f2a]">รายได้จากการเก็บผลผลิต</h2>
               <p className="text-sm text-slate-500">ดูแนวโน้มเงินสดจากผลผลิต</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-100 text-[#b5812d]">
@@ -350,7 +350,7 @@ export default function Dashboard() {
 function AlertHub({ phiAlerts, waterAlerts, hygieneAlerts, checklistFails }) {
   const groups = [
     {
-      title: 'PHI ห้ามเก็บเกี่ยว',
+      title: 'PHI ห้ามเก็บผลผลิต',
       icon: AlertTriangle,
       items: phiAlerts.map(a => `แปลง ${a.plot_name || '-'} พ่น ${a.product_name} ปลอดภัยหลัง ${a.safe_date}`),
       color: 'border-amber-200 bg-amber-50/80 text-amber-900',

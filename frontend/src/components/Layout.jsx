@@ -32,7 +32,7 @@ const items = [
   { to: '/water', icon: Droplets, label: 'น้ำ' },
   { to: '/chemicals', icon: FlaskConical, label: 'ปุ๋ย/สารเคมี' },
   { to: '/pests', icon: Bug, label: 'ศัตรูพืช' },
-  { to: '/harvest', icon: Leaf, label: 'เก็บเกี่ยว' },
+  { to: '/harvest', icon: Leaf, label: 'เก็บผลผลิต' },
   { to: '/products', icon: ShoppingBag, label: 'สินค้า' },
   { to: '/orders', icon: ReceiptText, label: 'คำสั่งซื้อ (LINE)' },
   { to: '/sales-report', icon: TrendingUp, label: 'รายงานรายได้ (Export)' },
@@ -61,8 +61,8 @@ export default function Layout() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-transparent print:h-auto print:overflow-visible print:block">
-      {/* Mobile Header - Hidden in Print */}
-      <header className="md:hidden print:hidden bg-white/90 backdrop-blur border-b border-emerald-100 px-4 py-3 flex items-center justify-between shrink-0">
+      {/* Mobile/Tablet Header - Hidden on Desktop (lg:) and in Print */}
+      <header className="lg:hidden print:hidden bg-white/90 backdrop-blur border-b border-emerald-100 px-4 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <BrandMark compact />
           <div>
@@ -77,8 +77,8 @@ export default function Layout() {
 
       {/* Main Layout Body */}
       <div className="flex flex-1 h-full overflow-hidden print:h-auto print:overflow-visible print:block">
-        {/* Sticky/Fixed Sidebar - Independent Scroll */}
-        <aside className={`fixed inset-y-0 left-0 z-50 w-72 transform bg-[#fdfef9]/95 backdrop-blur-xl border-r border-emerald-100 p-4 flex flex-col shrink-0 h-full overflow-y-auto transition duration-200 ease-out md:static md:translate-x-0 print:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        {/* Sticky/Fixed Sidebar - Drawer on Mobile/Tablet (<lg), Static on Desktop (lg+) */}
+        <aside className={`fixed inset-y-0 left-0 z-50 w-72 transform bg-[#fdfef9]/95 backdrop-blur-xl border-r border-emerald-100 p-4 flex flex-col shrink-0 h-full overflow-y-auto transition duration-200 ease-out lg:static lg:translate-x-0 print:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
           <div className="surface relative rounded-2xl p-4 mb-4 shrink-0">
             <div className="flex items-center gap-3">
               <BrandMark />
@@ -91,7 +91,7 @@ export default function Layout() {
               <Sparkles className="h-4 w-4 text-[#b5812d]" />
               <span className="truncate">{user?.farm_name || user?.email}</span>
             </div>
-            <button onClick={() => setSidebarOpen(false)} className="absolute right-3 top-3 md:hidden rounded-lg p-2 text-gray-600 hover:bg-gray-100">
+            <button onClick={() => setSidebarOpen(false)} className="absolute right-3 top-3 lg:hidden rounded-lg p-2 text-gray-600 hover:bg-gray-100">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -144,10 +144,10 @@ export default function Layout() {
           </button>
         </aside>
 
-        {sidebarOpen && <div className="fixed inset-0 z-40 bg-black/30 md:hidden print:hidden" onClick={() => setSidebarOpen(false)} />}
+        {sidebarOpen && <div className="fixed inset-0 z-40 bg-black/30 lg:hidden print:hidden" onClick={() => setSidebarOpen(false)} />}
 
-        {/* Scrollable Main Content Area */}
-        <main className="flex-1 h-full overflow-y-auto p-4 md:p-8 print:p-0 print:overflow-visible print:h-auto">
+        {/* Scrollable Main Content Area - Responsive Tablet/Desktop Padding */}
+        <main className="flex-1 h-full overflow-y-auto p-4 sm:p-6 lg:p-8 print:p-0 print:overflow-visible print:h-auto">
           <Outlet />
         </main>
       </div>

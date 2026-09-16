@@ -60,11 +60,31 @@ plotsRouter.post('/:id/new-crop', async (req, res) => {
     const newCycle = (current.cycle_number || 1) + 1;
     const pDate = planting_date || new Date().toISOString().split('T')[0];
 
-    // Close any previous active cycle for this plot in crop_cycles
-    await pool.query(
-      `UPDATE crop_cycles SET status = 'harvested' WHERE plot_id = ? AND user_id = ? AND status = 'active'`,
+    // Close any previous active cycle for this plot in crop_cycles and sync harvest info if available
+    const [lastHarvest] = await pool.query(
+      'SELECT quantity, unit, quality_grade, lot_code, harvest_date FROM harvest_logs WHERE plot_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1',
       [req.params.id, req.user.id]
     );
+
+    if (lastHarvest.length > 0) {
+      const h = lastHarvest[0];
+      await pool.query(
+        `UPDATE crop_cycles 
+         SET status = 'harvested',
+             harvest_quantity = COALESCE(harvest_quantity, ?),
+             harvest_unit = COALESCE(harvest_unit, ?),
+             quality_grade = COALESCE(quality_grade, ?),
+             lot_code = COALESCE(lot_code, ?),
+             harvest_date = COALESCE(harvest_date, ?)
+         WHERE plot_id = ? AND user_id = ? AND status = 'active'`,
+        [h.quantity, h.unit, h.quality_grade, h.lot_code, h.harvest_date, req.params.id, req.user.id]
+      );
+    } else {
+      await pool.query(
+        `UPDATE crop_cycles SET status = 'harvested' WHERE plot_id = ? AND user_id = ? AND status = 'active'`,
+        [req.params.id, req.user.id]
+      );
+    }
 
     // Insert new cycle into crop_cycles
     const cleanName = (current.name || '').replace(/แปลง|\s|\(.*?\)/g, '').trim() || (`P${current.id}`);
@@ -130,6 +150,22 @@ plotsRouter.post('/:id/new-crop', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Middleware to auto-calculate expected_harvest_date if growth_days is passed
+plotsRouter.use('/', (req, res, next) => {
+  if (['POST', 'PUT'].includes(req.method) && req.body) {
+    const { planting_date, growth_days, days, expected_harvest_date } = req.body;
+    const daysNum = parseInt(growth_days || days, 10);
+    if (planting_date && daysNum && !expected_harvest_date) {
+      const d = new Date(planting_date);
+      if (!isNaN(d.getTime())) {
+        d.setDate(d.getDate() + daysNum);
+        req.body.expected_harvest_date = d.toISOString().split('T')[0];
+      }
+    }
+  }
+  next();
 });
 
 // Standard CRUD fallback with all fields included

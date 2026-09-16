@@ -137,7 +137,7 @@ export default function Products() {
               <ShoppingBag className="h-4 w-4" />
               farm store inventory
             </div>
-            <h1 className="mt-4 text-3xl md:text-5xl font-black text-[#173f2a]">สินค้าเก็บเกี่ยวพร้อมขาย</h1>
+            <h1 className="mt-4 text-3xl md:text-5xl font-black text-[#173f2a]">สินค้าผลผลิตพร้อมขาย</h1>
             <p className="mt-3 max-w-2xl text-sm md:text-base text-slate-600">
               จัดการสินค้า ราคา รูปภาพ และสต็อกสำหรับหน้า LIFF ให้ดูเหมือนหน้าร้านจริง ไม่ใช่แค่ตารางหลังบ้าน
             </p>
@@ -160,12 +160,12 @@ export default function Products() {
             placeholder="ค้นหาสินค้า หมวด แปลง หรือสถานะ..."
           />
         </div>
-        <button className="btn" onClick={openNew}>
+        <button className="btn sm:w-auto" onClick={openNew}>
           <Plus className="h-4 w-4" /> เพิ่มสินค้า
         </button>
       </div>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {filtered.length === 0 && (
           <div className="premium-panel col-span-full rounded-2xl p-10 text-center text-slate-500">
             ยังไม่มีสินค้าในเงื่อนไขนี้

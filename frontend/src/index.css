@@ -132,7 +132,7 @@ tbody tr:hover {
   backdrop-filter: blur(14px);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 639px) {
   .card {
     padding: 1.25rem;
   }

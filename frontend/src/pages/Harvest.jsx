@@ -16,6 +16,8 @@ import {
   Printer,
   ExternalLink,
   Tag,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { getCropCycleId } from '../lib/cropCycle.js';
@@ -108,11 +110,11 @@ export default function Harvest() {
   const handleSmartSubmit = async (e) => {
     e.preventDefault();
     if (!form.plot_id) {
-      toast.error('กรุณาเลือกแปลงที่เก็บเกี่ยว');
+      toast.error('กรุณาเลือกแปลงที่เก็บผลผลิต');
       return;
     }
     if (!form.quantity || Number(form.quantity) <= 0) {
-      toast.error('กรุณาระบุจำนวนที่เก็บเกี่ยวให้ถูกต้อง');
+      toast.error('กรุณาระบุจำนวนที่เก็บผลผลิตให้ถูกต้อง');
       return;
     }
 
@@ -135,10 +137,10 @@ export default function Harvest() {
 
       const res = await api.post('/api/harvest/smart-record', payload);
       setSuccessResult(res.data);
-      toast.success(res.data.message || 'บันทึกการเก็บเกี่ยวสำเร็จ!');
+      toast.success(res.data.message || 'บันทึกการเก็บผลผลิตสำเร็จ!');
       setReloadKey(k => k + 1);
     } catch (err) {
-      toast.error(err.response?.data?.error || 'เกิดข้อผิดพลาดในการบันทึกเก็บเกี่ยว');
+      toast.error(err.response?.data?.error || 'เกิดข้อผิดพลาดในการบันทึกเก็บผลผลิต');
     } finally {
       setSubmitting(false);
     }
@@ -175,29 +177,198 @@ export default function Harvest() {
   return (
     <>
       <LogManager
-        title="เก็บเกี่ยว (GAP #5)"
+        title="เก็บผลผลิต (GAP #5)"
         endpoint="harvest"
         plotsLookup
         reloadTrigger={reloadKey}
         renderHeaderExtra={() => (
           <button
             onClick={() => openSmartHarvest()}
-            className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 active:scale-95 text-slate-900 text-xs font-black px-4 py-2.5 rounded-xl transition shadow-md cursor-pointer whitespace-nowrap"
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 active:scale-95 text-slate-950 text-xs font-black px-3.5 py-2.5 rounded-xl transition shadow-xs cursor-pointer whitespace-nowrap"
           >
-            <Sparkles className="w-4 h-4 text-slate-900 fill-current" />
-            <span>🧺 บันทึกเก็บเกี่ยวอัจฉริยะ (ลงสต็อกอัตโนมัติ)</span>
+            <Sparkles className="w-4 h-4 text-slate-950 fill-current shrink-0" />
+            <span className="hidden md:inline">เก็บผลผลิตอัจฉริยะ (ลงสต็อกอัตโนมัติ)</span>
+            <span className="md:hidden">เก็บผลผลิตอัจฉริยะ</span>
           </button>
         )}
+        renderCard={({ item: r, openEdit, del, plotName }) => {
+          const pName = plotName(r.plot_id);
+          const batchMatch = pName.match(/\[(#BATCH-[^\]]+)\]/);
+          const batchCode = batchMatch ? batchMatch[1] : null;
+          const cleanPlotTitle = batchMatch ? pName.replace(batchMatch[0], '').trim() : pName;
+          const isHygieneGood = String(r.harvest_hygiene || '').includes('สะอาด') || String(r.harvest_hygiene || '').includes('ปลอดภัย') || String(r.harvest_hygiene || '').includes('ผ่าน');
+
+          return (
+            <div className="surface rounded-3xl p-4 sm:p-5 bg-white border border-slate-200/80 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-3.5">
+              <div className="space-y-3">
+                {/* Header: Plot Name, Batch, Date, Badges */}
+                <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-3">
+                  <div className="space-y-1 min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h3 className="font-black text-sm sm:text-base text-[#173f2a] truncate">
+                        {cleanPlotTitle}
+                      </h3>
+                      {batchCode && (
+                        <span className="font-mono text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 shrink-0">
+                          {batchCode}
+                        </span>
+                      )}
+                    </div>
+
+                    {r.harvest_date && (
+                      <div className="text-[11px] text-slate-500 flex items-center gap-1.5 font-medium">
+                        <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>{format(new Date(r.harvest_date), 'dd/MM/yyyy')}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Badges: Quality Grade & Hygiene */}
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    {r.quality_grade && (
+                      <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-900 border border-amber-300/80 px-2.5 py-0.5 rounded-lg font-black text-xs shadow-2xs">
+                        เกรด {r.quality_grade}
+                      </span>
+                    )}
+                    {r.harvest_hygiene && (
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold text-[11px] border ${
+                        isHygieneGood
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : 'bg-amber-50 text-amber-800 border-amber-200'
+                      }`}>
+                        {isHygieneGood && <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />}
+                        {r.harvest_hygiene}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Hero Stat Box: Harvest Quantity & Lot Code */}
+                <div className="bg-gradient-to-br from-emerald-50/80 to-green-50/50 border border-emerald-200/70 rounded-2xl p-3 sm:p-3.5 flex items-center justify-between gap-3">
+                  <div>
+                    <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">
+                      ปริมาณผลผลิตที่เก็บได้
+                    </span>
+                    <div className="flex items-baseline gap-1 mt-0.5">
+                      <span className="text-xl sm:text-2xl font-black text-emerald-950 font-mono">
+                        {Number(r.quantity || 0).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
+                      </span>
+                      <span className="text-xs font-bold text-emerald-700">
+                        {r.unit || 'กก.'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {r.lot_code && (
+                    <div className="text-right">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        LOT CODE (GAP)
+                      </span>
+                      <span className="font-mono text-xs font-bold text-slate-800 bg-white/90 px-2 py-1 rounded-lg border border-slate-200/80 inline-block mt-0.5 shadow-2xs">
+                        {r.lot_code}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Detail Info Grid */}
+                <div className="grid grid-cols-2 gap-2 text-xs pt-0.5">
+                  <div className="space-y-0.5 bg-slate-50/80 rounded-xl p-2.5 border border-slate-100">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">ผู้ปฏิบัติงาน:</span>
+                    <span className="font-semibold text-slate-700 truncate block">
+                      {r.worker_name ? `👤 ${r.worker_name}` : '—'}
+                    </span>
+                  </div>
+
+                  <div className="space-y-0.5 bg-slate-50/80 rounded-xl p-2.5 border border-slate-100">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">รายได้ (THB):</span>
+                    <span className="font-semibold text-slate-700 truncate block">
+                      {r.revenue ? `฿${Number(r.revenue).toLocaleString()}` : '—'}
+                    </span>
+                  </div>
+
+                  {r.postharvest_handling && (
+                    <div className="col-span-2 space-y-0.5 bg-slate-50/80 rounded-xl p-2.5 border border-slate-100">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">การจัดการหลังเก็บผลผลิต:</span>
+                      <span className="font-medium text-slate-700 block text-[11px] line-clamp-2">
+                        📦 {r.postharvest_handling}
+                      </span>
+                    </div>
+                  )}
+
+                  {r.notes && (
+                    <div className="col-span-2 space-y-0.5 bg-amber-50/50 rounded-xl p-2.5 border border-amber-100 text-[11px] text-amber-900">
+                      <span className="text-[10px] uppercase font-bold text-amber-700 block">หมายเหตุ:</span>
+                      <span className="line-clamp-2">{r.notes}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons: 2x2 Grid (Guaranteed NO Overflow on ANY screen size!) */}
+              <div className="pt-3 border-t border-slate-100 space-y-2 mt-auto">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handlePersonalizedPush(r)}
+                    disabled={sendingId === r.id}
+                    className="inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold py-2.5 px-2 rounded-xl text-xs shadow-xs transition disabled:opacity-50 cursor-pointer"
+                    title="ยิง LINE Push แจ้งเตือนลูกค้าที่ชอบผักชนิดนี้"
+                  >
+                    <Send className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{sendingId === r.id ? 'กำลังส่ง...' : '📢 ยิง LINE Push'}</span>
+                  </button>
+
+                  {r.lot_code ? (
+                    <button
+                      type="button"
+                      onClick={() => setQrModalItem(r)}
+                      className="inline-flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 active:scale-98 text-slate-700 font-bold py-2.5 px-2 rounded-xl text-xs border border-slate-200 transition cursor-pointer"
+                      title="ดู QR Code สำหรับตรวจสอบย้อนกลับมาตรฐาน GAP"
+                    >
+                      <QrCode className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                      <span className="truncate">QR ย้อนกลับ</span>
+                    </button>
+                  ) : (
+                    <div className="rounded-xl bg-slate-50 border border-dashed border-slate-200 flex items-center justify-center text-[10px] text-slate-400 font-medium py-2.5">
+                      ไม่มี Lot QR
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openEdit(r)}
+                    className="inline-flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 active:scale-98 text-blue-700 font-bold py-2.5 px-2 rounded-xl text-xs border border-blue-200 transition cursor-pointer"
+                  >
+                    <Pencil className="w-3.5 h-3.5 shrink-0" />
+                    <span>แก้ไข</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => del(r.id)}
+                    className="inline-flex items-center justify-center gap-1.5 bg-rose-50 hover:bg-rose-100 active:scale-98 text-rose-700 font-bold py-2.5 px-2 rounded-xl text-xs border border-rose-200 transition cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>ลบ</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }}
         renderRowAction={(item) => (
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="inline-flex items-center gap-1.5 flex-nowrap">
             <button
               type="button"
               onClick={() => handlePersonalizedPush(item)}
               disabled={sendingId === item.id}
-              className="inline-flex items-center gap-1 bg-green-50 hover:bg-green-100 text-green-700 font-bold px-2.5 py-1.5 rounded-xl text-xs border border-green-200 transition disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center justify-center gap-1 bg-emerald-50 hover:bg-emerald-100 active:scale-98 text-emerald-800 font-bold py-1.5 px-2.5 rounded-xl text-xs border border-emerald-200 transition disabled:opacity-50 cursor-pointer whitespace-nowrap"
               title="ยิง LINE Push Notification หาเฉพาะลูกค้าที่ชอบผักชนิดนี้"
             >
-              <Send className="w-3.5 h-3.5" />
+              <Send className="w-3.5 h-3.5 shrink-0" />
               <span>{sendingId === item.id ? 'กำลังส่ง...' : '📢 ยิง LINE Push'}</span>
             </button>
 
@@ -205,25 +376,25 @@ export default function Harvest() {
               <button
                 type="button"
                 onClick={() => setQrModalItem(item)}
-                className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-2.5 py-1.5 rounded-xl text-xs border border-slate-200 transition cursor-pointer"
+                className="inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 active:scale-98 text-slate-700 font-bold py-1.5 px-2.5 rounded-xl text-xs border border-slate-200 transition cursor-pointer whitespace-nowrap"
                 title="ดู QR Code สำหรับตรวจสอบย้อนกลับมาตรฐาน GAP"
               >
-                <QrCode className="w-3.5 h-3.5 text-emerald-700" />
+                <QrCode className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
                 <span>QR ย้อนกลับ</span>
               </button>
             )}
           </div>
         )}
         fields={[
-          { key: 'harvest_date', label: 'วันที่เก็บ', type: 'date', placeholder: 'เลือกวันที่เก็บ', required: true },
+          { key: 'harvest_date', label: 'วันที่เก็บผลผลิต', type: 'date', placeholder: 'เลือกวันที่เก็บ', required: true },
           { key: 'plot_id', label: 'แปลง', placeholder: '-- เลือกแปลง --', required: true },
           { key: 'quantity', label: 'จำนวน', type: 'number', placeholder: 'เช่น 100', required: true },
           { key: 'unit', label: 'หน่วย', placeholder: 'เช่น kg', default: 'kg' },
           { key: 'quality_grade', label: 'เกรด', type: 'select', options: ['A', 'B', 'C'], placeholder: '-- เลือกเกรด --' },
           { key: 'lot_code', label: 'Lot Code (สำหรับ QR)', placeholder: 'Lot Code สำหรับ QR' },
           { key: 'revenue', label: 'รายได้ (THB)', type: 'number', placeholder: 'เช่น 5000' },
-          { key: 'harvest_hygiene', label: 'สุขอนามัยการเก็บเกี่ยว', type: 'select', options: ['สะอาด', 'ปนเปื้อน', 'รอตรวจสอบ'], placeholder: '-- เลือกสถานะ --' },
-          { key: 'postharvest_handling', label: 'การจัดการหลังเก็บเกี่ยว', placeholder: 'เช่น ล้าง/บรรจุ' },
+          { key: 'harvest_hygiene', label: 'สุขอนามัยการเก็บผลผลิต', type: 'select', options: ['สะอาด', 'ปนเปื้อน', 'รอตรวจสอบ'], placeholder: '-- เลือกสถานะ --' },
+          { key: 'postharvest_handling', label: 'การจัดการหลังเก็บผลผลิต', placeholder: 'เช่น ล้าง/คัดเกรด/บรรจุ' },
           { key: 'worker_name', label: 'ผู้ปฏิบัติ', placeholder: 'ชื่อผู้ปฏิบัติ' },
           { key: 'notes', label: 'หมายเหตุ', type: 'textarea', placeholder: 'หมายเหตุเพิ่มเติม', hideInTable: true },
         ]}
@@ -241,7 +412,7 @@ export default function Harvest() {
                     <Sparkles className="w-5 h-5 text-amber-700 fill-current" />
                   </span>
                   <h3 className="font-black text-slate-800 text-base sm:text-lg">
-                    บันทึกเก็บเกี่ยวอัจฉริยะ (Smart Harvest)
+                    บันทึกเก็บผลผลิตอัจฉริยะ (Smart Harvest)
                   </h3>
                 </div>
                 <p className="text-xs text-slate-500">
@@ -262,7 +433,7 @@ export default function Harvest() {
                 <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-center space-y-2">
                   <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
                   <h4 className="font-bold text-emerald-900 text-base">
-                    บันทึกการเก็บเกี่ยวและอัปเดตสต็อกเรียบร้อย!
+                    บันทึกการเก็บผลผลิตและอัปเดตสต็อกเรียบร้อย!
                   </h4>
                   <p className="text-xs text-emerald-700">
                     {successResult.message}
@@ -330,7 +501,7 @@ export default function Harvest() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                     <Layers className="w-4 h-4 text-emerald-700" />
-                    เลือกแปลงที่ต้องการเก็บเกี่ยว <span className="text-rose-500">*</span>
+                    เลือกแปลงที่ต้องการเก็บผลผลิต <span className="text-rose-500">*</span>
                   </label>
                   <select
                     required
@@ -549,7 +720,7 @@ export default function Harvest() {
                     className="px-5 py-2.5 bg-gradient-to-r from-emerald-700 to-green-700 hover:from-emerald-800 hover:to-green-800 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
                   >
                     <PackageCheck className="w-4 h-4" />
-                    {submitting ? 'กำลังบันทึกและลงสต็อก...' : '✓ ยืนยันเก็บเกี่ยวและลงสต็อก'}
+                    {submitting ? 'กำลังบันทึกและลงสต็อก...' : '✓ ยืนยันเก็บผลผลิตและลงสต็อก'}
                   </button>
                 </div>
               </form>

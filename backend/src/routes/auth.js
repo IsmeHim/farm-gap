@@ -53,7 +53,7 @@ r.get('/me', async (req, res) => {
   try {
     const payload = jwt.verify(h.slice(7), process.env.JWT_SECRET);
     const [rows] = await pool.query(
-      'SELECT id, email, display_name, farm_name, role, created_at, bank_name, bank_account_no, bank_account_name, promptpay_number, promptpay_qr_url FROM users WHERE id = ?',
+      'SELECT id, email, display_name, farm_name, role, created_at, bank_name, bank_account_no, bank_account_name, promptpay_number, promptpay_qr_url, line_user_id FROM users WHERE id = ?',
       [payload.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'user not found' });
@@ -78,6 +78,7 @@ r.put('/profile', async (req, res) => {
       bank_account_name,
       promptpay_number,
       promptpay_qr_url,
+      line_user_id,
     } = req.body;
 
     if (password && password.trim().length > 0) {
@@ -91,7 +92,8 @@ r.put('/profile', async (req, res) => {
           bank_account_no = ?,
           bank_account_name = ?,
           promptpay_number = ?,
-          promptpay_qr_url = ?
+          promptpay_qr_url = ?,
+          line_user_id = ?
         WHERE id = ?`,
         [
           display_name,
@@ -102,6 +104,7 @@ r.put('/profile', async (req, res) => {
           bank_account_name !== undefined ? bank_account_name : null,
           promptpay_number !== undefined ? promptpay_number : null,
           promptpay_qr_url !== undefined ? promptpay_qr_url : null,
+          line_user_id !== undefined ? line_user_id : null,
           payload.id,
         ]
       );
@@ -114,7 +117,8 @@ r.put('/profile', async (req, res) => {
           bank_account_no = ?,
           bank_account_name = ?,
           promptpay_number = ?,
-          promptpay_qr_url = ?
+          promptpay_qr_url = ?,
+          line_user_id = ?
         WHERE id = ?`,
         [
           display_name,
@@ -124,13 +128,14 @@ r.put('/profile', async (req, res) => {
           bank_account_name !== undefined ? bank_account_name : null,
           promptpay_number !== undefined ? promptpay_number : null,
           promptpay_qr_url !== undefined ? promptpay_qr_url : null,
+          line_user_id !== undefined ? line_user_id : null,
           payload.id,
         ]
       );
     }
 
     const [rows] = await pool.query(
-      'SELECT id, email, display_name, farm_name, role, created_at, bank_name, bank_account_no, bank_account_name, promptpay_number, promptpay_qr_url FROM users WHERE id = ?',
+      'SELECT id, email, display_name, farm_name, role, created_at, bank_name, bank_account_no, bank_account_name, promptpay_number, promptpay_qr_url, line_user_id FROM users WHERE id = ?',
       [payload.id]
     );
     const u = rows[0];
@@ -138,6 +143,51 @@ r.put('/profile', async (req, res) => {
     res.json({ token, user: u, message: 'Profile updated successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ทดสอบส่งข้อความแจ้งเตือนเข้า LINE ของเจ้าของฟาร์ม
+r.post('/test-line-notification', async (req, res) => {
+  const h = req.headers.authorization;
+  if (!h?.startsWith('Bearer ')) return res.status(401).json({ error: 'no token' });
+  try {
+    const payload = jwt.verify(h.slice(7), process.env.JWT_SECRET);
+    const { line_user_id } = req.body;
+
+    let targetLineId = line_user_id;
+    if (!targetLineId) {
+      const [rows] = await pool.query('SELECT line_user_id FROM users WHERE id = ?', [payload.id]);
+      targetLineId = rows[0]?.line_user_id;
+    }
+
+    if (!targetLineId || !targetLineId.trim()) {
+      return res.status(400).json({ error: 'กรุณาระบุ LINE User ID ก่อนทดสอบส่งข้อความ' });
+    }
+
+    const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+    if (!token || token === 'dummy_token') {
+      return res.status(400).json({ error: 'LINE_CHANNEL_ACCESS_TOKEN ยังไม่ได้ตั้งค่าในระบบ' });
+    }
+
+    const { messagingApi } = await import('@line/bot-sdk');
+    const client = new messagingApi.MessagingApiClient({
+      channelAccessToken: token,
+    });
+
+    await client.pushMessage({
+      to: targetLineId.trim(),
+      messages: [
+        {
+          type: 'text',
+          text: '🎉 ทดสอบการเชื่อมต่อแจ้งเตือนสำเร็จ!\n\nระบบ FarmGAP ผูกกับ LINE ของคุณเรียบร้อยแล้ว ต่อไปเมื่อมีคำสั่งซื้อผักสดเข้ามาใหม่ หรือมีลูกค้าแนบสลิปโอนเงิน ระบบจะแจ้งเตือนมาที่นี่ทันทีครับ 🌱✨',
+        },
+      ],
+    });
+
+    res.json({ success: true, message: 'ส่งข้อความแจ้งเตือนทดสอบเข้า LINE เรียบร้อยแล้ว!' });
+  } catch (err) {
+    console.error('Failed to send test LINE message:', err);
+    res.status(500).json({ error: `ไม่สามารถส่งข้อความได้: ${err.message}` });
   }
 });
 

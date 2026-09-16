@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../lib/auth.jsx';
 import { api } from '../lib/api';
 import { toast } from 'sonner';
-import { Building, User, Mail, Lock, ShieldCheck, Save, Sparkles, CheckCircle2, Leaf, QrCode, CreditCard, Wallet, ExternalLink, Image as ImageIcon } from 'lucide-react';
+import { Building, User, Mail, Lock, ShieldCheck, Save, Sparkles, CheckCircle2, Leaf, QrCode, CreditCard, Wallet, ExternalLink, Image as ImageIcon, Bell, Smartphone, Send } from 'lucide-react';
 import { format } from 'date-fns';
 
 const BANK_OPTIONS = [
@@ -32,8 +32,10 @@ export default function Profile() {
     bankAccountName: '',
     promptpayNumber: '',
     promptpayQrUrl: '',
+    lineUserId: '',
   });
   const [loading, setLoading] = useState(false);
+  const [testingLine, setTestingLine] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [userData, setUserData] = useState(null);
 
@@ -53,6 +55,7 @@ export default function Profile() {
           bankAccountName: res.data.bank_account_name || '',
           promptpayNumber: res.data.promptpay_number || '',
           promptpayQrUrl: res.data.promptpay_qr_url || '',
+          lineUserId: res.data.line_user_id || '',
         });
       } catch (e) {
         if (user) {
@@ -66,6 +69,7 @@ export default function Profile() {
             bankAccountName: user.bank_account_name || '',
             promptpayNumber: user.promptpay_number || '',
             promptpayQrUrl: user.promptpay_qr_url || '',
+            lineUserId: user.line_user_id || '',
           }));
         }
       } finally {
@@ -83,6 +87,28 @@ export default function Profile() {
     const autoQrUrl = `https://promptpay.io/${rawNumber}.png`;
     setForm(prev => ({ ...prev, promptpayQrUrl: autoQrUrl }));
     toast.success('สร้างลิงก์ QR Code พร้อมเพย์อัตโนมัติสำเร็จ!');
+  };
+
+  const handleTestLineNotification = async () => {
+    if (!form.lineUserId || !form.lineUserId.trim()) {
+      toast.error('กรุณาระบุ LINE User ID ก่อนทดสอบส่งข้อความ');
+      return;
+    }
+    if (!form.lineUserId.trim().startsWith('U')) {
+      toast.error('LINE User ID ไม่ถูกต้อง (รหัสต้องขึ้นต้นด้วยตัว U และมีความยาว 33 ตัวอักษร)');
+      return;
+    }
+    setTestingLine(true);
+    try {
+      const res = await api.post('/api/auth/test-line-notification', {
+        line_user_id: form.lineUserId.trim(),
+      });
+      toast.success(res.data?.message || 'ส่งข้อความแจ้งเตือนทดสอบเข้า LINE เรียบร้อยแล้ว!');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'เกิดข้อผิดพลาดในการทดสอบส่งข้อความเข้า LINE');
+    } finally {
+      setTestingLine(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -107,6 +133,7 @@ export default function Profile() {
         bank_account_name: form.bankAccountName,
         promptpay_number: form.promptpayNumber,
         promptpay_qr_url: form.promptpayQrUrl,
+        line_user_id: form.lineUserId.trim(),
       };
       if (form.password) {
         payload.password = form.password;
@@ -116,7 +143,7 @@ export default function Profile() {
       updateProfile(res.data.user, res.data.token);
       setUserData(res.data.user);
       setForm(prev => ({ ...prev, password: '', confirmPassword: '' }));
-      toast.success('บันทึกการตั้งค่าข้อมูลฟาร์มและบัญชีธนาคารสำเร็จ!');
+      toast.success('บันทึกการตั้งค่าข้อมูลฟาร์มและระบบแจ้งเตือนสำเร็จ!');
     } catch (err) {
       toast.error(err.response?.data?.error || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
     } finally {
@@ -204,6 +231,29 @@ export default function Profile() {
               ) : (
                 <div className="text-[11px] text-amber-600 bg-amber-50 rounded-xl p-2.5 border border-amber-100">
                   ยังไม่ได้ตั้งค่าบัญชีรับเงิน (จะใช้บัญชีเริ่มต้นของระบบ)
+                </div>
+              )}
+            </div>
+
+            {/* LINE Admin Notification Badge */}
+            <div className="border-t border-slate-100 pt-3 space-y-1.5 text-xs">
+              <div className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+                <Bell className="w-3.5 h-3.5 text-emerald-700" />
+                แจ้งเตือนออเดอร์เข้า LINE:
+              </div>
+              {userData?.line_user_id ? (
+                <div className="bg-emerald-50 text-emerald-900 rounded-xl p-2.5 border border-emerald-200 text-[11px] space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-800">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    เชื่อมต่อ LINE สำเร็จ
+                  </div>
+                  <div className="text-[10px] text-emerald-700 font-mono truncate">
+                    {userData.line_user_id}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-[11px] text-slate-600 bg-slate-50 rounded-xl p-2.5 border border-slate-200/80">
+                  ยังไม่ได้ผูก LINE (พิมพ์ <span className="font-mono font-bold text-emerald-700">myid</span> ในแชท LINE OA)
                 </div>
               )}
             </div>
@@ -409,6 +459,62 @@ export default function Profile() {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* LINE Admin Notification Section */}
+            <div className="border-t border-slate-100 pt-5 space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-emerald-700" />
+                  การแจ้งเตือนคำสั่งซื้อเข้า LINE เจ้าของฟาร์ม (LINE Admin Notification)
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  เมื่อมีลูกค้าสั่งซื้อผักสดใหม่ หรือมีการแนบสลิปโอนเงิน ระบบจะส่งการ์ดแจ้งเตือน Flex Message เข้า LINE ส่วนตัวของคุณทันที
+                </p>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Smartphone className="w-3.5 h-3.5 text-emerald-700" />
+                      LINE User ID ของเจ้าของฟาร์ม (User ID ขึ้นต้นด้วยตัว U ความยาว 33 หลัก)
+                    </span>
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={form.lineUserId}
+                      onChange={e => setForm(prev => ({ ...prev, lineUserId: e.target.value }))}
+                      placeholder="เช่น U1234567890abcdef1234567890abcdef"
+                      className="input text-xs flex-1 py-2.5 px-3.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600 font-mono text-[11px] bg-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleTestLineNotification}
+                      disabled={testingLine || !form.lineUserId}
+                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition shadow-xs disabled:opacity-50 cursor-pointer whitespace-nowrap"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      {testingLine ? 'กำลังส่งทดสอบ...' : '🧪 ทดสอบส่งข้อความเข้า LINE'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Guide on how to get LINE User ID */}
+                <div className="bg-white border border-emerald-100 rounded-xl p-3.5 text-xs space-y-2">
+                  <div className="font-bold text-emerald-900 flex items-center gap-1.5 text-[11px]">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                    วิธีดู LINE User ID ของคุณแบบง่ายๆ ใน 5 วินาที:
+                  </div>
+                  <ol className="list-decimal list-inside text-[11px] text-slate-600 space-y-1 pl-1 leading-relaxed">
+                    <li>เปิดห้องแชท LINE Official Account ของฟาร์ม</li>
+                    <li>พิมพ์คำว่า <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">myid</span> หรือ <span className="font-bold text-emerald-700">แอดมิน</span> แล้วกดส่งในแชท</li>
+                    <li>LINE บอทจะตอบกลับเป็นรหัส <strong>LINE User ID (ขึ้นต้นด้วย U...)</strong> ให้ทันที</li>
+                    <li>แตะค้างเพื่อคัดลอกรหัสดังกล่าว แล้วนำมาวางในช่องด้านบนนี้ จากนั้นกดปุ่ม <strong>"บันทึกการตั้งค่า"</strong></li>
+                  </ol>
+                </div>
               </div>
             </div>
 

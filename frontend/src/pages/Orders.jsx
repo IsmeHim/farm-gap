@@ -230,7 +230,7 @@ export default function Orders() {
       </div>
 
       {/* Overview Metric Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <div className="surface rounded-2xl p-4 border border-emerald-100/60 bg-white shadow-xs">
           <div className="text-[11px] text-slate-500 font-semibold mb-1">คำสั่งซื้อทั้งหมด</div>
           <div className="text-xl sm:text-2xl font-black text-[#173f2a]">{orders.length} <span className="text-xs font-normal text-slate-400">รายการ</span></div>
@@ -258,35 +258,42 @@ export default function Orders() {
               { key: 'all', label: 'ทั้งหมด', count: orders.length },
               { key: 'pending', label: 'รอตรวจสลิป', count: pendingCount },
               { key: 'paid', label: 'ชำระแล้ว', count: orders.filter(o => o.status === 'paid').length },
-              { key: 'shipping', label: 'กำลังส่ง', count: shippingCount },
-              { key: 'completed', label: 'สำเร็จ', count: orders.filter(o => o.status === 'completed').length },
+              { key: 'shipping', label: 'กำลังจัดส่ง', count: shippingCount },
+              { key: 'completed', label: 'จัดส่งสำเร็จ', count: orders.filter(o => o.status === 'completed').length },
               { key: 'cancelled', label: 'ยกเลิก', count: orders.filter(o => o.status === 'cancelled').length },
             ].map(tab => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`px-3 py-1.5 rounded-xl transition cursor-pointer ${activeTab === tab.key ? 'bg-[#173f2a] text-white shadow' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                className={`px-3 py-1.5 rounded-xl border transition cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === tab.key
+                    ? 'bg-[#173f2a] text-white border-[#173f2a] shadow-xs'
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'
+                }`}
               >
-                {tab.label} ({tab.count})
+                <span>{tab.label}</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeTab === tab.key ? 'bg-emerald-800 text-emerald-100' : 'bg-slate-200 text-slate-700'}`}>
+                  {tab.count}
+                </span>
               </button>
             ))}
           </div>
 
-          {/* Search Input */}
-          <div className="relative min-w-[240px]">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
+          {/* Search */}
+          <div className="relative w-full md:w-72">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="ค้นหาเลขออเดอร์ / ชื่อลูกค้า..."
+              placeholder="ค้นหารหัส, ชื่อ, เบอร์โทร..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="input !pl-9.5 !pr-3 text-xs w-full !py-2 rounded-xl border border-slate-200"
+              className="input !pl-9 text-xs w-full py-2 rounded-xl"
             />
           </div>
         </div>
 
-        {/* MOBILE VIEW: Mobile Order Cards (block md:hidden) */}
-        <div className="block md:hidden space-y-3">
+        {/* MOBILE & TABLET VIEW: Order Cards (<lg) */}
+        <div className="block lg:hidden">
           {loading ? (
             <div className="py-12 text-center text-slate-400">
               <div className="animate-spin text-2xl mb-1">🌱</div>
@@ -295,8 +302,9 @@ export default function Orders() {
           ) : filteredOrders.length === 0 ? (
             <div className="py-12 text-center text-slate-400 text-xs font-bold">ไม่พบรายการคำสั่งซื้อ</div>
           ) : (
-            filteredOrders.map(o => (
-              <div key={o.id} className="surface rounded-2xl p-4 bg-white border border-slate-200/80 shadow-xs space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {filteredOrders.map(o => (
+                <div key={o.id} className="surface rounded-2xl p-4 bg-white border border-slate-200/80 shadow-xs space-y-3 flex flex-col justify-between">
                 <div className="flex items-start justify-between border-b border-slate-100 pb-2.5">
                   <div>
                     <div className="font-mono font-bold text-sm text-[#173f2a]">{o.order_code}</div>
@@ -382,12 +390,13 @@ export default function Orders() {
                   )}
                 </div>
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
+      </div>
 
-        {/* DESKTOP VIEW: Sleek Table (hidden md:block) */}
-        <div className="hidden md:block table-responsive">
+        {/* DESKTOP & TABLET LANDSCAPE VIEW: Sleek Table (hidden on mobile & iPad portrait, block on lg:) */}
+        <div className="hidden lg:block table-responsive">
           <table className="min-w-full text-xs">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
