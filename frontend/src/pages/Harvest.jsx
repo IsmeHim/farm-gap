@@ -58,6 +58,7 @@ export default function Harvest() {
   // Targeted Push Notification Modal state
   const [pushModalItem, setPushModalItem] = useState(null);
   const [pushPlot, setPushPlot] = useState(null);
+  const [pushMatchedProduct, setPushMatchedProduct] = useState(null);
   const [clustersList, setClustersList] = useState([]);
   const [pushForm, setPushForm] = useState({
     target_type: 'auto',
@@ -208,8 +209,25 @@ export default function Harvest() {
       const defaultTitle = `🥦 ${cropName} สดๆ เพิ่งเก็บเกี่ยววันนี้!`;
       const defaultMsg = `สวัสดีครับคุณ {name} ทางฟาร์ม FarmGAP พึ่งเก็บเกี่ยว ${cropName} ${harvestItem.quantity ? `จำนวน ${harvestItem.quantity} ${harvestItem.unit || 'กก.'}` : ''} จากแปลง ${currentPlot?.name || 'เพาะปลูก'} สดใหม่ ปลอดภัยมาตรฐาน GAP พร้อมส่งตรงถึงมือคุณแล้วครับ!`;
 
-      // Match product image if available
-      const matchedProd = currentProducts.find(p => p.name?.toLowerCase().includes(cropName.toLowerCase()));
+      // 1. จับคู่หาสินค้าจาก plot_id เป็นลำดับแรก (แม่นยำ 100%)
+      let matchedProd = currentProducts.find(p => p.plot_id && Number(p.plot_id) === Number(harvestItem.plot_id));
+
+      // 2. หากยังไม่พบ ให้ค้นหาด้วยคีย์เวิร์ดชื่อผัก
+      if (!matchedProd) {
+        const cleanName = cropName
+          .replace(/\([^)]*\)/g, '')
+          .replace(/ปลอดสาร|สด|gap|อินทรีย์|ซูเปอร์ฟู้ด|พรีเมียม/gi, '')
+          .trim()
+          .toLowerCase();
+        const cropLower = cropName.toLowerCase();
+
+        matchedProd = currentProducts.find(p => {
+          const pName = (p.name || '').toLowerCase();
+          return pName.includes(cropLower) || (cleanName && pName.includes(cleanName));
+        });
+      }
+
+      setPushMatchedProduct(matchedProd || null);
       const defaultImage = matchedProd?.image_url || 'https://images.unsplash.com/photo-1540420773420-3366772f4999?q=80&w=600&auto=format&fit=crop';
 
       const initialClusterId = clusters[0]?.id || '';
@@ -1077,7 +1095,19 @@ export default function Harvest() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[11px] font-bold text-slate-600 block mb-1">ลิงก์รูปภาพประกอบ (Image URL)</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-slate-600">ลิงก์รูปภาพประกอบ (Image URL)</label>
+                        {pushMatchedProduct?.image_url && (
+                          <button
+                            type="button"
+                            onClick={() => setPushForm(f => ({ ...f, custom_image_url: pushMatchedProduct.image_url }))}
+                            className="text-[10px] text-emerald-800 hover:text-emerald-900 font-bold inline-flex items-center gap-1 cursor-pointer bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-200 transition"
+                            title="คลิกเพื่อดึงรูปจากสินค้านี้"
+                          >
+                            <span>🖼️ ดึงรูปจากสินค้า</span>
+                          </button>
+                        )}
+                      </div>
                       <input
                         type="text"
                         value={pushForm.custom_image_url}
@@ -1085,6 +1115,12 @@ export default function Harvest() {
                         placeholder="https://..."
                         className="input text-xs w-full rounded-xl"
                       />
+                      {pushMatchedProduct && (
+                        <p className="text-[10px] text-emerald-700 mt-1 flex items-center gap-1 font-medium truncate">
+                          <span>✨ ดึงจากสินค้า:</span>
+                          <span className="font-bold">{pushMatchedProduct.name}</span>
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="text-[11px] font-bold text-slate-600 block mb-1">ข้อความบนปุ่มกด (CTA Button)</label>

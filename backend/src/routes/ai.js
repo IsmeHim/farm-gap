@@ -224,6 +224,49 @@ aiRouter.post('/cluster', async (req, res) => {
   }
 });
 
+// Helper: สกัดคีย์เวิร์ดของพืช/ผักเพื่อใช้ค้นหาลูกค้าที่ตรงกลุ่ม
+function extractCropKeywords(cropName) {
+  if (!cropName || typeof cropName !== 'string') return [];
+  const lower = cropName.toLowerCase().trim();
+  const keywords = new Set();
+
+  // 1. ดึงชื่อไทย ตัดส่วนวงเล็บและคำสร้อย เช่น ปลอดสาร, สด, GAP, พรีเมียม, ฯลฯ
+  const cleanThai = lower
+    .replace(/\([^)]*\)/g, '')
+    .replace(/ปลอดสาร|สด|gap|อินทรีย์|ซูเปอร์ฟู้ด|โฮมเมด|กรอบพรีเมียม|เนื้อนุ่ม|พรีเมียม/gi, '')
+    .trim();
+
+  if (cleanThai) {
+    keywords.add(cleanThai);
+    // ถ้าขึ้นต้นด้วย "ผัก" เช่น "ผักกาดขาว" ให้เพิ่ม "กาดขาว" ด้วย
+    if (cleanThai.startsWith('ผัก') && cleanThai.length > 3) {
+      const withoutPhak = cleanThai.replace(/^ผัก/, '').trim();
+      if (withoutPhak.length >= 2) keywords.add(withoutPhak);
+    }
+  }
+
+  // 2. ดึงชื่อภาษาอังกฤษในวงเล็บ เช่น (Chinese Cabbage)
+  const enMatch = lower.match(/\(([^)]+)\)/);
+  if (enMatch && enMatch[1]) {
+    const en = enMatch[1].trim();
+    keywords.add(en);
+    // เพิ่มคำย่อยภาษาอังกฤษที่มีความยาวตั้งแต่ 3 ตัวอักษรขึ้นไป
+    en.split(/[\s-]+/).forEach(w => {
+      const cleanW = w.trim();
+      if (cleanW.length >= 3 && !['premium', 'fresh', 'gap'].includes(cleanW)) {
+        keywords.add(cleanW);
+      }
+    });
+  }
+
+  // 3. กรณีดึงไม่ได้ ให้ใช้ชื่อเต็มเดิม
+  if (keywords.size === 0 && lower) {
+    keywords.add(lower);
+  }
+
+  return Array.from(keywords);
+}
+
 // Helper: ค้นหากลุ่มลูกค้าเป้าหมายสำหรับยิงแจ้งเตือน LINE
 async function getTargetCustomers({ target_type = 'auto', cluster_id = null, crop_name = '' }) {
   let customers = [];
@@ -249,21 +292,46 @@ async function getTargetCustomers({ target_type = 'auto', cluster_id = null, cro
     customers = rows;
   } else {
     // 3. AI Target Matching ตามความชอบผักและประวัติสั่งซื้อ
-    const searchPattern = `%${(crop_name || '').trim()}%`;
-    const [rows] = await pool.query(
-      `SELECT DISTINCT c.id, c.line_user_id, c.display_name, c.picture_url, c.cluster_id, cc.cluster_name
-       FROM customers c
-       LEFT JOIN customer_clusters cc ON c.cluster_id = cc.id
-       LEFT JOIN orders o ON o.customer_id = c.id
-       LEFT JOIN order_items oi ON oi.order_id = o.id
-       LEFT JOIN products p ON oi.product_id = p.id
-       WHERE c.line_user_id IS NOT NULL AND TRIM(c.line_user_id) != ''
-         AND (
-           (cc.preferred_crops IS NOT NULL AND (cc.preferred_crops LIKE ? OR ? LIKE CONCAT('%', cc.cluster_name, '%')))
-           OR (p.name IS NOT NULL AND (p.name LIKE ? OR ? LIKE CONCAT('%', p.name, '%')))
-         )`,
-      [searchPattern, crop_name, searchPattern, crop_name]
-    );
+    const keywords = extractCropKeywords(crop_name);
+
+    if (keywords.length === 0) {
+      // Fallback: ถ้าไม่มีชื่อผัก ส่งคืนลูกค้าทุกคนที่มี LINE
+      const [rows] = await pool.query(
+        `SELECT c.id, c.line_user_id, c.display_name, c.picture_url, c.cluster_id, cc.cluster_name
+         FROM customers c
+         LEFT JOIN customer_clusters cc ON c.cluster_id = cc.id
+         WHERE c.line_user_id IS NOT NULL AND TRIM(c.line_user_id) != ''`
+      );
+      return rows;
+    }
+
+    const orConditions = [];
+    const queryParams = [];
+
+    keywords.forEach(kw => {
+      const pat = `%${kw}%`;
+      orConditions.push('(p.name LIKE ?)');
+      queryParams.push(pat);
+      orConditions.push('(cc.preferred_crops IS NOT NULL AND cc.preferred_crops LIKE ?)');
+      queryParams.push(pat);
+      orConditions.push('(cc.cluster_name LIKE ?)');
+      queryParams.push(pat);
+      orConditions.push('(cc.description LIKE ?)');
+      queryParams.push(pat);
+    });
+
+    const sql = `
+      SELECT DISTINCT c.id, c.line_user_id, c.display_name, c.picture_url, c.cluster_id, cc.cluster_name
+      FROM customers c
+      LEFT JOIN customer_clusters cc ON c.cluster_id = cc.id
+      LEFT JOIN orders o ON o.customer_id = c.id
+      LEFT JOIN order_items oi ON oi.order_id = o.id
+      LEFT JOIN products p ON oi.product_id = p.id
+      WHERE c.line_user_id IS NOT NULL AND TRIM(c.line_user_id) != ''
+        AND (${orConditions.join(' OR ')})
+    `;
+
+    const [rows] = await pool.query(sql, queryParams);
     customers = rows;
   }
 
