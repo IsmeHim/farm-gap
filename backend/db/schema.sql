@@ -248,6 +248,7 @@ CREATE TABLE IF NOT EXISTS orders (
   total_amount DECIMAL(12,2) NOT NULL,
   status VARCHAR(50) DEFAULT 'pending',
   delivery_type VARCHAR(50) DEFAULT 'delivery',
+  payment_method VARCHAR(50) DEFAULT 'transfer',
   delivery_date DATE,
   slip_image_url TEXT,
   notes TEXT,

@@ -20,6 +20,7 @@ import SalesReport from './pages/SalesReport.jsx';
 import LiffOrder from './pages/LiffOrder.jsx';
 import LiffHistory from './pages/LiffHistory.jsx';
 import Profile from './pages/Profile.jsx';
+import ShippingLabel from './pages/ShippingLabel.jsx';
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -33,6 +34,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/trace/:lot" element={<Trace />} />
+      <Route path="/orders/:id/print" element={<ShippingLabel />} />
       <Route path="/liff/order" element={<LiffOrder />} />
       <Route path="/liff/history" element={<LiffHistory />} />
       <Route path="/" element={<Protected><Layout /></Protected>}>

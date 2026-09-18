@@ -219,52 +219,59 @@ export default function SalesReport() {
   return (
     <div className="space-y-5 print:space-y-3">
       {/* Header - Screen View */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs print:hidden">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-700 text-white flex items-center justify-center font-bold shadow-md shadow-emerald-900/10 shrink-0">
-            <TrendingUp className="w-6 h-6" />
+      <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs print:hidden">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-800 text-white flex items-center justify-center font-bold shadow-md shadow-emerald-900/15 shrink-0">
+              <TrendingUp className="w-6 h-6" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-black text-slate-900 leading-tight">
+                  รายงานรายได้ & ส่งออกข้อมูล
+                </h1>
+                <span className="hidden sm:inline-block px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100/70 text-emerald-800 border border-emerald-200">
+                  Sales & Revenue
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                สรุปยอดขายผลผลิตจากหน้าร้าน LINE OA เพื่อการบัญชี ตรวจสอบกำไร และยื่นภาษี
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 leading-tight flex items-center gap-2">
-              รายงานรายได้ & ส่งออกข้อมูล (Sales & Revenue)
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              สรุปยอดขายผลผลิตจากหน้าร้าน LINE OA เพื่อการบัญชี ตรวจสอบกำไร และยื่นภาษี
-            </p>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
+            <button
+              type="button"
+              onClick={exportOrdersCSV}
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 bg-emerald-50 hover:bg-emerald-100/90 text-emerald-800 font-bold px-3.5 py-2.5 rounded-xl text-xs border border-emerald-200/80 transition active:scale-95 cursor-pointer shadow-2xs whitespace-nowrap"
+              title="ดาวน์โหลดไฟล์ Excel/CSV รายการคำสั่งซื้อทั้งหมด"
+            >
+              <Download className="w-4 h-4 text-emerald-700 shrink-0" />
+              <span>Export CSV (ออเดอร์)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={exportProductsCSV}
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 bg-sky-50 hover:bg-sky-100/90 text-sky-800 font-bold px-3.5 py-2.5 rounded-xl text-xs border border-sky-200/80 transition active:scale-95 cursor-pointer shadow-2xs whitespace-nowrap"
+              title="ดาวน์โหลดไฟล์ Excel/CSV สรุปยอดขายแยกตามชนิดผัก"
+            >
+              <Download className="w-4 h-4 text-sky-700 shrink-0" />
+              <span>Export CSV (ผัก)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition active:scale-95 cursor-pointer shadow-sm hover:shadow whitespace-nowrap"
+              title="พิมพ์ใบสรุปยอดขาย หรือบันทึกเป็น PDF"
+            >
+              <Printer className="w-4 h-4 shrink-0" />
+              <span>พิมพ์รายงาน / PDF</span>
+            </button>
           </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-          <button
-            type="button"
-            onClick={exportOrdersCSV}
-            className="inline-flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold px-3.5 py-2.5 rounded-xl text-xs border border-emerald-200 transition active:scale-95 cursor-pointer shadow-2xs"
-            title="ดาวน์โหลดไฟล์ Excel/CSV รายการคำสั่งซื้อทั้งหมด"
-          >
-            <Download className="w-4 h-4 text-emerald-700" />
-            <span>Export CSV (ออเดอร์)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={exportProductsCSV}
-            className="inline-flex items-center gap-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold px-3.5 py-2.5 rounded-xl text-xs border border-sky-200 transition active:scale-95 cursor-pointer shadow-2xs"
-            title="ดาวน์โหลดไฟล์ Excel/CSV สรุปยอดขายแยกตามชนิดผัก"
-          >
-            <Download className="w-4 h-4 text-sky-700" />
-            <span>Export CSV (ผัก)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition active:scale-95 cursor-pointer shadow-md"
-            title="พิมพ์ใบสรุปยอดขาย หรือบันทึกเป็น PDF"
-          >
-            <Printer className="w-4 h-4" />
-            <span>พิมพ์รายงาน / PDF</span>
-          </button>
         </div>
       </div>
 
@@ -284,13 +291,13 @@ export default function SalesReport() {
       </div>
 
       {/* Filter Bar - Screen View */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-3 print:hidden">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          {/* Presets */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs font-bold text-slate-500 mr-1 flex items-center gap-1">
+      <div className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs space-y-3.5 print:hidden">
+        {/* Row 1: Presets Segmented Control */}
+        <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1 sm:pb-0">
+          <div className="inline-flex items-center p-1 bg-slate-100 rounded-2xl gap-1 shrink-0">
+            <span className="text-xs font-bold text-slate-500 px-2 flex items-center gap-1">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
-              ช่วงเวลา:
+              <span className="hidden sm:inline">ช่วงเวลา:</span>
             </span>
             {[
               { key: 'all', label: 'ทั้งหมด' },
@@ -303,10 +310,10 @@ export default function SalesReport() {
                 key={p.key}
                 type="button"
                 onClick={() => applyPreset(p.key)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                className={`whitespace-nowrap px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
                   preset === p.key
                     ? 'bg-emerald-700 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
                 }`}
               >
                 {p.label}
@@ -314,10 +321,21 @@ export default function SalesReport() {
             ))}
           </div>
 
-          {/* Date range inputs */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5 text-xs">
-              <span className="text-slate-400">จาก</span>
+          <button
+            onClick={loadData}
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200/80 hover:bg-slate-50 text-slate-600 transition cursor-pointer text-xs font-semibold shrink-0"
+            title="รีเฟรชข้อมูล"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>รีเฟรช</span>
+          </button>
+        </div>
+
+        {/* Row 2: Date pickers & Status filter */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-3 border-t border-slate-100">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200/80 text-xs">
+              <span className="text-slate-400 font-medium">จาก</span>
               <input
                 type="date"
                 value={startDate}
@@ -325,11 +343,11 @@ export default function SalesReport() {
                   setPreset('custom');
                   setStartDate(e.target.value);
                 }}
-                className="input !py-1 text-xs rounded-xl border border-slate-200 font-mono"
+                className="bg-transparent border-none text-xs font-mono text-slate-700 focus:outline-none p-0 cursor-pointer"
               />
             </div>
-            <div className="flex items-center gap-1.5 text-xs">
-              <span className="text-slate-400">ถึง</span>
+            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200/80 text-xs">
+              <span className="text-slate-400 font-medium">ถึง</span>
               <input
                 type="date"
                 value={endDate}
@@ -337,17 +355,18 @@ export default function SalesReport() {
                   setPreset('custom');
                   setEndDate(e.target.value);
                 }}
-                className="input !py-1 text-xs rounded-xl border border-slate-200 font-mono"
+                className="bg-transparent border-none text-xs font-mono text-slate-700 focus:outline-none p-0 cursor-pointer"
               />
             </div>
+          </div>
 
-            {/* Status select */}
+          <div className="flex items-center gap-2">
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
-              className="input !py-1 text-xs rounded-xl border border-slate-200 font-medium"
+              className="flex-1 sm:flex-initial text-xs bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
             >
-              <option value="valid">✅ ยอดขายที่สำเร็จ (Paid / Shipping / Completed)</option>
+              <option value="valid">✅ ออเดอร์สำเร็จ (Paid / Shipping / Completed)</option>
               <option value="all">ทุกสถานะ (รวมรอตรวจ/ยกเลิก)</option>
               <option value="completed">เฉพาะจัดส่งสำเร็จ (Completed)</option>
               <option value="paid">เฉพาะชำระแล้ว (Paid)</option>
@@ -355,7 +374,7 @@ export default function SalesReport() {
 
             <button
               onClick={loadData}
-              className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition cursor-pointer"
+              className="sm:hidden p-2 rounded-xl border border-slate-200/80 hover:bg-slate-50 text-slate-600 transition cursor-pointer shrink-0"
               title="รีเฟรชข้อมูล"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -365,69 +384,77 @@ export default function SalesReport() {
       </div>
 
       {/* Financial Summary Metric Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
         {/* Total Revenue */}
-        <div className="bg-white rounded-2xl p-4 border border-emerald-200/80 bg-linear-to-br from-white to-emerald-50/40 shadow-xs space-y-1">
-          <div className="flex items-center justify-between">
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-emerald-200/80 bg-gradient-to-br from-white via-white to-emerald-50/50 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] uppercase font-bold text-emerald-700 tracking-wider">ยอดขายรวมสุทธิ</span>
-            <div className="p-1.5 rounded-xl bg-emerald-100 text-emerald-800">
+            <div className="p-2 rounded-xl bg-emerald-100 text-emerald-800">
               <DollarSign className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-slate-900 font-mono">
-            ฿{Number(summary.total_revenue || 0).toLocaleString()}
-          </div>
-          <div className="text-[11px] text-emerald-800 font-medium">
-            จาก {summary.completed_orders || 0} คำสั่งซื้อที่สำเร็จ
+          <div>
+            <div className="text-2xl sm:text-3xl font-black text-slate-900 font-mono tracking-tight">
+              ฿{Number(summary.total_revenue || 0).toLocaleString()}
+            </div>
+            <div className="text-xs text-emerald-800 font-medium mt-1">
+              จาก {summary.completed_orders || 0} คำสั่งซื้อที่สำเร็จ
+            </div>
           </div>
         </div>
 
         {/* Avg Order Value */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs space-y-1">
-          <div className="flex items-center justify-between">
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] uppercase font-bold text-slate-400 tracking-wider">ยอดซื้อเฉลี่ย / บิล</span>
-            <div className="p-1.5 rounded-xl bg-slate-100 text-slate-700">
+            <div className="p-2 rounded-xl bg-indigo-50 text-indigo-700">
               <ShoppingBag className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-slate-800 font-mono">
-            ฿{Number(summary.avg_order_value || 0).toLocaleString()}
-          </div>
-          <div className="text-[11px] text-slate-400">
-            Average Ticket Size
+          <div>
+            <div className="text-2xl sm:text-3xl font-black text-slate-800 font-mono tracking-tight">
+              ฿{Number(summary.avg_order_value || 0).toLocaleString()}
+            </div>
+            <div className="text-xs text-slate-400 mt-1">
+              Average Order Value (AOV)
+            </div>
           </div>
         </div>
 
         {/* Veggies Sold Volume */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs space-y-1">
-          <div className="flex items-center justify-between">
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] uppercase font-bold text-slate-400 tracking-wider">ปริมาณผักที่จำหน่าย</span>
-            <div className="p-1.5 rounded-xl bg-amber-100 text-amber-800">
+            <div className="p-2 rounded-xl bg-amber-100 text-amber-800">
               <Package className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-amber-900 font-mono">
-            {Number(summary.total_veggies_kg || 0).toFixed(1)} <span className="text-sm font-normal text-slate-500">กก.</span>
-          </div>
-          <div className="text-[11px] text-slate-400">
-            รวมทุกรายการผักสด
+          <div>
+            <div className="text-2xl sm:text-3xl font-black text-amber-900 font-mono tracking-tight">
+              {Number(summary.total_veggies_kg || 0).toFixed(1)} <span className="text-sm font-normal text-slate-500">กก.</span>
+            </div>
+            <div className="text-xs text-slate-400 mt-1">
+              รวมทุกรายการผลผลิตสด
+            </div>
           </div>
         </div>
 
         {/* Gross Profit / Costs */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs space-y-1">
-          <div className="flex items-center justify-between">
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] uppercase font-bold text-slate-400 tracking-wider">กำไรเบื้องต้นประเมิน</span>
-            <div className="p-1.5 rounded-xl bg-purple-100 text-purple-800">
+            <div className={`p-2 rounded-xl ${summary.gross_profit >= 0 ? 'bg-purple-100 text-purple-800' : 'bg-rose-100 text-rose-700'}`}>
               <Wallet className="w-4 h-4" />
             </div>
           </div>
-          <div className={`text-2xl sm:text-3xl font-black font-mono ${summary.gross_profit >= 0 ? 'text-purple-900' : 'text-rose-600'}`}>
-            ฿{Number(summary.gross_profit || 0).toLocaleString()}
-          </div>
-          <div className="text-[11px] text-slate-400 flex items-center justify-between">
-            <span>หักต้นทุนฟาร์ม:</span>
-            <span className="font-mono text-slate-600">฿{Number(summary.total_costs || 0).toLocaleString()}</span>
+          <div>
+            <div className={`text-2xl sm:text-3xl font-black font-mono tracking-tight ${summary.gross_profit >= 0 ? 'text-purple-900' : 'text-rose-600'}`}>
+              ฿{Number(summary.gross_profit || 0).toLocaleString()}
+            </div>
+            <div className="text-xs text-slate-500 mt-1 flex items-center justify-between">
+              <span>หักต้นทุนแปลง/ปัจจัย:</span>
+              <span className="font-mono font-semibold text-slate-700">฿{Number(summary.total_costs || 0).toLocaleString()}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -435,7 +462,7 @@ export default function SalesReport() {
       {/* Top Products Breakdown & Order Stats */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Column 1 & 2: Top Selling Products */}
-        <div className="lg:col-span-2 bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-3.5">
+        <div className="lg:col-span-2 bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-slate-200/80 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div className="flex items-center gap-2">
               <Award className="w-5 h-5 text-amber-500" />
@@ -446,7 +473,7 @@ export default function SalesReport() {
             <button
               type="button"
               onClick={exportProductsCSV}
-              className="text-xs text-emerald-700 hover:text-emerald-800 font-bold inline-flex items-center gap-1 print:hidden"
+              className="text-xs text-emerald-700 hover:text-emerald-800 font-bold inline-flex items-center gap-1.5 transition cursor-pointer print:hidden"
             >
               <span>Export CSV</span>
               <Download className="w-3.5 h-3.5" />
@@ -454,7 +481,10 @@ export default function SalesReport() {
           </div>
 
           {top_products.length === 0 ? (
-            <div className="p-8 text-center text-xs text-slate-400">ยังไม่มีข้อมูลการขายสินค้าในช่วงเวลานี้</div>
+            <div className="p-12 text-center text-xs text-slate-400 space-y-1">
+              <p className="text-2xl">🥬</p>
+              <p>ยังไม่มีข้อมูลการขายสินค้าในช่วงเวลานี้</p>
+            </div>
           ) : (
             <div className="space-y-3">
               {top_products.map((prod, idx) => {
@@ -463,33 +493,41 @@ export default function SalesReport() {
                 const totalRev = summary.total_revenue || 1;
                 const shareOfTotal = ((prod.total_revenue / totalRev) * 100).toFixed(1);
 
+                // Rank badges
+                const rankBadges = [
+                  'bg-amber-100 text-amber-800 border-amber-300',
+                  'bg-slate-100 text-slate-700 border-slate-300',
+                  'bg-orange-100 text-orange-800 border-orange-300'
+                ];
+                const badgeClass = rankBadges[idx] || 'bg-slate-50 text-slate-600 border-slate-200';
+
                 return (
-                  <div key={prod.product_id} className="space-y-1 bg-slate-50/70 p-3 rounded-2xl border border-slate-100">
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-[10px]">
-                          {idx + 1}
+                  <div key={prod.product_id} className="p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-2 hover:bg-slate-50 transition">
+                    <div className="flex items-center justify-between text-xs gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-[11px] border shrink-0 ${badgeClass}`}>
+                          {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
                         </span>
-                        <span className="font-bold text-slate-900">{prod.product_name}</span>
-                        <span className="text-[11px] text-slate-400 font-mono">({prod.orders_count} ออเดอร์)</span>
+                        <span className="font-bold text-slate-900 truncate text-sm">{prod.product_name}</span>
+                        <span className="text-[11px] text-slate-400 font-mono shrink-0">({prod.orders_count} ออเดอร์)</span>
                       </div>
-                      <div className="text-right">
-                        <span className="font-black text-slate-900 font-mono">฿{Number(prod.total_revenue).toLocaleString()}</span>
-                        <span className="text-[10px] text-slate-400 ml-1.5 font-medium">({shareOfTotal}%)</span>
+                      <div className="text-right shrink-0">
+                        <span className="font-black text-slate-900 font-mono text-sm">฿{Number(prod.total_revenue).toLocaleString()}</span>
+                        <span className="text-[11px] text-emerald-700 ml-1.5 font-bold">({shareOfTotal}%)</span>
                       </div>
                     </div>
 
                     {/* Progress Bar */}
                     <div className="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden">
                       <div
-                        className="bg-emerald-600 h-full rounded-full transition-all duration-500"
+                        className="bg-gradient-to-r from-emerald-500 to-teal-600 h-full rounded-full transition-all duration-500"
                         style={{ width: `${percent}%` }}
                       />
                     </div>
 
                     <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
-                      <span>ปริมาณที่ขายได้: <strong className="text-slate-700">{prod.total_quantity} {prod.unit || 'กก.'}</strong></span>
-                      <span>สัดส่วนยอดขาย: <strong>{shareOfTotal}%</strong></span>
+                      <span>ปริมาณจำหน่าย: <strong className="text-slate-800 font-semibold">{prod.total_quantity} {prod.unit || 'กก.'}</strong></span>
+                      <span>สัดส่วนยอดขาย: <strong className="text-slate-800 font-semibold">{shareOfTotal}%</strong></span>
                     </div>
                   </div>
                 );
@@ -499,52 +537,63 @@ export default function SalesReport() {
         </div>
 
         {/* Column 3: Summary Highlights */}
-        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-4">
-          <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-            <Sparkles className="w-5 h-5 text-emerald-600" />
-            <h2 className="font-black text-slate-900 text-sm sm:text-base">
-              ภาพรวมการกระจายสินค้า
-            </h2>
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-4">
+          <div>
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+              <Sparkles className="w-5 h-5 text-emerald-600" />
+              <h2 className="font-black text-slate-900 text-sm sm:text-base">
+                ภาพรวมการกระจายสินค้า & บัญชี
+              </h2>
+            </div>
+
+            <div className="mt-4 space-y-3.5 text-xs">
+              <div className="p-3.5 bg-emerald-50/70 rounded-2xl border border-emerald-200/70 space-y-1.5">
+                <div className="font-bold text-emerald-950 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>ความพร้อมตรวจสอบตามมาตรฐาน GAP</span>
+                </div>
+                <p className="text-[11px] text-emerald-800 leading-relaxed">
+                  รายการออเดอร์ทั้งหมดบันทึกประวัติการขาย แหล่งที่มา และการกระจายสินค้าอย่างสมบูรณ์ สามารถนำไฟล์ส่งออกไปแนบเอกสารตรวจประเมินฟาร์มได้ทันที
+                </p>
+              </div>
+
+              <div className="space-y-2.5 pt-1">
+                <div className="flex items-center justify-between py-1.5 border-b border-slate-100 text-slate-600">
+                  <span>จำนวนคำสั่งซื้อทั้งหมด:</span>
+                  <span className="font-bold text-slate-900 font-mono">{summary.total_orders} รายการ</span>
+                </div>
+                <div className="flex items-center justify-between py-1.5 border-b border-slate-100 text-slate-600">
+                  <span>ออเดอร์ที่รับเงินแล้ว:</span>
+                  <span className="font-bold text-emerald-800 font-mono">{summary.completed_orders} รายการ</span>
+                </div>
+                <div className="flex items-center justify-between py-1.5 border-b border-slate-100 text-slate-600">
+                  <span>ต้นทุนการผลิตสะสม:</span>
+                  <span className="font-bold text-slate-700 font-mono">฿{Number(summary.total_costs || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex items-center justify-between py-1.5 text-slate-600">
+                  <span>กำไรสุทธิเบื้องต้น:</span>
+                  <span className={`font-black font-mono text-sm ${summary.gross_profit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                    ฿{Number(summary.gross_profit || 0).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-3 text-xs">
-            <div className="p-3 bg-emerald-50/70 rounded-2xl border border-emerald-200/60 space-y-1">
-              <div className="font-bold text-emerald-950 flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>ความพร้อมสำหรับทำบัญชี & ภาษี:</span>
-              </div>
-              <p className="text-[11px] text-emerald-800 leading-relaxed pl-5">
-                ข้อมูลคำสั่งซื้อทั้งหมดผูกรหัสลูกค้า วันที่ เวลา และรายการสินค้าอย่างเป็นระเบียบ สามารถส่งออกเป็นไฟล์ CSV ไปเปิดบน Excel ได้โดยตรง
-              </p>
-            </div>
-
-            <div className="space-y-2 pt-1">
-              <div className="flex justify-between py-1.5 border-b border-slate-100">
-                <span className="text-slate-500">จำนวนคำสั่งซื้อทั้งหมด:</span>
-                <span className="font-bold text-slate-800 font-mono">{summary.total_orders} รายการ</span>
-              </div>
-              <div className="flex justify-between py-1.5 border-b border-slate-100">
-                <span className="text-slate-500">ออเดอร์ที่รับเงินแล้ว:</span>
-                <span className="font-bold text-emerald-800 font-mono">{summary.completed_orders} รายการ</span>
-              </div>
-              <div className="flex justify-between py-1.5 border-b border-slate-100">
-                <span className="text-slate-500">ต้นทุนการผลิตสะสม:</span>
-                <span className="font-bold text-slate-700 font-mono">฿{Number(summary.total_costs || 0).toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between py-1.5">
-                <span className="text-slate-500">กำไรสุทธิเบื้องต้น:</span>
-                <span className="font-black text-emerald-900 font-mono">฿{Number(summary.gross_profit || 0).toLocaleString()}</span>
-              </div>
-            </div>
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-[11px] text-slate-500 text-center">
+            ข้อมูลอัปเดตแบบ Realtime ตามสถานะคำสั่งซื้อในระบบ
           </div>
         </div>
       </div>
 
-      {/* Orders Table */}
+      {/* Orders Section (Desktop Table + Mobile Cards) */}
       <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <ShoppingBag className="w-5 h-5 text-emerald-700" />
+        {/* Header with Search and Export */}
+        <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-emerald-50 rounded-xl text-emerald-700">
+              <ShoppingBag className="w-5 h-5" />
+            </div>
             <div>
               <h3 className="font-black text-slate-900 text-sm sm:text-base">
                 รายการคำสั่งซื้อ & รายรับ ({filteredOrders.length} รายการ)
@@ -554,19 +603,28 @@ export default function SalesReport() {
           </div>
 
           <div className="flex items-center gap-2 print:hidden">
-            <div className="relative w-full sm:w-64">
+            <div className="relative flex-1 md:w-64">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="ค้นหาเลขออเดอร์ หรือชื่อลูกค้า..."
+                placeholder="ค้นหาเลขออเดอร์, ชื่อลูกค้า..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="input !pl-9 !pr-3 text-xs w-full rounded-xl border border-slate-200"
+                className="w-full text-xs pl-9 pr-8 py-2 rounded-xl border border-slate-200/80 bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
             <button
               onClick={exportOrdersCSV}
-              className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer shadow-2xs shrink-0"
+              className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition cursor-pointer shadow-2xs shrink-0 active:scale-95"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Export</span>
@@ -586,91 +644,167 @@ export default function SalesReport() {
             <p className="text-slate-400">ลองเปลี่ยนช่วงวันที่ หรือเลือกดูทุกสถานะออเดอร์ดูครับ</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-slate-50/90 text-slate-500 font-bold border-b border-slate-200/80 uppercase text-[11px]">
-                <tr>
-                  <th className="px-4 py-3.5 whitespace-nowrap">รหัสออเดอร์</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap">วันที่ / เวลา</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap">ลูกค้า</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap">การจัดส่ง</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap">รายการผักที่ซื้อ</th>
-                  <th className="px-4 py-3.5 text-right whitespace-nowrap">ยอดชำระ</th>
-                  <th className="px-4 py-3.5 text-center whitespace-nowrap">สถานะ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredOrders.map(o => (
-                  <tr key={o.id} className="hover:bg-slate-50/70 transition">
-                    <td className="px-4 py-3.5 align-middle font-mono font-bold text-emerald-900 whitespace-nowrap">
-                      #{o.order_code}
-                    </td>
+          <>
+            {/* Desktop / Tablet Table View (hidden on mobile) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50/90 text-slate-500 font-bold border-b border-slate-200/80 uppercase text-[11px]">
+                  <tr>
+                    <th className="px-4 py-3.5 whitespace-nowrap">รหัสออเดอร์</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap">วันที่ / เวลา</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap">ลูกค้า</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap">การจัดส่ง</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap">รายการผักที่ซื้อ</th>
+                    <th className="px-4 py-3.5 text-right whitespace-nowrap">ยอดชำระ</th>
+                    <th className="px-4 py-3.5 text-center whitespace-nowrap">สถานะ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredOrders.map(o => (
+                    <tr key={o.id} className="hover:bg-slate-50/70 transition">
+                      <td className="px-4 py-3.5 align-middle font-mono font-bold text-emerald-900 whitespace-nowrap">
+                        #{o.order_code}
+                      </td>
 
-                    <td className="px-4 py-3.5 align-middle whitespace-nowrap text-slate-600 font-mono text-[11px]">
-                      {o.created_at ? format(new Date(o.created_at), 'dd/MM/yyyy HH:mm') : '—'}
-                    </td>
+                      <td className="px-4 py-3.5 align-middle whitespace-nowrap text-slate-600 font-mono text-[11px]">
+                        {o.created_at ? format(new Date(o.created_at), 'dd/MM/yyyy HH:mm') : '—'}
+                      </td>
 
-                    <td className="px-4 py-3.5 align-middle">
-                      <div className="font-bold text-slate-900">{o.customer_name}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{o.customer_phone || '—'}</div>
-                    </td>
+                      <td className="px-4 py-3.5 align-middle">
+                        <div className="font-bold text-slate-900">{o.customer_name}</div>
+                        <div className="text-[11px] text-slate-400 font-mono">{o.customer_phone || '—'}</div>
+                      </td>
 
-                    <td className="px-4 py-3.5 align-middle whitespace-nowrap">
-                      <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold ${
+                      <td className="px-4 py-3.5 align-middle whitespace-nowrap">
+                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
+                          o.delivery_type === 'delivery' ? 'bg-amber-100/80 text-amber-800' : 'bg-blue-100/80 text-blue-800'
+                        }`}>
+                          {o.delivery_type === 'delivery' ? '🚚 ส่งตามที่อยู่' : '🏡 รับเองที่ฟาร์ม'}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3.5 align-middle">
+                        <div className="space-y-0.5 max-w-[260px]">
+                          {o.items && o.items.length > 0 ? (
+                            o.items.map((i, idx) => (
+                              <div key={idx} className="text-[11px] text-slate-700 truncate">
+                                • {i.product_name} <strong className="text-slate-900 font-mono">x{i.quantity} {i.unit}</strong>
+                              </div>
+                            ))
+                          ) : (
+                            <span className="text-slate-300 italic text-[11px]">ไม่มีรายการย่อย</span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3.5 align-middle text-right whitespace-nowrap">
+                        <span className="font-black text-slate-900 font-mono text-sm">
+                          ฿{Number(o.total_amount).toLocaleString()}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3.5 align-middle text-center whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                          o.status === 'completed'
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            : o.status === 'shipping'
+                            ? 'bg-purple-100 text-purple-800 border border-purple-300'
+                            : o.status === 'paid'
+                            ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                            : o.status === 'pending'
+                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                            : 'bg-rose-100 text-rose-800 border border-rose-300'
+                        }`}>
+                          {o.status === 'completed'
+                            ? 'จัดส่งสำเร็จ'
+                            : o.status === 'shipping'
+                            ? 'กำลังจัดส่ง'
+                            : o.status === 'paid'
+                            ? 'ชำระแล้ว'
+                            : o.status === 'pending'
+                            ? 'รอตรวจสลิป'
+                            : 'ยกเลิก'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card View (md:hidden) */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {filteredOrders.map(o => (
+                <div key={o.id} className="p-4 space-y-2.5 hover:bg-slate-50 transition">
+                  {/* Top: Order code & Status */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-emerald-900 text-sm">#{o.order_code}</span>
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                         o.delivery_type === 'delivery' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
                       }`}>
-                        {o.delivery_type === 'delivery' ? '🚚 ส่งตามที่อยู่' : '🏡 รับเองที่ฟาร์ม'}
+                        {o.delivery_type === 'delivery' ? '🚚 ส่ง' : '🏡 รับเอง'}
                       </span>
-                    </td>
+                    </div>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      o.status === 'completed'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : o.status === 'shipping'
+                        ? 'bg-purple-100 text-purple-800'
+                        : o.status === 'paid'
+                        ? 'bg-blue-100 text-blue-800'
+                        : o.status === 'pending'
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-rose-100 text-rose-800'
+                    }`}>
+                      {o.status === 'completed'
+                        ? 'จัดส่งสำเร็จ'
+                        : o.status === 'shipping'
+                        ? 'กำลังจัดส่ง'
+                        : o.status === 'paid'
+                        ? 'ชำระแล้ว'
+                        : o.status === 'pending'
+                        ? 'รอตรวจสลิป'
+                        : 'ยกเลิก'}
+                    </span>
+                  </div>
 
-                    <td className="px-4 py-3.5 align-middle">
-                      <div className="space-y-0.5 max-w-[260px]">
-                        {o.items && o.items.length > 0 ? (
-                          o.items.map((i, idx) => (
-                            <div key={idx} className="text-[11px] text-slate-700 truncate">
-                              • {i.product_name} <strong className="text-slate-900 font-mono">x{i.quantity} {i.unit}</strong>
-                            </div>
-                          ))
-                        ) : (
-                          <span className="text-slate-300 italic text-[11px]">ไม่มีรายการย่อย</span>
-                        )}
-                      </div>
-                    </td>
+                  {/* Customer and Date */}
+                  <div className="flex items-center justify-between text-xs text-slate-600">
+                    <div>
+                      <span className="font-bold text-slate-900">{o.customer_name}</span>
+                      {o.customer_phone && <span className="text-slate-400 font-mono ml-1.5 text-[11px]">({o.customer_phone})</span>}
+                    </div>
+                    <div className="font-mono text-[11px] text-slate-400">
+                      {o.created_at ? format(new Date(o.created_at), 'dd/MM HH:mm') : '—'}
+                    </div>
+                  </div>
 
-                    <td className="px-4 py-3.5 align-middle text-right whitespace-nowrap">
-                      <span className="font-black text-slate-900 font-mono text-sm">
-                        ฿{Number(o.total_amount).toLocaleString()}
-                      </span>
-                    </td>
+                  {/* Items list */}
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 space-y-1 text-xs">
+                    {o.items && o.items.length > 0 ? (
+                      o.items.map((i, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-[11px] text-slate-700">
+                          <span className="truncate">{i.product_name}</span>
+                          <span className="font-mono font-semibold text-slate-900 shrink-0 ml-2">x{i.quantity} {i.unit}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <span className="text-slate-400 italic text-[11px]">ไม่มีรายการย่อย</span>
+                    )}
+                  </div>
 
-                    <td className="px-4 py-3.5 align-middle text-center whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        o.status === 'completed'
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                          : o.status === 'shipping'
-                          ? 'bg-purple-100 text-purple-800 border border-purple-300'
-                          : o.status === 'paid'
-                          ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                          : o.status === 'pending'
-                          ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                          : 'bg-rose-100 text-rose-800'
-                      }`}>
-                        {o.status === 'completed'
-                          ? 'จัดส่งสำเร็จ'
-                          : o.status === 'shipping'
-                          ? 'กำลังจัดส่ง'
-                          : o.status === 'paid'
-                          ? 'ชำระแล้ว'
-                          : o.status === 'pending'
-                          ? 'รอตรวจสลิป'
-                          : 'ยกเลิก'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                  {/* Price */}
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-100/60 text-xs">
+                    <span className="text-slate-500 font-medium">ยอดชำระสุทธิ</span>
+                    <span className="font-black text-slate-900 font-mono text-base">
+                      ฿{Number(o.total_amount).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 

@@ -62,9 +62,15 @@ export default function Storage() {
           {/* Header */}
           <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
             <div className="space-y-0.5">
-              <div className="flex items-center gap-1.5 font-black text-sm text-slate-900">
+              <div className="flex items-center gap-1.5 font-black text-sm text-slate-900 flex-wrap">
                 <User className="w-4 h-4 text-purple-700 shrink-0" />
                 <span>{item.buyer || 'ลูกค้าทั่วไป'}</span>
+                {item.order_id && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                    <Package className="w-3 h-3 text-amber-600" />
+                    ออเดอร์ #{item.order_id}
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-1 text-[11px] text-slate-500">
                 <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -147,10 +153,18 @@ export default function Storage() {
           label: 'ผู้ซื้อ', 
           placeholder: 'ผู้ซื้อ / ชื่อลูกค้า', 
           required: true,
-          render: (val) => (
-            <div className="font-bold text-slate-900 flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-              <span>{val || '—'}</span>
+          render: (val, row) => (
+            <div className="space-y-0.5">
+              <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                <span>{val || '—'}</span>
+              </div>
+              {row?.order_id && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                  <Package className="w-2.5 h-2.5 text-amber-600" />
+                  ออเดอร์ #{row.order_id}
+                </span>
+              )}
             </div>
           )
         },
@@ -169,10 +183,15 @@ export default function Storage() {
           key: 'vehicle', 
           label: 'ยานพาหนะ', 
           type: 'select',
-          options: ['รถส่วนตัว', 'รถจักรยานยนต์ส่วนตัว'],
+          options: [
+            'รถจักรยานยนต์ส่วนตัว (เจ้าของฟาร์มส่งเอง)',
+            'รถยนต์ส่วนตัว',
+            'บริการขนส่งพัสดุเอกชน',
+            'ลูกค้ามารับเองที่ฟาร์ม',
+          ],
           placeholder: '-- เลือกยานพาหนะ --',
           render: (val) => (
-            <div className="text-slate-700 flex items-center gap-1 truncate max-w-[170px]" title={val}>
+            <div className="text-slate-700 flex items-center gap-1 truncate max-w-[180px]" title={val}>
               <Truck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <span>{val || '—'}</span>
             </div>
@@ -194,8 +213,8 @@ export default function Storage() {
             </span>
           )
         },
-        { key: 'storage_location', label: 'สถานที่เก็บ', placeholder: 'เช่น ห้องเย็นฟาร์ม Temp 4°C' },
-        { key: 'storage_conditions', label: 'สภาพการเก็บรักษา', placeholder: 'เช่น คุมความเย็น 4°C ตลอดการเดินทาง', hideInTable: true },
+        { key: 'storage_location', label: 'สถานที่เก็บ', placeholder: 'เช่น คลังบรรจุและกระจายสินค้าฟาร์ม' },
+        { key: 'storage_conditions', label: 'สภาพการเก็บรักษา', placeholder: 'เช่น บรรจุในกล่อง/ถุงเก็บความสด ป้องกันแสงแดดและความร้อน', hideInTable: true },
         { key: 'transport_time', label: 'เวลาขนส่ง', type: 'time', placeholder: 'เวลา' },
         { 
           key: 'delivery_condition', 

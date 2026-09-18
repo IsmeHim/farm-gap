@@ -76,14 +76,20 @@ aiRouter.get('/clusters', async (req, res) => {
 aiRouter.post('/cluster', async (req, res) => {
   try {
     // 4.1 ตรวจสอบและสร้างหมวดหมู่คลัสเตอร์เริ่มต้นถ้ายังไม่มี
-    const [existingClusters] = await pool.query('SELECT * FROM customer_clusters');
+    let [existingClusters] = await pool.query('SELECT * FROM customer_clusters ORDER BY id ASC');
     if (existingClusters.length === 0) {
       await pool.query(`
-        INSERT INTO customer_clusters (id, cluster_name, description, preferred_crops) VALUES
-        (1, 'สลัดเลิฟเวอร์ (Salad Lovers)', 'เน้นสั่งซื้อผักสลัดบ่อยครั้ง ปริมาณยอดเงินปานกลาง', '["กรีนโอ๊ค", "เรดโอ๊ค", "บัตเตอร์เฮด"]'),
-        (2, 'ลูกค้าขาประจำ (Regular Customers)', 'สั่งซื้อครอบคลุม ผักรวมหลากหลาย และมีจำนวนออเดอร์สม่ำเสมอ', '["คอส", "ฟินเลย์", "คะน้า"]'),
-        (3, 'ลูกค้าขายส่ง / B2B (Bulk Buyers)', 'สั่งจำนวนมาก ยอดชำระต่อบิลสูง สั่งซื้อผักหลากหลาย', '["กรีนโอ๊ค", "คอส", "ผักชี"]')
+        INSERT INTO customer_clusters (cluster_name, description, preferred_crops) VALUES
+        ('สลัดเลิฟเวอร์ (Salad Lovers)', 'เน้นสั่งซื้อผักสลัดบ่อยครั้ง ปริมาณยอดเงินปานกลาง', '["กรีนโอ๊ค", "เรดโอ๊ค", "บัตเตอร์เฮด"]'),
+        ('ลูกค้าประจำเพื่อสุขภาพ (Health Regulars)', 'ชอบผักเคล บัตเตอร์เฮด และสั่งน้ำสลัดคู่กันเป็นประจำ', '["คอส", "ฟินเลย์", "คะน้า"]'),
+        ('กลุ่มร้านอาหารและค้าส่ง (Bulk & B2B)', 'สั่งซื้อปริมาณมาก ยอดชำระต่อบิลสูง สั่งซื้อผักหลากหลาย', '["กรีนโอ๊ค", "คอส", "ผักชี"]')
       `);
+      [existingClusters] = await pool.query('SELECT * FROM customer_clusters ORDER BY id ASC');
+    }
+
+    const clusterIds = existingClusters.map(c => c.id);
+    if (clusterIds.length === 0) {
+      return res.status(500).json({ error: 'ไม่พบหมวดหมู่กลุ่มลูกค้าในระบบ' });
     }
 
     // 4.2 ดึงข้อมูลพฤติกรรมลูกค้ามาทำฟีเจอร์เวกเตอร์
@@ -100,20 +106,23 @@ aiRouter.post('/cluster', async (req, res) => {
       GROUP BY c.id
     `);
 
+    if (users.length === 0) {
+      return res.json({ success: true, message: 'ยังไม่มีข้อมูลลูกค้าในระบบ' });
+    }
+
     // หากไม่มีลูกค้าเลย หรือมีลูกค้าน้อยกว่า 3 คน ให้จับคู่กลุ่มเริ่มต้นโดยตรง
     if (users.length < 3) {
       for (const u of users) {
-        // จับคลัสเตอร์ตามสัดส่วนยอดซื้อเบื้องต้น
-        let clusterId = 1;
-        if (u.total_spend > 5000) clusterId = 3;
-        else if (u.order_count > 3) clusterId = 2;
+        let clusterId = clusterIds[0];
+        if (u.total_spend > 5000) clusterId = clusterIds[2] || clusterIds[0];
+        else if (u.order_count > 3) clusterId = clusterIds[1] || clusterIds[0];
         await pool.query('UPDATE customers SET cluster_id = ? WHERE id = ?', [clusterId, u.customer_id]);
       }
       return res.json({ success: true, message: 'ลูกค้าน้อยเกินไปสำหรับ K-Means, จัดกลุ่มแบบเบื้องต้นสำเร็จ' });
     }
 
     // 4.3 เตรียมข้อมูลสำหรับการทำ K-Means
-    const K = 3;
+    const K = Math.min(clusterIds.length, 3);
     const data = users.map(u => ({
       id: u.customer_id,
       features: [u.order_count, u.total_spend, u.avg_order_value, u.total_items]
@@ -139,15 +148,12 @@ aiRouter.post('/cluster', async (req, res) => {
       })
     }));
 
-    // เริ่มต้น Centroids 3 จุดจากข้อมูลสุ่ม
+    // เริ่มต้น Centroids K จุดแบบสุ่มปลอดภัย
+    const shuffled = [...Array(normalizedData.length).keys()].sort(() => 0.5 - Math.random());
     let centroids = [];
-    const chosenIndices = new Set();
-    while (centroids.length < K) {
-      const randIdx = Math.floor(Math.random() * normalizedData.length);
-      if (!chosenIndices.has(randIdx)) {
-        chosenIndices.add(randIdx);
-        centroids.push([...normalizedData[randIdx].features]);
-      }
+    for (let k = 0; k < K; k++) {
+      const idx = shuffled[k % shuffled.length];
+      centroids.push([...normalizedData[idx].features]);
     }
 
     // ฟังก์ชันคำนวณระยะห่าง Euclidean
@@ -197,74 +203,154 @@ aiRouter.post('/cluster', async (req, res) => {
 
       centroids = newCentroids.map((c, cIdx) => {
         const count = counts[cIdx];
-        return count === 0 ? c : c.map(val => val / count);
+        return count === 0 ? centroids[cIdx] : c.map(val => val / count);
       });
 
       iterations--;
     }
 
-    // 4.4 บันทึกผลลัพธ์กลับลงไปในฐานข้อมูลลูกค้า
+    // 4.4 บันทึกผลลัพธ์กลับลงไปในฐานข้อมูลลูกค้า โดยอ้างอิง cluster_id จากตารางจริง
     for (let i = 0; i < normalizedData.length; i++) {
       const customerId = normalizedData[i].id;
-      // แปลงจาก cluster index 0,1,2 เป็น cluster_id 1,2,3
-      const clusterId = assignments[i] + 1;
+      const clusterIdx = assignments[i];
+      const clusterId = clusterIds[clusterIdx] || clusterIds[0];
       await pool.query('UPDATE customers SET cluster_id = ? WHERE id = ?', [clusterId, customerId]);
     }
 
     res.json({ success: true, message: 'โมเดล K-Means จัดกลุ่มลูกค้าตามพฤติกรรมการซื้อสำเร็จ' });
   } catch (error) {
+    console.error('K-Means Cluster error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// 5. ยิง LINE Push Notification แบบเจาะจงกลุ่มเป้าหมาย (Personalized Push)
-aiRouter.post('/notify-harvest', async (req, res) => {
-  const { harvest_id, crop_name, quantity, unit, plot_name } = req.body;
-  if (!crop_name) {
-    return res.status(400).json({ error: 'crop_name is required' });
-  }
+// Helper: ค้นหากลุ่มลูกค้าเป้าหมายสำหรับยิงแจ้งเตือน LINE
+async function getTargetCustomers({ target_type = 'auto', cluster_id = null, crop_name = '' }) {
+  let customers = [];
 
-  try {
-    // ดึงข้อมูลลูกค้าที่ตรงเงื่อนไข (เคยสั่งผักชนิดนี้ หรือ อยู่ในกลุ่ม Cluster ที่ชอบผักชนิดนี้)
-    const searchPattern = `%${crop_name}%`;
-    let [customers] = await pool.query(
-      `SELECT DISTINCT c.id, c.line_user_id, c.display_name, c.cluster_id, cc.cluster_name
+  if (target_type === 'cluster' && cluster_id) {
+    // 1. เจาะจงตามกลุ่ม Cluster ID
+    const [rows] = await pool.query(
+      `SELECT c.id, c.line_user_id, c.display_name, c.picture_url, c.cluster_id, cc.cluster_name
+       FROM customers c
+       LEFT JOIN customer_clusters cc ON c.cluster_id = cc.id
+       WHERE c.cluster_id = ? AND c.line_user_id IS NOT NULL AND TRIM(c.line_user_id) != ''`,
+      [cluster_id]
+    );
+    customers = rows;
+  } else if (target_type === 'all') {
+    // 2. ลูกค้าทุกคนที่มี LINE
+    const [rows] = await pool.query(
+      `SELECT c.id, c.line_user_id, c.display_name, c.picture_url, c.cluster_id, cc.cluster_name
+       FROM customers c
+       LEFT JOIN customer_clusters cc ON c.cluster_id = cc.id
+       WHERE c.line_user_id IS NOT NULL AND TRIM(c.line_user_id) != ''`
+    );
+    customers = rows;
+  } else {
+    // 3. AI Target Matching ตามความชอบผักและประวัติสั่งซื้อ
+    const searchPattern = `%${(crop_name || '').trim()}%`;
+    const [rows] = await pool.query(
+      `SELECT DISTINCT c.id, c.line_user_id, c.display_name, c.picture_url, c.cluster_id, cc.cluster_name
        FROM customers c
        LEFT JOIN customer_clusters cc ON c.cluster_id = cc.id
        LEFT JOIN orders o ON o.customer_id = c.id
        LEFT JOIN order_items oi ON oi.order_id = o.id
        LEFT JOIN products p ON oi.product_id = p.id
-       WHERE (p.name LIKE ? OR cc.preferred_crops LIKE ?)`,
-      [searchPattern, searchPattern]
+       WHERE c.line_user_id IS NOT NULL AND TRIM(c.line_user_id) != ''
+         AND (
+           (cc.preferred_crops IS NOT NULL AND (cc.preferred_crops LIKE ? OR ? LIKE CONCAT('%', cc.cluster_name, '%')))
+           OR (p.name IS NOT NULL AND (p.name LIKE ? OR ? LIKE CONCAT('%', p.name, '%')))
+         )`,
+      [searchPattern, crop_name, searchPattern, crop_name]
     );
+    customers = rows;
+  }
 
-    // หากไม่พบลูกค้าตรงกลุ่มเฉพาะ ให้ดึงลูกค้า LINE ทั้งหมดเป็น Fallback
-    if (customers.length === 0) {
-      const [allCustomers] = await pool.query(
-        `SELECT c.id, c.line_user_id, c.display_name, c.cluster_id, cc.cluster_name
-         FROM customers c
-         LEFT JOIN customer_clusters cc ON c.cluster_id = cc.id LIMIT 20`
-      );
-      customers = allCustomers;
-    }
+  return customers;
+}
+
+// 5. ดึงข้อมูลกลุ่มผู้รับล่วงหน้าสำหรับ Live Preview ในหน้าต่าง Modal
+aiRouter.get('/push-preview', async (req, res) => {
+  try {
+    const { target_type = 'auto', cluster_id, crop_name = '' } = req.query;
+    const customers = await getTargetCustomers({ target_type, cluster_id, crop_name });
+    res.json({
+      success: true,
+      count: customers.length,
+      customers: customers.map(c => ({
+        id: c.id,
+        name: c.display_name,
+        picture_url: c.picture_url,
+        cluster_id: c.cluster_id,
+        cluster_name: c.cluster_name || 'ทั่วไป',
+        is_real_line: Boolean(c.line_user_id && c.line_user_id.startsWith('U') && c.line_user_id.length > 20)
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. ยิง LINE Push Notification แบบเจาะจงกลุ่มเป้าหมายและกำหนดข้อความได้
+aiRouter.post('/notify-harvest', async (req, res) => {
+  const {
+    harvest_id,
+    crop_name,
+    quantity,
+    unit,
+    plot_name,
+    target_type = 'auto',
+    cluster_id = null,
+    custom_title = '',
+    custom_message = '',
+    custom_image_url = '',
+    cta_label = '',
+    cta_url = ''
+  } = req.body;
+
+  if (!crop_name) {
+    return res.status(400).json({ error: 'crop_name is required' });
+  }
+
+  try {
+    const customers = await getTargetCustomers({ target_type, cluster_id, crop_name });
 
     if (customers.length === 0) {
-      return res.json({ success: true, notified_count: 0, target_customers: [], message: 'ยังไม่มีลูกค้า LINE ในระบบ' });
+      return res.json({
+        success: true,
+        notified_count: 0,
+        target_customers: [],
+        message: 'ไม่พบลูกค้าในกลุ่มเป้าหมายที่เลือก'
+      });
     }
 
     const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
     const isMock = !token || token === 'dummy_token';
+    const client = isMock ? null : new MessagingApiClient({ channelAccessToken: token });
 
-    // วนลูปยิง Push Notification หาแต่ละคน
+    const finalTitle = (custom_title || '').trim() || `🥦 ${crop_name} สดๆ เพิ่งเก็บเกี่ยววันนี้!`;
+    const finalImage = (custom_image_url || '').trim() || 'https://images.unsplash.com/photo-1540420773420-3366772f4999?q=80&w=600&auto=format&fit=crop';
+    const finalCtaLabel = (cta_label || '').trim() || '🛒 กดสั่งซื้อผักสดทันที';
+    const finalCtaUrl = (cta_url || '').trim() || process.env.LIFF_ORDER_URL || 'https://liff.line.me/2011230817-FlfQg9Yb';
+
+    let sentCount = 0;
+
     for (const c of customers) {
+      let bodyText = (custom_message || '').trim();
+      if (!bodyText) {
+        bodyText = `สวัสดีครับคุณ {name} ทางฟาร์ม FarmGAP พึ่งเก็บเกี่ยว ${crop_name} ${quantity ? `จำนวน ${quantity} ${unit || 'กก.'}` : ''} จากแปลง ${plot_name || 'เพาะปลูก'} สดใหม่ ได้มาตรฐานความปลอดภัย GAP พร้อมจัดส่งถึงมือคุณแล้วครับ!`;
+      }
+      bodyText = bodyText.replace(/{name}/g, c.display_name || 'ลูกค้าคนพิเศษ');
+
       const flexNotify = {
         type: 'flex',
-        altText: `🥦 ${crop_name} สดๆ จากแปลง พร้อมส่งแล้ววันนี้!`,
+        altText: finalTitle,
         contents: {
           type: 'bubble',
           hero: {
             type: 'image',
-            url: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?q=80&w=600&auto=format&fit=crop',
+            url: finalImage,
             size: 'full',
             aspectRatio: '20:13',
             aspectMode: 'cover',
@@ -276,17 +362,18 @@ aiRouter.post('/notify-harvest', async (req, res) => {
             contents: [
               {
                 type: 'text',
-                text: `🥦 ${crop_name} สดๆ เพิ่งเก็บเกี่ยววันนี้!`,
+                text: finalTitle,
                 weight: 'bold',
-                size: 'lg',
-                color: '#2e7d32',
+                size: 'md',
+                color: '#15803d',
+                wrap: true,
               },
               {
                 type: 'text',
-                text: `สวัสดีครับคุณ ${c.display_name || 'ลูกค้า LINE'} ทางฟาร์ม FarmGAP AI พึ่งเก็บเกี่ยว ${crop_name} ${quantity ? `จำนวน ${quantity} ${unit || 'กก.'}` : ''} จากแปลง ${plot_name || 'เพาะปลูก'} สดใหม่ ได้มาตรฐานความปลอดภัย GAP พร้อมจัดส่งถึงมือคุณแล้วครับ!`,
+                text: bodyText,
                 wrap: true,
                 size: 'sm',
-                color: '#444444',
+                color: '#334155',
               },
             ],
           },
@@ -298,41 +385,48 @@ aiRouter.post('/notify-harvest', async (req, res) => {
                 type: 'button',
                 action: {
                   type: 'uri',
-                  label: '🛒 กดสั่งซื้อผักสดทันที',
-                  uri: process.env.LIFF_ORDER_URL || 'https://liff.line.me/dummy-liff-order-id',
+                  label: finalCtaLabel,
+                  uri: finalCtaUrl,
                 },
                 style: 'primary',
-                color: '#2e7d32',
+                color: '#15803d',
+                height: 'sm',
               },
             ],
           },
         },
       };
 
-      if (!isMock) {
-        try {
-          await client.pushMessage({
-            to: c.line_user_id,
-            messages: [flexNotify],
-          });
-        } catch (err) {
-          console.warn(`Failed LINE Push to ${c.display_name}:`, err.message);
+      if (!isMock && client) {
+        if (c.line_user_id && c.line_user_id.startsWith('U') && c.line_user_id.length > 20) {
+          try {
+            await client.pushMessage({
+              to: c.line_user_id,
+              messages: [flexNotify],
+            });
+            sentCount++;
+          } catch (err) {
+            console.warn(`Failed LINE Push to ${c.display_name} (${c.line_user_id}):`, err.message);
+          }
         }
+      } else {
+        sentCount++;
       }
     }
 
     res.json({
       success: true,
       isMock,
-      notified_count: customers.length,
+      notified_count: isMock ? customers.length : sentCount,
       target_customers: customers.map(c => ({
         id: c.id,
         name: c.display_name,
         cluster: c.cluster_name || 'ทั่วไป'
       })),
-      message: `ยิง LINE Push Notification แจ้งเตือน ${crop_name} สำเร็จ (${customers.length} ท่าน)`
+      message: `ยิง LINE Push Notification แจ้งเตือนสำเร็จ (${isMock ? customers.length : sentCount} ท่าน)`
     });
   } catch (error) {
+    console.error('Notify harvest error:', error);
     res.status(500).json({ error: error.message });
   }
 });

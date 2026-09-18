@@ -168,13 +168,13 @@ export default function Dashboard() {
   const handleRunAi = async () => {
     setRunningAi(true);
     try {
-      await api.post('/api/ai/cluster');
+      const res = await api.post('/api/ai/cluster');
       await api.post('/api/ai/recommend');
       await fetchAiData();
-      alert('ประมวลผล K-Means และอัปเดตสินค้าแนะนำเรียบร้อยแล้ว');
+      toast.success(res.data?.message || 'ประมวลผล K-Means และอัปเดตสินค้าแนะนำเรียบร้อยแล้ว ✨');
     } catch (err) {
       console.error(err);
-      alert('เกิดข้อผิดพลาดในการวิเคราะห์ AI');
+      toast.error(err.response?.data?.error || 'เกิดข้อผิดพลาดในการวิเคราะห์ AI');
     } finally {
       setRunningAi(false);
     }

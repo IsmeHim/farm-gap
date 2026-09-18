@@ -22,9 +22,25 @@ import {
   Sparkles,
   Package,
   TrendingUp,
-  X
+  X,
+  Printer
 } from 'lucide-react';
 import { format } from 'date-fns';
+
+const formatDeliveryDate = (val) => {
+  if (!val) return '-';
+  try {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      const hasTime = typeof val === 'string' && (val.includes('T') || val.includes(':'));
+      if (hasTime) {
+        return `${format(d, 'dd/MM/yyyy HH:mm')} น.`;
+      }
+      return format(d, 'dd/MM/yyyy');
+    }
+  } catch (e) {}
+  return val;
+};
 
 export default function Orders() {
   const [orders, setOrders] = useState([]);
@@ -113,14 +129,14 @@ export default function Orders() {
     setDispatchForm({
       log_date: format(new Date(), 'yyyy-MM-dd'),
       transport_time: format(new Date(), 'HH:mm'),
-      storage_location: 'ห้องเย็นฟาร์ม Temp 4°C',
+      storage_location: 'คลังบรรจุและกระจายสินค้าฟาร์ม',
       shipped_to: realAddress,
       buyer: fullOrder.customer_name || 'ลูกค้าทั่วไป',
-      vehicle: 'รถส่วนตัว',
+      vehicle: 'รถจักรยานยนต์ส่วนตัว (เจ้าของฟาร์มส่งเอง)',
       vehicle_clean_status: true,
-      storage_conditions: 'คุมความเย็น 4°C ตลอดการเดินทาง',
+      storage_conditions: 'บรรจุในกล่อง/ถุงเก็บความสด ป้องกันแสงแดดและความร้อน',
       delivery_condition: 'ดี',
-      worker_name: 'ผู้ดูแลฟาร์ม',
+      worker_name: 'เจ้าของฟาร์ม',
       notes: itemsSummary ? `จัดส่งออเดอร์ #${fullOrder.order_code} [${itemsSummary}]` : `จัดส่งออเดอร์ #${fullOrder.order_code}`,
       sync_to_storage: true,
     });
@@ -304,93 +320,119 @@ export default function Orders() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
               {filteredOrders.map(o => (
-                <div key={o.id} className="surface rounded-2xl p-4 bg-white border border-slate-200/80 shadow-xs space-y-3 flex flex-col justify-between">
-                <div className="flex items-start justify-between border-b border-slate-100 pb-2.5">
-                  <div>
-                    <div className="font-mono font-bold text-sm text-[#173f2a]">{o.order_code}</div>
-                    <div className="text-xs font-bold text-slate-800 mt-0.5">{o.customer_name}</div>
-                    <div className="text-[11px] text-slate-400">{o.customer_phone || '-'}</div>
+                <div key={o.id} className="surface rounded-2xl p-4 sm:p-5 bg-white border border-slate-200/80 shadow-xs space-y-3.5 flex flex-col justify-between hover:border-emerald-200 transition">
+                  {/* Card Header: Code, Customer, Status */}
+                  <div className="flex items-start justify-between border-b border-slate-100 pb-3 gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-black text-sm text-[#173f2a] tracking-tight">{o.order_code}</span>
+                      </div>
+                      <div className="text-xs font-bold text-slate-800 mt-1 truncate">{o.customer_name || 'ลูกค้าทั่วไป'}</div>
+                      <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                        <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span>{o.customer_phone || '-'}</span>
+                      </div>
+                    </div>
+                    <div className="shrink-0">
+                      {getStatusBadge(o.status)}
+                    </div>
                   </div>
-                  <div>
-                    {getStatusBadge(o.status)}
+
+                  {/* Card Body: Delivery, Appointment, Price, Slip */}
+                  <div className="grid grid-cols-2 gap-3 text-xs py-0.5">
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] uppercase font-bold text-slate-400">การจัดส่ง</span>
+                      <div className="font-semibold text-slate-700 text-xs">
+                        {o.delivery_type === 'delivery' ? '🚚 ส่งตามที่อยู่' : '🏡 รับเองที่ฟาร์ม'}
+                      </div>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] uppercase font-bold text-slate-400">นัดหมาย</span>
+                      <div className="font-semibold text-emerald-800 text-xs truncate" title={o.delivery_date}>
+                        {formatDeliveryDate(o.delivery_date)}
+                      </div>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] uppercase font-bold text-slate-400">ยอดชำระสุทธิ</span>
+                      <div className="text-base font-black text-slate-900 tracking-tight">
+                        ฿{Number(o.total_amount).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] uppercase font-bold text-slate-400">สลิปโอนเงิน</span>
+                      <div className="mt-0.5">
+                        {o.slip_image_url ? (
+                          <button
+                            onClick={() => setSlipModalImage(o.slip_image_url)}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-800 bg-blue-50/90 hover:bg-blue-100 active:bg-blue-200 px-2.5 py-1 rounded-lg border border-blue-200/90 transition cursor-pointer shadow-2xs"
+                          >
+                            <Receipt className="w-3 h-3 text-blue-600" />
+                            <span>ดูสลิป</span>
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-slate-400 italic">ยังไม่แนบสลิป</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Mobile Card Action Buttons */}
+                  <div className="pt-3 border-t border-slate-100 space-y-2">
+                    {/* Utility Actions (Print & Details) - 2 equal columns */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <Link
+                        to={`/orders/${o.id}/print`}
+                        target="_blank"
+                        className="inline-flex items-center justify-center gap-1.5 bg-emerald-50/80 hover:bg-emerald-100 active:bg-emerald-200 text-emerald-800 text-xs font-bold py-2.5 px-2.5 rounded-xl border border-emerald-200/90 transition shadow-2xs whitespace-nowrap cursor-pointer"
+                        title="พิมพ์ใบปะหน้าพัสดุและเช็คลิสต์แพ็คสินค้า"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                        <span>ใบปะหน้า</span>
+                      </Link>
+
+                      <button
+                        onClick={() => viewOrderDetails(o)}
+                        className="inline-flex items-center justify-center gap-1.5 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 text-slate-700 text-xs font-bold py-2.5 px-2.5 rounded-xl border border-slate-200 transition shadow-2xs whitespace-nowrap cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                        <span>รายละเอียด</span>
+                      </button>
+                    </div>
+
+                    {/* Lifecycle Primary Action Button (Full-width prominence) */}
+                    {o.status === 'pending' && (
+                      <button
+                        onClick={() => handleUpdateStatus(o.id, 'paid')}
+                        disabled={updatingId === o.id}
+                        className="w-full inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white text-xs font-bold py-2.5 px-3 rounded-xl transition shadow-xs cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>{updatingId === o.id ? 'กำลังบันทึก...' : 'อนุมัติสลิป (ชำระแล้ว)'}</span>
+                      </button>
+                    )}
+                    {o.status === 'paid' && (
+                      <button
+                        onClick={() => openDispatchModal(o)}
+                        disabled={updatingId === o.id}
+                        className="w-full inline-flex items-center justify-center gap-1.5 bg-[#173f2a] hover:bg-[#20573a] active:scale-[0.99] text-white text-xs font-bold py-2.5 px-3 rounded-xl transition shadow-xs cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                      >
+                        <Truck className="w-4 h-4 text-emerald-300" />
+                        <span>บันทึกจัดส่งสินค้า (ลง GAP #6)</span>
+                      </button>
+                    )}
+                    {o.status === 'shipping' && (
+                      <button
+                        onClick={() => handleUpdateStatus(o.id, 'completed')}
+                        disabled={updatingId === o.id}
+                        className="w-full inline-flex items-center justify-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white text-xs font-bold py-2.5 px-3 rounded-xl transition shadow-xs cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                      >
+                        <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                        <span>{updatingId === o.id ? 'กำลังบันทึก...' : 'ยืนยันจัดส่งสำเร็จเรียบร้อย'}</span>
+                      </button>
+                    )}
                   </div>
                 </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs py-1">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-400">การจัดส่ง:</span>
-                    <div className="font-semibold text-slate-700 mt-0.5">
-                      {o.delivery_type === 'delivery' ? '🚚 ส่งตามที่อยู่' : '🏡 รับเองที่ฟาร์ม'}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-400">นัดหมาย:</span>
-                    <div className="font-semibold text-emerald-800 mt-0.5">
-                      {o.delivery_date || '-'}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-400">ยอดชำระสุทธิ:</span>
-                    <div className="text-sm font-black text-slate-900 mt-0.5">
-                      ฿{Number(o.total_amount).toLocaleString()}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-400">สลิปโอนเงิน:</span>
-                    <div className="mt-0.5">
-                      {o.slip_image_url ? (
-                        <button
-                          onClick={() => setSlipModalImage(o.slip_image_url)}
-                          className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-200 cursor-pointer"
-                        >
-                          <Receipt className="w-3 h-3" /> ดูสลิป
-                        </button>
-                      ) : (
-                        <span className="text-[11px] text-slate-400">ยังไม่แนบ</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mobile Card Action Buttons */}
-                <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
-                  <button
-                    onClick={() => viewOrderDetails(o)}
-                    className="flex-1 inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold py-2 px-3 rounded-xl transition cursor-pointer"
-                  >
-                    <Eye className="w-3.5 h-3.5" /> รายละเอียด
-                  </button>
-
-                  {o.status === 'pending' && (
-                    <button
-                      onClick={() => handleUpdateStatus(o.id, 'paid')}
-                      disabled={updatingId === o.id}
-                      className="flex-1 inline-flex items-center justify-center gap-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded-xl transition shadow-xs cursor-pointer"
-                    >
-                      <Check className="w-3.5 h-3.5" /> อนุมัติสลิป
-                    </button>
-                  )}
-                  {o.status === 'paid' && (
-                    <button
-                      onClick={() => openDispatchModal(o)}
-                      disabled={updatingId === o.id}
-                      className="flex-1 inline-flex items-center justify-center gap-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold py-2 px-3 rounded-xl transition shadow-xs cursor-pointer"
-                    >
-                      <Truck className="w-3.5 h-3.5" /> ส่งของ
-                    </button>
-                  )}
-                  {o.status === 'shipping' && (
-                    <button
-                      onClick={() => handleUpdateStatus(o.id, 'completed')}
-                      disabled={updatingId === o.id}
-                      className="flex-1 inline-flex items-center justify-center gap-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold py-2 px-3 rounded-xl transition shadow-xs cursor-pointer"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" /> สำเร็จ
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+              ))}
           </div>
         )}
       </div>
@@ -398,11 +440,11 @@ export default function Orders() {
         {/* DESKTOP & TABLET LANDSCAPE VIEW: Sleek Table (hidden on mobile & iPad portrait, block on lg:) */}
         <div className="hidden lg:block table-responsive">
           <table className="min-w-full text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-50/90 border-b border-slate-200">
               <tr>
                 <th className="text-left px-4 py-3 font-bold text-slate-600">รหัสออเดอร์</th>
                 <th className="text-left px-4 py-3 font-bold text-slate-600">ลูกค้า</th>
-                <th className="text-left px-4 py-3 font-bold text-slate-600">วันที่สั่ง/นัดหมาย</th>
+                <th className="text-left px-4 py-3 font-bold text-slate-600">วันที่สั่ง / นัดหมาย</th>
                 <th className="text-left px-4 py-3 font-bold text-slate-600">การจัดส่ง</th>
                 <th className="text-right px-4 py-3 font-bold text-slate-600">ยอดเงิน</th>
                 <th className="text-center px-4 py-3 font-bold text-slate-600">สลิปโอนเงิน</th>
@@ -417,83 +459,104 @@ export default function Orders() {
                 <tr><td colSpan={8} className="text-center py-12 text-slate-400">ไม่พบรายการคำสั่งซื้อ</td></tr>
               ) : (
                 filteredOrders.map(o => (
-                  <tr key={o.id} className="hover:bg-slate-50/80 transition">
-                    <td className="px-4 py-3 font-bold text-[#173f2a]">
+                  <tr key={o.id} className="hover:bg-emerald-50/30 transition">
+                    <td className="px-4 py-3.5 font-bold text-[#173f2a] whitespace-nowrap">
                       <button 
                         onClick={() => viewOrderDetails(o)}
-                        className="text-left hover:underline text-emerald-800 font-mono cursor-pointer"
+                        className="text-left hover:underline text-emerald-800 font-mono font-bold cursor-pointer"
                       >
                         {o.order_code}
                       </button>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="font-bold text-slate-800">{o.customer_name}</div>
-                      <div className="text-[11px] text-slate-400">{o.customer_phone || '-'}</div>
+                    <td className="px-4 py-3.5">
+                      <div className="font-bold text-slate-800">{o.customer_name || 'ลูกค้าทั่วไป'}</div>
+                      <div className="text-[11px] text-slate-400 flex items-center gap-1">
+                        <Phone className="w-3 h-3 text-slate-300 shrink-0" />
+                        <span>{o.customer_phone || '-'}</span>
+                      </div>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">
+                    <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap">
                       <div>สั่งเมื่อ: {o.created_at ? format(new Date(o.created_at), 'dd/MM/yy HH:mm') : '-'}</div>
-                      <div className="text-[11px] text-emerald-700 font-semibold">นัดรับ: {o.delivery_date || '-'}</div>
+                      <div className="text-[11px] text-emerald-700 font-semibold">
+                        นัดรับ: {formatDeliveryDate(o.delivery_date)}
+                      </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold ${o.delivery_type === 'delivery' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold ${o.delivery_type === 'delivery' ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-blue-50 text-blue-800 border border-blue-200'}`}>
                         {o.delivery_type === 'delivery' ? '🚚 ส่งตามที่อยู่' : '🏡 รับเองที่ฟาร์ม'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right font-black text-slate-800">
+                    <td className="px-4 py-3.5 text-right font-black text-slate-900 whitespace-nowrap">
                       ฿{Number(o.total_amount).toLocaleString()}
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-4 py-3.5 text-center whitespace-nowrap">
                       {o.slip_image_url ? (
                         <button
                           onClick={() => setSlipModalImage(o.slip_image_url)}
-                          className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200 cursor-pointer"
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-800 bg-blue-50/80 hover:bg-blue-100 active:bg-blue-200 px-2.5 py-1 rounded-lg border border-blue-200 transition shadow-2xs cursor-pointer"
                         >
-                          <Receipt className="w-3 h-3" /> ดูสลิป
+                          <Receipt className="w-3 h-3 text-blue-600" />
+                          <span>ดูสลิป</span>
                         </button>
                       ) : (
-                        <span className="text-[11px] text-slate-400">ยังไม่แนบ</span>
+                        <span className="text-[11px] text-slate-400 italic">ยังไม่แนบ</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-4 py-3.5 text-center whitespace-nowrap">
                       {getStatusBadge(o.status)}
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
+                    <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1.5 flex-nowrap">
+                        {/* Print Label Button */}
+                        <Link
+                          to={`/orders/${o.id}/print`}
+                          target="_blank"
+                          className="inline-flex items-center gap-1 bg-white hover:bg-emerald-50 active:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold px-2.5 py-1.5 rounded-xl transition shadow-2xs whitespace-nowrap cursor-pointer"
+                          title="พิมพ์ใบปะหน้าพัสดุและเช็คลิสต์แพ็คสินค้า"
+                        >
+                          <Printer className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                          <span>ใบปะหน้า</span>
+                        </Link>
+
+                        {/* Details Button */}
                         <button
                           onClick={() => viewOrderDetails(o)}
-                          className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+                          className="inline-flex items-center gap-1 bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold px-2.5 py-1.5 rounded-xl transition shadow-2xs whitespace-nowrap cursor-pointer"
                           title="ดูรายละเอียดออเดอร์"
                         >
-                          <Eye className="w-4 h-4" />
+                          <Eye className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                          <span>รายละเอียด</span>
                         </button>
                         
-                        {/* Quick action buttons */}
+                        {/* Primary Action Button on Desktop */}
                         {o.status === 'pending' && (
                           <button
                             onClick={() => handleUpdateStatus(o.id, 'paid')}
                             disabled={updatingId === o.id}
-                            className="bg-green-600 hover:bg-green-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer"
+                            className="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition shadow-2xs cursor-pointer whitespace-nowrap disabled:opacity-50"
                           >
-                            อนุมัติสลิป
+                            <Check className="w-3.5 h-3.5" />
+                            <span>อนุมัติสลิป</span>
                           </button>
                         )}
                         {o.status === 'paid' && (
                           <button
                             onClick={() => openDispatchModal(o)}
                             disabled={updatingId === o.id}
-                            className="bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1"
+                            className="inline-flex items-center gap-1.5 bg-[#173f2a] hover:bg-[#20573a] active:scale-95 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition shadow-2xs cursor-pointer whitespace-nowrap disabled:opacity-50"
                           >
-                            <Truck className="w-3 h-3" />
-                            <span>ส่งของ</span>
+                            <Truck className="w-3.5 h-3.5 text-emerald-300" />
+                            <span>ส่งของ (GAP)</span>
                           </button>
                         )}
                         {o.status === 'shipping' && (
                           <button
                             onClick={() => handleUpdateStatus(o.id, 'completed')}
                             disabled={updatingId === o.id}
-                            className="bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer"
+                            className="inline-flex items-center gap-1 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition shadow-2xs cursor-pointer whitespace-nowrap disabled:opacity-50"
                           >
-                            สำเร็จ
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200" />
+                            <span>สำเร็จ</span>
                           </button>
                         )}
                       </div>
@@ -529,7 +592,7 @@ export default function Orders() {
               <div className="text-slate-800 font-semibold">{selectedOrder.customer_name}</div>
               <div className="text-slate-600 flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-slate-400" /> {selectedOrder.customer_phone || '-'}</div>
               <div className="text-slate-600 flex items-start gap-1"><MapPin className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" /> {selectedOrder.customer_address || 'รับเองที่ฟาร์ม'}</div>
-              <div className="text-slate-600 flex items-center gap-1"><Calendar className="w-3.5 h-3.5 text-slate-400" /> วันที่นัดหมาย: {selectedOrder.delivery_date || '-'}</div>
+              <div className="text-slate-600 flex items-center gap-1"><Calendar className="w-3.5 h-3.5 text-slate-400" /> วันที่นัดหมาย: {formatDeliveryDate(selectedOrder.delivery_date)}</div>
               {selectedOrder.notes && <div className="text-slate-500 italic mt-1">หมายเหตุจากลูกค้า: "{selectedOrder.notes}"</div>}
             </div>
 
@@ -579,35 +642,66 @@ export default function Orders() {
               </div>
             )}
 
+            {/* Print Shipping Label Quick Action */}
+            <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-3.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <div className="font-bold text-emerald-950 text-xs flex items-center gap-1.5">
+                  <Printer className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <span>ใบปะหน้าพัสดุ & เช็คลิสต์แพ็คสินค้า (GAP Shipping Label)</span>
+                </div>
+                <p className="text-[11px] text-emerald-800 leading-relaxed">
+                  พิมพ์ใบปะหน้าแปะกล่องพัสดุ (100x150mm หรือ A4) พร้อม QR Code มาตรฐาน GAP ให้ลูกค้าสแกนตรวจสอบย้อนกลับ
+                </p>
+              </div>
+
+              <Link
+                to={`/orders/${selectedOrder.id}/print`}
+                target="_blank"
+                className="inline-flex items-center justify-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-xs shrink-0 cursor-pointer whitespace-nowrap"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>🖨️ พิมพ์ใบปะหน้า</span>
+              </Link>
+            </div>
+
             {/* Status Update Controls */}
-            <div className="border-t pt-4 flex flex-wrap items-center justify-between gap-3">
-              <div className="text-xs text-slate-500">เปลี่ยนสถานะออเดอร์:</div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => handleUpdateStatus(selectedOrder.id, 'paid')}
-                  className="btn bg-blue-600 hover:bg-blue-700 text-white text-xs py-1.5 cursor-pointer"
-                >
-                  ✅ อนุมัติสลิป (ชำระแล้ว)
-                </button>
+            <div className="border-t border-slate-100 pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="text-xs font-semibold text-slate-500">เปลี่ยนสถานะออเดอร์:</div>
+              <div className="flex flex-wrap items-center gap-2">
+                {selectedOrder.status !== 'paid' && (
+                  <button
+                    onClick={() => handleUpdateStatus(selectedOrder.id, 'paid')}
+                    className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition shadow-xs cursor-pointer"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>อนุมัติสลิป (ชำระแล้ว)</span>
+                  </button>
+                )}
                 <button
                   onClick={() => openDispatchModal(selectedOrder)}
-                  className="btn bg-purple-600 hover:bg-purple-700 text-white text-xs py-1.5 cursor-pointer flex items-center gap-1.5"
+                  className="inline-flex items-center gap-1.5 bg-[#173f2a] hover:bg-[#20573a] active:scale-95 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition shadow-xs cursor-pointer"
                 >
-                  <Truck className="w-3.5 h-3.5" />
-                  <span>กำลังจัดส่ง (GAP #6)</span>
+                  <Truck className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>จัดส่งสินค้า (ลงสมุด GAP #6)</span>
                 </button>
-                <button
-                  onClick={() => handleUpdateStatus(selectedOrder.id, 'completed')}
-                  className="btn bg-emerald-700 hover:bg-emerald-800 text-white text-xs py-1.5 cursor-pointer"
-                >
-                  🎉 จัดส่งสำเร็จ
-                </button>
-                <button
-                  onClick={() => handleUpdateStatus(selectedOrder.id, 'cancelled')}
-                  className="btn btn-outline text-rose-600 hover:bg-rose-50 text-xs py-1.5 cursor-pointer"
-                >
-                  ❌ ยกเลิก
-                </button>
+                {selectedOrder.status !== 'completed' && (
+                  <button
+                    onClick={() => handleUpdateStatus(selectedOrder.id, 'completed')}
+                    className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition shadow-xs cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200" />
+                    <span>จัดส่งสำเร็จ</span>
+                  </button>
+                )}
+                {selectedOrder.status !== 'cancelled' && (
+                  <button
+                    onClick={() => handleUpdateStatus(selectedOrder.id, 'cancelled')}
+                    className="inline-flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-700 border border-rose-200 text-xs font-bold px-3.5 py-2 rounded-xl transition cursor-pointer"
+                  >
+                    <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                    <span>ยกเลิกออเดอร์</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -639,7 +733,7 @@ export default function Orders() {
             {/* Modal Header */}
             <div className="flex items-start justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-purple-100 text-purple-800 flex items-center justify-center font-bold text-lg">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-lg">
                   🚚
                 </div>
                 <div>
@@ -647,7 +741,7 @@ export default function Orders() {
                     จัดส่งสินค้าอัจฉริยะ (Smart Dispatch)
                   </h3>
                   <p className="text-xs text-slate-500">
-                    อ้างอิงออเดอร์ <strong className="font-mono text-purple-900">#{dispatchModalOrder.order_code}</strong> • {dispatchModalOrder.customer_name}
+                    อ้างอิงออเดอร์ <strong className="font-mono text-[#173f2a]">#{dispatchModalOrder.order_code}</strong> • {dispatchModalOrder.customer_name}
                   </p>
                 </div>
               </div>
@@ -657,12 +751,12 @@ export default function Orders() {
             </div>
 
             {/* Smart Sync Info Banner */}
-            <div className="p-3 bg-purple-50/70 border border-purple-200/70 rounded-2xl text-xs space-y-1">
-              <div className="font-bold text-purple-900 flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-purple-600 shrink-0" />
+            <div className="p-3.5 bg-emerald-50/70 border border-emerald-200/70 rounded-2xl text-xs space-y-1">
+              <div className="font-bold text-emerald-950 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>ระบบดึงข้อมูลจากคำสั่งซื้อและเตรียมบันทึก GAP #6 ให้อัตโนมัติ:</span>
               </div>
-              <p className="text-[11px] text-purple-800 pl-5 leading-relaxed">
+              <p className="text-[11px] text-emerald-800 pl-5 leading-relaxed">
                 เมื่อยืนยัน ระบบจะเปลี่ยนสถานะออเดอร์เป็น <strong>กำลังจัดส่ง</strong> และนำข้อมูลด้านล่างไปลงบันทึกในสมุด <strong>"ขนส่ง/เก็บรักษา (GAP #6)"</strong> ให้ทันทีในคลิกเดียว
               </p>
             </div>
@@ -740,10 +834,10 @@ export default function Orders() {
                     onChange={e => setDispatchForm(f => ({ ...f, storage_location: e.target.value }))}
                     className="input text-xs w-full rounded-xl font-medium"
                   >
-                    <option value="ห้องเย็นฟาร์ม Temp 4°C">ห้องเย็นฟาร์ม Temp 4°C</option>
-                    <option value="ลานพักผลผลิตชั่วคราว สะอาด มีหลังคา">ลานพักผลผลิตชั่วคราว สะอาด มีหลังคา</option>
                     <option value="คลังบรรจุและกระจายสินค้าฟาร์ม">คลังบรรจุและกระจายสินค้าฟาร์ม</option>
+                    <option value="ลานพักผลผลิตชั่วคราว สะอาด มีหลังคา">ลานพักผลผลิตชั่วคราว สะอาด มีหลังคา</option>
                     <option value="อุณหภูมิห้อง ถ่ายเทอากาศดี">อุณหภูมิห้อง ถ่ายเทอากาศดี</option>
+                    <option value="ห้องเย็นฟาร์ม Temp 4°C">ห้องเย็นฟาร์ม Temp 4°C</option>
                   </select>
                 </div>
 
@@ -757,8 +851,10 @@ export default function Orders() {
                     onChange={e => setDispatchForm(f => ({ ...f, vehicle: e.target.value }))}
                     className="input text-xs w-full rounded-xl font-medium"
                   >
-                    <option value="รถส่วนตัว">รถส่วนตัว</option>
-                    <option value="รถจักรยานยนต์ส่วนตัว">รถจักรยานยนต์ส่วนตัว</option>
+                    <option value="รถจักรยานยนต์ส่วนตัว (เจ้าของฟาร์มส่งเอง)">🏍️ รถจักรยานยนต์ส่วนตัว (เจ้าของฟาร์มส่งเอง)</option>
+                    <option value="รถยนต์ส่วนตัว">🚗 รถยนต์ส่วนตัว</option>
+                    <option value="บริการขนส่งพัสดุเอกชน">📦 บริการขนส่งพัสดุเอกชน</option>
+                    <option value="ลูกค้ามารับเองที่ฟาร์ม">🏡 ลูกค้ามารับเองที่ฟาร์ม</option>
                   </select>
                 </div>
               </div>
@@ -838,7 +934,7 @@ export default function Orders() {
                     type="checkbox"
                     checked={dispatchForm.sync_to_storage}
                     onChange={e => setDispatchForm(f => ({ ...f, sync_to_storage: e.target.checked }))}
-                    className="w-4 h-4 text-purple-600 rounded cursor-pointer"
+                    className="w-4 h-4 text-emerald-700 rounded cursor-pointer"
                   />
                   <span>บันทึกลงสมุด ขนส่ง/เก็บรักษา (GAP #6) อัตโนมัติ</span>
                 </label>
@@ -856,9 +952,9 @@ export default function Orders() {
                 <button
                   type="submit"
                   disabled={dispatchSubmitting}
-                  className="px-5 py-2.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-bold shadow-md transition active:scale-95 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                  className="px-5 py-2.5 bg-[#173f2a] hover:bg-[#20573a] text-white rounded-xl text-xs font-bold shadow-md transition active:scale-95 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
                 >
-                  <Truck className="w-4 h-4" />
+                  <Truck className="w-4 h-4 text-emerald-300" />
                   <span>{dispatchSubmitting ? 'กำลังบันทึกจัดส่ง...' : '🚀 ยืนยันการจัดส่ง & ลงสมุด GAP #6'}</span>
                 </button>
               </div>

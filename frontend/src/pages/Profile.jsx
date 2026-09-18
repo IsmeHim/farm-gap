@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../lib/auth.jsx';
 import { api } from '../lib/api';
 import { toast } from 'sonner';
-import { Building, User, Mail, Lock, ShieldCheck, Save, Sparkles, CheckCircle2, Leaf, QrCode, CreditCard, Wallet, ExternalLink, Image as ImageIcon, Bell, Smartphone, Send } from 'lucide-react';
+import { Building, User, Mail, Lock, ShieldCheck, Save, Sparkles, CheckCircle2, Leaf, QrCode, CreditCard, Wallet, ExternalLink, Image as ImageIcon, Bell, Smartphone, Send, Globe } from 'lucide-react';
 import { format } from 'date-fns';
 
 const BANK_OPTIONS = [
@@ -33,6 +33,7 @@ export default function Profile() {
     promptpayNumber: '',
     promptpayQrUrl: '',
     lineUserId: '',
+    frontendUrl: '',
   });
   const [loading, setLoading] = useState(false);
   const [testingLine, setTestingLine] = useState(false);
@@ -56,6 +57,7 @@ export default function Profile() {
           promptpayNumber: res.data.promptpay_number || '',
           promptpayQrUrl: res.data.promptpay_qr_url || '',
           lineUserId: res.data.line_user_id || '',
+          frontendUrl: res.data.frontend_url || '',
         });
       } catch (e) {
         if (user) {
@@ -70,6 +72,7 @@ export default function Profile() {
             promptpayNumber: user.promptpay_number || '',
             promptpayQrUrl: user.promptpay_qr_url || '',
             lineUserId: user.line_user_id || '',
+            frontendUrl: user.frontend_url || '',
           }));
         }
       } finally {
@@ -111,6 +114,12 @@ export default function Profile() {
     }
   };
 
+  const handleUseCurrentOrigin = () => {
+    const currentOrigin = window.location.origin;
+    setForm(prev => ({ ...prev, frontendUrl: currentOrigin }));
+    toast.info(`นำโดเมนหน้าเว็บปัจจุบัน (${currentOrigin}) มาใส่เรียบร้อยแล้ว อย่าลืมกดบันทึกการตั้งค่าครับ`);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -134,6 +143,7 @@ export default function Profile() {
         promptpay_number: form.promptpayNumber,
         promptpay_qr_url: form.promptpayQrUrl,
         line_user_id: form.lineUserId.trim(),
+        frontend_url: form.frontendUrl.trim(),
       };
       if (form.password) {
         payload.password = form.password;
@@ -514,6 +524,56 @@ export default function Profile() {
                     <li>LINE บอทจะตอบกลับเป็นรหัส <strong>LINE User ID (ขึ้นต้นด้วย U...)</strong> ให้ทันที</li>
                     <li>แตะค้างเพื่อคัดลอกรหัสดังกล่าว แล้วนำมาวางในช่องด้านบนนี้ จากนั้นกดปุ่ม <strong>"บันทึกการตั้งค่า"</strong></li>
                   </ol>
+                </div>
+
+                {/* Website / ngrok Domain URL for LINE notifications */}
+                <div className="space-y-1.5 pt-3 border-t border-slate-200/80">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                    <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5 text-blue-600" />
+                      โดเมน / URL เว็บไซต์สำหรับเปิดจาก LINE (Website Base URL)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleUseCurrentOrigin}
+                        className="text-[11px] text-blue-600 hover:text-blue-800 font-medium hover:underline cursor-pointer"
+                        title="ใช้ที่อยู่เว็บไซต์ปัจจุบันในเบราว์เซอร์นี้"
+                      >
+                        ⚡ ใช้โดเมนปัจจุบัน
+                      </button>
+                      {form.frontendUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setForm(prev => ({ ...prev, frontendUrl: '' }))}
+                          className="text-[11px] text-rose-600 hover:text-rose-800 font-medium hover:underline cursor-pointer"
+                          title="ล้างค่าเพื่อให้กลับไปใช้ค่าเริ่มต้นจากเซิร์ฟเวอร์ (.env)"
+                        >
+                          ล้างค่า
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={form.frontendUrl}
+                      onChange={e => setForm(prev => ({ ...prev, frontendUrl: e.target.value }))}
+                      placeholder="เช่น https://xxxx-xx-xx.ngrok-free.app หรือ https://farmgap.com (เว้นว่าง = ค่าเริ่มต้น)"
+                      className="input text-xs flex-1 py-2.5 px-3.5 rounded-xl border border-slate-200 focus:outline-none focus:border-blue-600 font-mono text-[11px] bg-white"
+                    />
+                  </div>
+                  <div className="text-[11px] text-slate-500 space-y-1 leading-relaxed">
+                    <p>
+                      • <strong>ใช้แก้ปัญหาลิงก์เปิดไม่ได้ในมือถือ:</strong> ปลายทางของปุ่ม <span className="font-semibold text-slate-700">"🖨️ พิมพ์ใบปะหน้า"</span> และ <span className="font-semibold text-slate-700">"📦 เปิดดูรายการออเดอร์"</span> ใน LINE จะใช้ลิงก์นี้
+                    </p>
+                    <p>
+                      • <strong>โหมดทดสอบ (ngrok):</strong> วาง URL ของ ngrok เช่น <code className="bg-slate-100 px-1 py-0.5 rounded text-blue-700">https://xxxx.ngrok-free.app</code> แล้วกดบันทึก เมื่อกดปุ่มจากในมือถือจะเข้าเว็บได้ทันที
+                    </p>
+                    <p>
+                      • <strong>โหมดใช้งานจริง (Production):</strong> เมื่อนำขึ้นโฮสติ้งจริง สามารถใส่โดเมนจริงของคุณ หรือล้างช่องนี้ให้ว่างไว้ ระบบจะอ่านค่าจากตัวแปร <code className="bg-slate-100 px-1 py-0.5 rounded text-emerald-700">FRONTEND_URL</code> ในไฟล์ <code className="bg-slate-100 px-1 py-0.5 rounded">.env</code> ให้อัตโนมัติ
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

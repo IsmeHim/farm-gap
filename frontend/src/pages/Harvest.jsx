@@ -18,6 +18,10 @@ import {
   Tag,
   Pencil,
   Trash2,
+  Users,
+  Bot,
+  MessageSquare,
+  Eye,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { getCropCycleId } from '../lib/cropCycle.js';
@@ -50,6 +54,23 @@ export default function Harvest() {
   const [submitting, setSubmitting] = useState(false);
   const [successResult, setSuccessResult] = useState(null); // holds { harvest, product, lot_code, phi_warning }
   const [qrModalItem, setQrModalItem] = useState(null);
+
+  // Targeted Push Notification Modal state
+  const [pushModalItem, setPushModalItem] = useState(null);
+  const [pushPlot, setPushPlot] = useState(null);
+  const [clustersList, setClustersList] = useState([]);
+  const [pushForm, setPushForm] = useState({
+    target_type: 'auto',
+    cluster_id: '',
+    custom_title: '',
+    custom_message: '',
+    custom_image_url: '',
+    cta_label: '🛒 กดสั่งซื้อผักสดทันที',
+    cta_url: '',
+  });
+  const [audienceList, setAudienceList] = useState([]);
+  const [loadingAudience, setLoadingAudience] = useState(false);
+  const [sendingPush, setSendingPush] = useState(false);
 
   // Load active plots and products for Smart Harvest
   const loadPrerequisites = async () => {
@@ -146,20 +167,126 @@ export default function Harvest() {
     }
   };
 
-  // Personalized LINE Push
-  const handlePersonalizedPush = async (harvestItem) => {
-    setSendingId(harvestItem.id);
+  // Targeted LINE Push Modal Handlers
+  const loadAudiencePreview = async (targetType, clusterId, cropName) => {
+    setLoadingAudience(true);
     try {
-      const plotsRes = await api.get('/api/plots');
-      const plot = plotsRes.data.find(p => p.id === harvestItem.plot_id);
-      const cropName = plot?.crop_name || 'ผักสลัดสด';
+      const res = await api.get('/api/ai/push-preview', {
+        params: {
+          target_type: targetType,
+          cluster_id: clusterId,
+          crop_name: cropName || '',
+        },
+      });
+      setAudienceList(res.data?.customers || []);
+    } catch (err) {
+      console.error('Failed to load audience preview:', err);
+    } finally {
+      setLoadingAudience(false);
+    }
+  };
 
+  const openPushModal = async (harvestItem) => {
+    setPushModalItem(harvestItem);
+    try {
+      const [plotsRes, clustersRes, prodsRes] = await Promise.all([
+        plots.length > 0 ? { data: plots } : api.get('/api/plots'),
+        clustersList.length > 0 ? { data: clustersList } : api.get('/api/ai/clusters').catch(() => ({ data: { clusters: [] } })),
+        products.length > 0 ? { data: products } : api.get('/api/products').catch(() => ({ data: [] })),
+      ]);
+
+      const currentPlot = (plotsRes.data || []).find(p => p.id === harvestItem.plot_id);
+      setPushPlot(currentPlot);
+
+      const clusters = clustersRes.data?.clusters || clustersRes.data || [];
+      setClustersList(clusters);
+
+      const currentProducts = prodsRes.data || [];
+      if (products.length === 0) setProducts(currentProducts);
+
+      const cropName = currentPlot?.crop_name || 'ผักสดคุณภาพ GAP';
+      const defaultTitle = `🥦 ${cropName} สดๆ เพิ่งเก็บเกี่ยววันนี้!`;
+      const defaultMsg = `สวัสดีครับคุณ {name} ทางฟาร์ม FarmGAP พึ่งเก็บเกี่ยว ${cropName} ${harvestItem.quantity ? `จำนวน ${harvestItem.quantity} ${harvestItem.unit || 'กก.'}` : ''} จากแปลง ${currentPlot?.name || 'เพาะปลูก'} สดใหม่ ปลอดภัยมาตรฐาน GAP พร้อมส่งตรงถึงมือคุณแล้วครับ!`;
+
+      // Match product image if available
+      const matchedProd = currentProducts.find(p => p.name?.toLowerCase().includes(cropName.toLowerCase()));
+      const defaultImage = matchedProd?.image_url || 'https://images.unsplash.com/photo-1540420773420-3366772f4999?q=80&w=600&auto=format&fit=crop';
+
+      const initialClusterId = clusters[0]?.id || '';
+      setPushForm({
+        target_type: 'auto',
+        cluster_id: initialClusterId,
+        custom_title: defaultTitle,
+        custom_message: defaultMsg,
+        custom_image_url: defaultImage,
+        cta_label: '🛒 กดสั่งซื้อผักสดทันที',
+        cta_url: '',
+      });
+
+      loadAudiencePreview('auto', initialClusterId, cropName);
+    } catch (e) {
+      console.error('Failed to prepare push modal:', e);
+      toast.error('ไม่สามารถเตรียมข้อมูลแจ้งเตือนได้');
+    }
+  };
+
+  const handleTargetTypeChange = (type) => {
+    const nextForm = { ...pushForm, target_type: type };
+    setPushForm(nextForm);
+    loadAudiencePreview(type, nextForm.cluster_id, pushPlot?.crop_name);
+  };
+
+  const handleClusterChange = (cId) => {
+    const nextForm = { ...pushForm, cluster_id: cId };
+    setPushForm(nextForm);
+    loadAudiencePreview('cluster', cId, pushPlot?.crop_name);
+  };
+
+  const applyPresetTemplate = (presetKey) => {
+    const cropName = pushPlot?.crop_name || 'ผักสด';
+    if (presetKey === 'fresh') {
+      setPushForm(prev => ({
+        ...prev,
+        custom_title: `🥦 ${cropName} สดๆ เพิ่งตัดจากแปลงวันนี้!`,
+        custom_message: `สวัสดีครับคุณ {name} ทางฟาร์มพึ่งตัด ${cropName} สดๆ จากแปลงเพาะปลูก ${pushPlot?.name || ''} มาตรฐาน GAP 100% สด กรอบ ปลอดภัย ไร้สารเคมีตกค้าง พร้อมส่งตรงถึงบ้านคุณครับ!`,
+        cta_label: '🛒 สั่งซื้อผักสดทันที',
+      }));
+    } else if (presetKey === 'b2b') {
+      setPushForm(prev => ({
+        ...prev,
+        custom_title: `📦 ${cropName} เกรดยกลัง ราคาส่งพิเศษสำหรับร้านค้า!`,
+        custom_message: `สวัสดีครับคุณ {name} วันนี้ฟาร์มมี ${cropName} ล็อตใหม่คัดเกรดพิเศษ ${pushModalItem?.quantity ? `มีจำนวน ${pushModalItem.quantity} ${pushModalItem.unit || 'กก.'}` : ''} เหมาะสำหรับร้านอาหารและลูกค้ายกลัง ราคาส่งมิตรภาพ สนใจรับกี่ลังแจ้งได้เลยครับ`,
+        cta_label: '📦 ดูราคาส่งและสั่งจอง',
+      }));
+    } else if (presetKey === 'promo') {
+      setPushForm(prev => ({
+        ...prev,
+        custom_title: `⚡ นาทีทอง! ${cropName} สดใหม่ ลดพิเศษวันนี้เท่านั้น`,
+        custom_message: `สวัสดีครับคุณ {name} พิเศษสำหรับลูกค้าคนสำคัญ! ${cropName} เพิ่งเก็บเกี่ยวสดๆ วันนี้ จัดโปรโมชั่นลดพิเศษ จำนวนจำกัดเพียง ${pushModalItem?.quantity || 'ไม่กี่'} ${pushModalItem?.unit || 'กก.'} เท่านั้น ช้อปเลยก่อนหมด!`,
+        cta_label: '⚡ ช้อปโปรโมชั่นทันที',
+      }));
+    }
+  };
+
+  const handleConfirmPush = async (e) => {
+    e.preventDefault();
+    if (!pushModalItem) return;
+    setSendingPush(true);
+    try {
+      const cropName = pushPlot?.crop_name || 'ผักสลัดสด';
       const res = await api.post('/api/ai/notify-harvest', {
-        harvest_id: harvestItem.id,
+        harvest_id: pushModalItem.id,
         crop_name: cropName,
-        quantity: harvestItem.quantity,
-        unit: harvestItem.unit || 'kg',
-        plot_name: plot?.name || 'แปลงเกษตร',
+        quantity: pushModalItem.quantity,
+        unit: pushModalItem.unit || 'kg',
+        plot_name: pushPlot?.name || 'แปลงเกษตร',
+        target_type: pushForm.target_type,
+        cluster_id: pushForm.cluster_id,
+        custom_title: pushForm.custom_title,
+        custom_message: pushForm.custom_message,
+        custom_image_url: pushForm.custom_image_url,
+        cta_label: pushForm.cta_label,
+        cta_url: pushForm.cta_url,
       });
 
       const targets = res.data.target_customers?.map(c => `${c.name} (${c.cluster})`).join(', ');
@@ -167,10 +294,12 @@ export default function Harvest() {
         description: targets ? `ส่งถึง: ${targets}` : 'ยิงแจ้งเตือนถึงลูกค้าเรียบร้อยแล้ว',
         duration: 5000,
       });
+      setPushModalItem(null);
     } catch (err) {
-      toast.error('ไม่สามารถส่งแจ้งเตือน LINE ได้');
+      console.error(err);
+      toast.error(err.response?.data?.error || 'ไม่สามารถส่งแจ้งเตือน LINE ได้');
     } finally {
-      setSendingId(null);
+      setSendingPush(false);
     }
   };
 
@@ -310,13 +439,12 @@ export default function Harvest() {
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => handlePersonalizedPush(r)}
-                    disabled={sendingId === r.id}
-                    className="inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold py-2.5 px-2 rounded-xl text-xs shadow-xs transition disabled:opacity-50 cursor-pointer"
-                    title="ยิง LINE Push แจ้งเตือนลูกค้าที่ชอบผักชนิดนี้"
+                    onClick={() => openPushModal(r)}
+                    className="inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold py-2.5 px-2 rounded-xl text-xs shadow-xs transition cursor-pointer"
+                    title="ตั้งค่าและยิง LINE Push แจ้งเตือนลูกค้า"
                   >
                     <Send className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">{sendingId === r.id ? 'กำลังส่ง...' : '📢 ยิง LINE Push'}</span>
+                    <span className="truncate">📢 ยิง LINE Push</span>
                   </button>
 
                   {r.lot_code ? (
@@ -363,13 +491,12 @@ export default function Harvest() {
           <div className="inline-flex items-center gap-1.5 flex-nowrap">
             <button
               type="button"
-              onClick={() => handlePersonalizedPush(item)}
-              disabled={sendingId === item.id}
-              className="inline-flex items-center justify-center gap-1 bg-emerald-50 hover:bg-emerald-100 active:scale-98 text-emerald-800 font-bold py-1.5 px-2.5 rounded-xl text-xs border border-emerald-200 transition disabled:opacity-50 cursor-pointer whitespace-nowrap"
-              title="ยิง LINE Push Notification หาเฉพาะลูกค้าที่ชอบผักชนิดนี้"
+              onClick={() => openPushModal(item)}
+              className="inline-flex items-center justify-center gap-1 bg-emerald-50 hover:bg-emerald-100 active:scale-98 text-emerald-800 font-bold py-1.5 px-2.5 rounded-xl text-xs border border-emerald-200 transition cursor-pointer whitespace-nowrap"
+              title="ตั้งค่าและยิง LINE Push แจ้งเตือนลูกค้า"
             >
               <Send className="w-3.5 h-3.5 shrink-0" />
-              <span>{sendingId === item.id ? 'กำลังส่ง...' : '📢 ยิง LINE Push'}</span>
+              <span>📢 ยิง LINE Push</span>
             </button>
 
             {item.lot_code && (
@@ -725,6 +852,326 @@ export default function Harvest() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Smart Targeted Push Notification */}
+      {pushModalItem && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex justify-between items-start bg-emerald-50/50">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold mb-1">
+                  <Bot className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>AI Smart Marketing Broadcast</span>
+                </div>
+                <h3 className="font-black text-base sm:text-lg text-[#173f2a]">
+                  ยิงแจ้งเตือน LINE อัจฉริยะ (Targeted Push)
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  ผลผลิต: <strong className="text-emerald-900">{pushPlot?.crop_name || 'ผักสด'}</strong> | แปลง: {pushPlot?.name || '-'} | จำนวน: {pushModalItem.quantity} {pushModalItem.unit}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPushModalItem(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-white/80 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body: Scrollable */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
+              {/* 1. Audience Selector */}
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase text-slate-700 flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-emerald-700" />
+                  <span>1. เลือกกลุ่มเป้าหมายผู้รับ (Audience)</span>
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleTargetTypeChange('auto')}
+                    className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between gap-1.5 ${
+                      pushForm.target_type === 'auto'
+                        ? 'bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
+                        : 'bg-white border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-emerald-950 flex items-center gap-1">
+                        🎯 AI ตรงตามผัก
+                      </span>
+                      {pushForm.target_type === 'auto' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
+                    </div>
+                    <p className="text-[11px] text-slate-500 line-clamp-2">
+                      ส่งหาเฉพาะคนที่ชอบหรือเคยสั่งผักชนิดนี้
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleTargetTypeChange('cluster')}
+                    className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between gap-1.5 ${
+                      pushForm.target_type === 'cluster'
+                        ? 'bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
+                        : 'bg-white border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-emerald-950 flex items-center gap-1">
+                        🏷️ เจาะจงกลุ่ม AI
+                      </span>
+                      {pushForm.target_type === 'cluster' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
+                    </div>
+                    <p className="text-[11px] text-slate-500 line-clamp-2">
+                      เลือกส่งตาม Cluster ที่ K-Means จัดไว้
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleTargetTypeChange('all')}
+                    className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between gap-1.5 ${
+                      pushForm.target_type === 'all'
+                        ? 'bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
+                        : 'bg-white border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-emerald-950 flex items-center gap-1">
+                        👥 ลูกค้าทุกคน
+                      </span>
+                      {pushForm.target_type === 'all' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
+                    </div>
+                    <p className="text-[11px] text-slate-500 line-clamp-2">
+                      บรอดแคสต์หาลูกค้าทุกคนที่มี LINE
+                    </p>
+                  </button>
+                </div>
+
+                {/* Sub-selector for Cluster */}
+                {pushForm.target_type === 'cluster' && (
+                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-1.5 animate-in fade-in duration-150">
+                    <label className="text-[11px] font-bold text-slate-600">เลือกกลุ่มลูกค้าที่ต้องการส่ง:</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                      {clustersList.map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => handleClusterChange(c.id)}
+                          className={`px-2.5 py-2 rounded-xl text-xs font-bold border transition text-left cursor-pointer ${
+                            Number(pushForm.cluster_id) === Number(c.id)
+                              ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xs'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          <div className="truncate">{c.cluster_name}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Live Audience Recipient Preview Box */}
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <span>🎯 รายชื่อผู้ที่จะได้รับแจ้งเตือน</span>
+                      <span className="bg-emerald-100 text-emerald-900 px-2 py-0.2 rounded-full text-[11px] font-black">
+                        {loadingAudience ? 'กำลังตรวจสอบ...' : `${audienceList.length} ท่าน`}
+                      </span>
+                    </span>
+                  </div>
+
+                  {loadingAudience ? (
+                    <div className="text-[11px] text-slate-400 py-1 flex items-center gap-1.5">
+                      <div className="animate-spin text-xs">🌱</div> กำลังคำนวณรายชื่อกลุ่มเป้าหมาย...
+                    </div>
+                  ) : audienceList.length === 0 ? (
+                    <div className="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-200 flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>ไม่พบลูกค้าที่ตรงตามเงื่อนไขนี้ (แนะนำให้เลือกกลุ่ม AI อื่น หรือเลือกส่งลูกค้าทุกคน)</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                      {audienceList.map(c => (
+                        <span
+                          key={c.id}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-800 text-[11px] font-medium shadow-2xs"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                          <span>{c.name}</span>
+                          <span className="text-[9px] text-slate-400">({c.cluster_name})</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 2. Message Customization & Templates */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <label className="text-xs font-black uppercase text-slate-700 flex items-center gap-1.5">
+                    <MessageSquare className="w-4 h-4 text-emerald-700" />
+                    <span>2. ปรับแต่งข้อความแจ้งเตือน (Custom Message)</span>
+                  </label>
+
+                  {/* Preset Buttons */}
+                  <div className="inline-flex items-center gap-1 flex-wrap">
+                    <span className="text-[10px] text-slate-400 font-bold">เทมเพลตด่วน:</span>
+                    <button
+                      type="button"
+                      onClick={() => applyPresetTemplate('fresh')}
+                      className="text-[10px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-lg transition cursor-pointer"
+                    >
+                      🥦 ผักสดใหม่
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyPresetTemplate('b2b')}
+                      className="text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-lg transition cursor-pointer"
+                    >
+                      📦 ราคาส่ง B2B
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyPresetTemplate('promo')}
+                      className="text-[10px] font-bold bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 px-2 py-0.5 rounded-lg transition cursor-pointer"
+                    >
+                      ⚡ โปรโมชั่นด่วน
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">หัวข้อการ์ด (Title)</label>
+                    <input
+                      type="text"
+                      value={pushForm.custom_title}
+                      onChange={e => setPushForm(f => ({ ...f, custom_title: e.target.value }))}
+                      placeholder="เช่น 🥦 ผักสลัดกรีนโอ๊ค สดๆ เพิ่งเก็บเกี่ยววันนี้!"
+                      className="input text-xs w-full rounded-xl"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-[11px] font-bold text-slate-600">เนื้อหาข้อความ (Body Message)</label>
+                      <span className="text-[10px] text-emerald-700 font-medium">ใส่ {'{name}'} เพื่อเรียกชื่อลูกค้าแต่ละคนอัตโนมัติ</span>
+                    </div>
+                    <textarea
+                      rows={3}
+                      value={pushForm.custom_message}
+                      onChange={e => setPushForm(f => ({ ...f, custom_message: e.target.value }))}
+                      placeholder="รายละเอียดข้อความที่ต้องการแจ้งเตือนลูกค้า..."
+                      className="input text-xs w-full rounded-xl leading-relaxed"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">ลิงก์รูปภาพประกอบ (Image URL)</label>
+                      <input
+                        type="text"
+                        value={pushForm.custom_image_url}
+                        onChange={e => setPushForm(f => ({ ...f, custom_image_url: e.target.value }))}
+                        placeholder="https://..."
+                        className="input text-xs w-full rounded-xl"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">ข้อความบนปุ่มกด (CTA Button)</label>
+                      <input
+                        type="text"
+                        value={pushForm.cta_label}
+                        onChange={e => setPushForm(f => ({ ...f, cta_label: e.target.value }))}
+                        placeholder="เช่น 🛒 กดสั่งซื้อผักสดทันที"
+                        className="input text-xs w-full rounded-xl"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Live Phone Flex Preview */}
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <label className="text-xs font-black uppercase text-slate-700 flex items-center gap-1.5">
+                  <Eye className="w-4 h-4 text-emerald-700" />
+                  <span>3. ตัวอย่างข้อความที่จะแสดงใน LINE ลูกค้า (Live Preview)</span>
+                </label>
+
+                <div className="bg-[#74889e]/20 p-3 sm:p-4 rounded-2xl flex justify-center">
+                  {/* LINE Bubble Mockup */}
+                  <div className="max-w-xs w-full bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden text-slate-800">
+                    {/* Hero Image */}
+                    <div className="h-36 bg-slate-100 relative overflow-hidden">
+                      <img
+                        src={pushForm.custom_image_url || 'https://images.unsplash.com/photo-1540420773420-3366772f4999?q=80&w=600&auto=format&fit=crop'}
+                        alt="Preview Hero"
+                        className="w-full h-full object-cover"
+                        onError={e => {
+                          e.target.src = 'https://images.unsplash.com/photo-1540420773420-3366772f4999?q=80&w=600&auto=format&fit=crop';
+                        }}
+                      />
+                      <span className="absolute top-2 right-2 bg-black/60 text-white text-[9px] font-bold px-2 py-0.5 rounded-full backdrop-blur-xs">
+                        FarmGAP Standard
+                      </span>
+                    </div>
+
+                    {/* Body */}
+                    <div className="p-3.5 space-y-2">
+                      <h4 className="font-black text-sm text-emerald-800 line-clamp-2 leading-tight">
+                        {pushForm.custom_title || `🥦 ${pushPlot?.crop_name || 'ผักสด'} เพิ่งเก็บเกี่ยววันนี้!`}
+                      </h4>
+                      <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed">
+                        {(pushForm.custom_message || '').replace(/{name}/g, audienceList[0]?.name || 'ลูกค้าคนพิเศษ')}
+                      </p>
+                    </div>
+
+                    {/* Button */}
+                    <div className="p-3 pt-0">
+                      <div className="w-full py-2 bg-emerald-700 text-white font-bold text-center text-xs rounded-xl shadow-xs">
+                        {pushForm.cta_label || '🛒 กดสั่งซื้อผักสดทันที'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions Footer */}
+            <div className="p-4 border-t border-slate-100 flex items-center justify-between gap-2 bg-slate-50/80">
+              <button
+                type="button"
+                onClick={() => setPushModalItem(null)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200/70 transition cursor-pointer"
+              >
+                ยกเลิก
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmPush}
+                disabled={sendingPush || audienceList.length === 0}
+                className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-green-700 hover:from-emerald-700 hover:to-green-800 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+              >
+                <Send className="w-4 h-4 text-emerald-200" />
+                <span>
+                  {sendingPush
+                    ? 'กำลังยิง LINE Push...'
+                    : audienceList.length === 0
+                    ? 'ไม่มีผู้รับในกลุ่มนี้'
+                    : `🚀 ยืนยันยิง LINE Push (${audienceList.length} ท่าน)`}
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       )}
