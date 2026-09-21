@@ -24,6 +24,7 @@ export default function Profile() {
 
   const [form, setForm] = useState({
     displayName: '',
+    username: '',
     farmName: '',
     phone: '',
     email: '',
@@ -53,6 +54,7 @@ export default function Profile() {
         setUserData(res.data);
         setForm({
           displayName: res.data.display_name || '',
+          username: res.data.username || '',
           farmName: res.data.farm_name || '',
           phone: res.data.phone || res.data.promptpay_number || '',
           email: res.data.email || '',
@@ -72,6 +74,7 @@ export default function Profile() {
           setForm(prev => ({
             ...prev,
             displayName: user.display_name || '',
+            username: user.username || '',
             farmName: user.farm_name || '',
             email: user.email || '',
             bankName: user.bank_name || '',
@@ -186,6 +189,7 @@ export default function Profile() {
     try {
       const payload = {
         display_name: form.displayName,
+        username: form.username,
         farm_name: form.farmName,
         phone: form.phone,
         bank_name: form.bankName,
@@ -256,6 +260,10 @@ export default function Profile() {
               <div className="flex justify-between py-1 border-b border-slate-50">
                 <span className="text-slate-400">เจ้าของฟาร์ม:</span>
                 <span className="font-semibold text-slate-700">{userData?.display_name || '-'}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-50">
+                <span className="text-slate-400">ชื่อผู้ใช้ (Username):</span>
+                <span className="font-semibold font-mono text-emerald-700">{userData?.username || '-'}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-50">
                 <span className="text-slate-400">อีเมลล็อกอิน:</span>
@@ -370,6 +378,24 @@ export default function Profile() {
                 placeholder="เช่น นายสมชาย ใจดี"
                 className="input text-xs w-full py-2.5 px-3.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600"
               />
+            </div>
+
+            {/* Username */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <User className="w-4 h-4 text-emerald-700" />
+                ชื่อผู้ใช้ (Username สำหรับเข้าสู่ระบบ)
+              </label>
+              <input
+                type="text"
+                value={form.username}
+                onChange={e => setForm(prev => ({ ...prev, username: e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, '') }))}
+                placeholder="เช่น admin, boss (ภาษาอังกฤษ/ตัวเลข)"
+                className="input text-xs w-full py-2.5 px-3.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600 font-mono"
+              />
+              <p className="text-[11px] text-slate-400">
+                สามารถใช้ชื่อผู้ใช้นี้คู่กับรหัสผ่านเพื่อเข้าสู่ระบบแทนอีเมลได้
+              </p>
             </div>
 
             {/* Farm Contact Phone */}

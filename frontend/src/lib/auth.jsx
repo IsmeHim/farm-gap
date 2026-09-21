@@ -46,13 +46,19 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const login = async (email, password) => {
-    const { data } = await api.post('/api/auth/login', { email, password });
+  const login = async (identifier, password) => {
+    const { data } = await api.post('/api/auth/login', {
+      identifier,
+      email: identifier,
+      username: identifier,
+      password,
+    });
     if (data?.token) localStorage.setItem('token', data.token);
     if (data?.user) {
       localStorage.setItem('user', JSON.stringify(data.user));
       setUser(data.user);
     }
+    return data?.user;
   };
 
   const register = async (payload) => {
@@ -62,6 +68,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem('user', JSON.stringify(data.user));
       setUser(data.user);
     }
+    return data?.user;
   };
 
   const updateProfile = (updatedUser, token) => {

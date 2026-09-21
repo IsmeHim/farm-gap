@@ -126,10 +126,27 @@ ordersRouter.post('/', async (req, res) => {
   }
 });
 
-// ดึงรายการออเดอร์ทั้งหมด (สำหรับฟาร์ม)
+// ดึงรายการออเดอร์ทั้งหมด (สำหรับฟาร์ม) หรือตามลูกค้า (สำหรับ LIFF)
 ordersRouter.get('/', async (req, res) => {
   try {
     const { status, customer_id, line_user_id, phone } = req.query;
+
+    // หากเป็นการขอดูออเดอร์ทั้งหมดของฟาร์ม (ไม่มี filter เฉพาะลูกค้า) ต้องเป็นเจ้าหน้าที่ฟาร์ม (owner/worker) เท่านั้น
+    if (!customer_id && !line_user_id && !phone) {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'กรุณาเข้าสู่ระบบก่อนดูรายการออเดอร์ของฟาร์ม' });
+      }
+      try {
+        const payload = jwt.verify(authHeader.slice(7), process.env.JWT_SECRET || 'farmgap_secret_key_2026');
+        if (payload.role !== 'owner' && payload.role !== 'worker') {
+          return res.status(403).json({ error: 'Forbidden: บัญชีผู้ใช้ทั่วไปไม่มีสิทธิ์ดูออเดอร์ทั้งหมดของฟาร์ม' });
+        }
+      } catch {
+        return res.status(401).json({ error: 'invalid token' });
+      }
+    }
+
     let query = `
       SELECT o.*, c.display_name AS customer_name, c.phone AS customer_phone, c.address AS customer_address, c.line_user_id
       FROM orders o
@@ -194,6 +211,19 @@ ordersRouter.get('/:id', async (req, res) => {
 
 // อัปเดตสถานะออเดอร์ (pending -> paid -> shipping -> completed / cancelled)
 ordersRouter.patch('/:id/status', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'กรุณาเข้าสู่ระบบก่อนแก้ไขสถานะออเดอร์' });
+  }
+  try {
+    const payload = jwt.verify(authHeader.slice(7), process.env.JWT_SECRET || 'farmgap_secret_key_2026');
+    if (payload.role !== 'owner' && payload.role !== 'worker') {
+      return res.status(403).json({ error: 'Forbidden: บัญชีผู้ใช้ทั่วไปไม่มีสิทธิ์แก้ไขสถานะออเดอร์' });
+    }
+  } catch {
+    return res.status(401).json({ error: 'invalid token' });
+  }
+
   const { status } = req.body;
   const allowedStatuses = ['pending', 'paid', 'shipping', 'completed', 'cancelled'];
   if (!status || !allowedStatuses.includes(status)) {

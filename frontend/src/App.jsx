@@ -26,6 +26,10 @@ function Protected({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="p-8">กำลังโหลด...</div>;
   if (!user) return <Navigate to="/login" replace />;
+  // หากเป็นผู้ใช้ทั่วไป (role user หรือไม่ได้เป็น owner/worker) ให้เด้งไปหน้าสั่งซื้อผักทันที ป้องกันเข้าถึงข้อมูลหลังบ้าน
+  if (user.role !== 'owner' && user.role !== 'worker') {
+    return <Navigate to="/liff/order" replace />;
+  }
   return children;
 }
 

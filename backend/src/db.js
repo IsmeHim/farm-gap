@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../.env');
 dotenv.config({ path: envPath });
 
-if (!process.env.DB_USER || !process.env.DB_PASSWORD) {
+if (!process.env.DB_USER || process.env.DB_PASSWORD === undefined) {
   console.warn('⚠️ DB env vars missing or not loaded:', {
     DB_HOST: process.env.DB_HOST,
     DB_PORT: process.env.DB_PORT,

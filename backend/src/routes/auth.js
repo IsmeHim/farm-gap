@@ -6,31 +6,74 @@ import { pool } from '../db.js';
 const r = Router();
 
 r.post('/register', async (req, res) => {
-  const { email, password, display_name, farm_name } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'email/password required' });
+  const { email, username, password, display_name, farm_name } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'กรุณากรอกอีเมลและรหัสผ่าน' });
   try {
     const hash = await bcrypt.hash(password, 10);
+    const finalUsername = (username || '').trim() || null;
     const [result] = await pool.query(
-      'INSERT INTO users (email, password_hash, display_name, farm_name) VALUES (?,?,?,?)',
-      [email, hash, display_name || null, farm_name || null]
+      'INSERT INTO users (email, username, password_hash, display_name, farm_name, role) VALUES (?,?,?,?,?,?)',
+      [email.trim(), finalUsername, hash, display_name || null, farm_name || null, 'user']
     );
-    const token = jwt.sign({ id: result.insertId, email, role: 'owner', display_name: display_name || null }, process.env.JWT_SECRET, { expiresIn: '30d' });
-    res.json({ token, user: { id: result.insertId, email, display_name, farm_name, role: 'owner' } });
+    const token = jwt.sign(
+      { id: result.insertId, email: email.trim(), username: finalUsername, role: 'user', display_name: display_name || null },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+    res.json({
+      token,
+      user: {
+        id: result.insertId,
+        email: email.trim(),
+        username: finalUsername,
+        display_name,
+        farm_name,
+        role: 'user',
+      },
+    });
   } catch (e) {
-    if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'email already used' });
+    if (e.code === 'ER_DUP_ENTRY') {
+      if (e.message.includes('username') || e.message.includes('idx_users_username')) {
+        return res.status(409).json({ error: 'ชื่อผู้ใช้ (Username) นี้มีผู้ใช้งานแล้ว' });
+      }
+      return res.status(409).json({ error: 'อีเมลนี้ถูกใช้งานแล้ว' });
+    }
     res.status(500).json({ error: e.message });
   }
 });
 
 r.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-  const [rows] = await pool.query('SELECT * FROM users WHERE email=?', [email]);
-  if (!rows[0]) return res.status(401).json({ error: 'invalid credentials' });
+  const { email, username, identifier, password } = req.body;
+  const loginKey = (identifier || email || username || '').trim();
+  if (!loginKey || !password) {
+    return res.status(400).json({ error: 'กรุณากรอกอีเมลหรือชื่อผู้ใช้ และรหัสผ่าน' });
+  }
+
+  // ค้นหาได้ทั้ง Email, Username และ Display Name
+  const [rows] = await pool.query(
+    'SELECT * FROM users WHERE email = ? OR username = ? OR display_name = ? LIMIT 1',
+    [loginKey, loginKey, loginKey]
+  );
+  if (!rows[0]) return res.status(401).json({ error: 'อีเมลหรือชื่อผู้ใช้ หรือรหัสผ่านไม่ถูกต้อง' });
   const ok = await bcrypt.compare(password, rows[0].password_hash);
-  if (!ok) return res.status(401).json({ error: 'invalid credentials' });
+  if (!ok) return res.status(401).json({ error: 'อีเมลหรือชื่อผู้ใช้ หรือรหัสผ่านไม่ถูกต้อง' });
   const u = rows[0];
-  const token = jwt.sign({ id: u.id, email: u.email, role: u.role, display_name: u.display_name }, process.env.JWT_SECRET, { expiresIn: '30d' });
-  res.json({ token, user: { id: u.id, email: u.email, display_name: u.display_name, farm_name: u.farm_name, role: u.role } });
+  const token = jwt.sign(
+    { id: u.id, email: u.email, username: u.username, role: u.role, display_name: u.display_name },
+    process.env.JWT_SECRET,
+    { expiresIn: '30d' }
+  );
+  res.json({
+    token,
+    user: {
+      id: u.id,
+      email: u.email,
+      username: u.username,
+      display_name: u.display_name,
+      farm_name: u.farm_name,
+      role: u.role,
+    },
+  });
 });
 
 // ข้อมูลการเงินและบัญชีธนาคารสำหรับลูกค้า/หน้าร้าน (Public)
@@ -53,7 +96,7 @@ r.get('/me', async (req, res) => {
   try {
     const payload = jwt.verify(h.slice(7), process.env.JWT_SECRET);
     const [rows] = await pool.query(
-      'SELECT id, email, display_name, farm_name, phone, role, created_at, bank_name, bank_account_no, bank_account_name, promptpay_number, promptpay_qr_url, line_user_id, frontend_url FROM users WHERE id = ?',
+      'SELECT id, email, username, display_name, farm_name, phone, role, created_at, bank_name, bank_account_no, bank_account_name, promptpay_number, promptpay_qr_url, line_user_id, frontend_url FROM users WHERE id = ?',
       [payload.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'user not found' });
@@ -71,6 +114,7 @@ r.put('/profile', async (req, res) => {
     const payload = jwt.verify(h.slice(7), process.env.JWT_SECRET);
     const {
       display_name,
+      username,
       farm_name,
       phone,
       password,
@@ -83,11 +127,14 @@ r.put('/profile', async (req, res) => {
       frontend_url,
     } = req.body;
 
+    const finalUsername = username !== undefined ? (username?.trim() || null) : undefined;
+
     if (password && password.trim().length > 0) {
       const hash = await bcrypt.hash(password, 10);
       await pool.query(
         `UPDATE users SET 
           display_name = COALESCE(?, display_name), 
+          username = COALESCE(?, username),
           farm_name = COALESCE(?, farm_name), 
           phone = COALESCE(?, phone),
           password_hash = ?,
@@ -101,6 +148,7 @@ r.put('/profile', async (req, res) => {
         WHERE id = ?`,
         [
           display_name,
+          finalUsername,
           farm_name,
           phone !== undefined ? phone : null,
           hash,
@@ -118,6 +166,7 @@ r.put('/profile', async (req, res) => {
       await pool.query(
         `UPDATE users SET 
           display_name = COALESCE(?, display_name), 
+          username = COALESCE(?, username),
           farm_name = COALESCE(?, farm_name),
           phone = COALESCE(?, phone),
           bank_name = ?,
@@ -130,6 +179,7 @@ r.put('/profile', async (req, res) => {
         WHERE id = ?`,
         [
           display_name,
+          finalUsername,
           farm_name,
           phone !== undefined ? phone : null,
           bank_name !== undefined ? bank_name : null,
@@ -145,13 +195,20 @@ r.put('/profile', async (req, res) => {
     }
 
     const [rows] = await pool.query(
-      'SELECT id, email, display_name, farm_name, role, created_at, bank_name, bank_account_no, bank_account_name, promptpay_number, promptpay_qr_url, line_user_id, frontend_url FROM users WHERE id = ?',
+      'SELECT id, email, username, display_name, farm_name, role, created_at, bank_name, bank_account_no, bank_account_name, promptpay_number, promptpay_qr_url, line_user_id, frontend_url FROM users WHERE id = ?',
       [payload.id]
     );
     const u = rows[0];
-    const token = jwt.sign({ id: u.id, email: u.email, role: u.role }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    const token = jwt.sign(
+      { id: u.id, email: u.email, username: u.username, role: u.role, display_name: u.display_name },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
     res.json({ token, user: u, message: 'Profile updated successfully' });
   } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'ชื่อผู้ใช้ (Username) นี้มีผู้ใช้งานแล้ว' });
+    }
     res.status(500).json({ error: err.message });
   }
 });

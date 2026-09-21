@@ -253,6 +253,7 @@ CREATE TABLE IF NOT EXISTS orders (
   payment_method VARCHAR(50) DEFAULT 'transfer',
   delivery_date DATE,
   slip_image_url LONGTEXT,
+  tracking_number VARCHAR(100) NULL,
   notes TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,

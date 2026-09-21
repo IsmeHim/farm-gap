@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { messagingApi } from '@line/bot-sdk';
 import crypto from 'crypto';
+import dns from 'dns';
+dns.setDefaultResultOrder('ipv4first');
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -20,10 +22,25 @@ const config = {
   channelSecret: process.env.LINE_CHANNEL_SECRET || 'dummy_secret',
 };
 
-// Create LINE Messaging API Client
+// Create LINE Messaging API Client with Auto-Retry on network/socket reset
 const client = new MessagingApiClient({
   channelAccessToken: config.channelAccessToken,
 });
+
+// Auto-retry wrapper against Undici idle keep-alive socket drops
+const _originalReplyMessage = client.replyMessage.bind(client);
+client.replyMessage = async function (params) {
+  try {
+    return await _originalReplyMessage(params);
+  } catch (err) {
+    if (err?.message?.includes('fetch failed')) {
+      console.warn('⚠️ LINE fetch failed (socket reset). Retrying once in 250ms...');
+      await new Promise(r => setTimeout(r, 250));
+      return await _originalReplyMessage(params);
+    }
+    throw err;
+  }
+};
 export const lineRouter = Router();
 
 // Auto-initialize line_chat_sessions table
@@ -43,6 +60,10 @@ async function initSessionTable() {
     // Ensure slip_image_url in orders is LONGTEXT so it never overflows
     await pool.query(`
       ALTER TABLE orders MODIFY COLUMN slip_image_url LONGTEXT
+    `).catch(() => {});
+    // Ensure tracking_number column exists in orders table
+    await pool.query(`
+      ALTER TABLE orders ADD COLUMN tracking_number VARCHAR(100) NULL
     `).catch(() => {});
   } catch (err) {
     console.error('Failed to init line_chat_sessions table:', err.message);
@@ -142,8 +163,14 @@ async function askGemini(prompt, systemInstruction) {
     return 'สวัสดีครับ! ยินดีต้อนรับสู่ฟาร์มผักมาตรฐาน GAP ปลอดภัย คุณสามารถสั่งซื้อผักสดได้ง่ายๆ โดยพิมพ์แจ้งรายการในแชทได้ทันที เช่น "สั่งกรีนโอ๊ค 2 แพ็ค" หรือสอบถามเกี่ยวกับมาตรฐานความปลอดภัยและสต็อกได้เลยครับ!';
   }
 
-  const model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const candidateModels = [
+    process.env.GEMINI_MODEL,
+    'gemini-3.6-flash',
+    'gemini-3.5-flash',
+    'gemini-flash-latest',
+  ].filter(Boolean);
+  const models = [...new Set(candidateModels)];
+
   const payload = {
     contents: [{ parts: [{ text: prompt }] }],
     systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
@@ -153,23 +180,51 @@ async function askGemini(prompt, systemInstruction) {
     }
   };
 
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    
-    if (!res.ok) {
-      throw new Error(`Gemini API error code: ${res.status}`);
+  for (const model of models) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(6000),
+      });
+      
+      if (!res.ok) {
+        if (res.status === 429) {
+          console.warn('⚠️ Gemini rate limit / quota exceeded (HTTP 429). Serving smart farm knowledge assistant.');
+          break;
+        }
+        if (res.status === 400 || res.status === 401 || res.status === 403) {
+          console.warn(`⚠️ Gemini API auth/request rejected (HTTP ${res.status}). Aborting model fallbacks.`);
+          break;
+        }
+        console.warn(`⚠️ Gemini model [${model}] returned HTTP ${res.status}, trying fallback model...`);
+        continue;
+      }
+      
+      const data = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) {
+        return text;
+      }
+    } catch (err) {
+      console.warn(`⚠️ Gemini model [${model}] error: ${err.message}, trying fallback model...`);
     }
-    
-    const data = await res.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || 'ขออภัยครับ ผมมีข้อขัดข้องในการเรียบเรียงคำตอบ';
-  } catch (err) {
-    console.error('Failed to query Gemini API:', err.message);
-    return 'ขออภัยครับ ระบบปัญญาประดิษฐ์ประมวลผลคำตอบขัดข้องชั่วคราว คุณสามารถสั่งซื้อผักสดได้โดยพิมพ์เช่น "สั่งกรีนโอ๊ค 2 แพ็ค" หรือพิมพ์ "สั่งซื้อ" ครับ';
   }
+
+  console.warn('⚠️ Gemini API unavailable or quota reached. Serving smart farm knowledge assistant.');
+  const lowerPrompt = prompt.toLowerCase();
+  if (lowerPrompt.includes('ปลูก') || lowerPrompt.includes('ทำสวน') || lowerPrompt.includes('ดูแล')) {
+    return '🌱 ผักสลัดในฟาร์ม FarmGAP (เช่น กรีนโอ๊ค เรดโอ๊ค คอส) ปลูกโดยใช้ระบบเกษตรอินทรีย์ ปลอดภัย ได้รับใบรับรองมาตรฐาน GAP ในทุกล็อต มีการสุ่มตรวจวิเคราะห์คุณภาพน้ำรดดินสม่ำเสมอ ใช้เวลาประมาณ 40-45 วันในการเก็บเกี่ยวครับ';
+  }
+  if (lowerPrompt.includes('ราคา') || lowerPrompt.includes('เท่าไหร่') || lowerPrompt.includes('บาท')) {
+    return '💵 ผักสลัดสดจากแปลงของเราจำหน่ายราคาเริ่มต้น 20-50 บาทต่อถุง/กิโลกรัมครับ สามารถพิมพ์ระบุสั่งซื้อได้เลย เช่น "สั่งกรีนโอ๊ค 2 แพ็ค" หรือพิมพ์ "เมนูผัก" เพื่อดูรายการพร้อมราคาครับ';
+  }
+  if (lowerPrompt.includes('สต็อก') || lowerPrompt.includes('เหลือ') || lowerPrompt.includes('มีผัก') || lowerPrompt.includes('เมนู')) {
+    return '🥬 วันนี้ฟาร์มเรามีผักสดพร้อมจัดส่งครับ! สามารถพิมพ์ "เมนูผัก" เพื่อเลือกชมและสั่งซื้อได้เลยครับ 🌱';
+  }
+  return '🌱 สวัสดีครับ ยินดีต้อนรับสู่ฟาร์มผักมาตรฐาน GAP ปลอดภัย คุณสามารถสั่งซื้อผักสดได้ง่ายๆ โดยพิมพ์รายการในแชทได้ทันที เช่น "สั่งกรีนโอ๊ค 2 แพ็ค" หรือพิมพ์ "เมนูผัก" เพื่อดูรายการผักสดทั้งหมดได้เลยครับ!';
 }
 
 // Helper: ดึงข้อมูลติดต่อเจ้าของฟาร์มและข้อมูลบัญชีจากฐานข้อมูลแบบ Dynamic
@@ -223,11 +278,9 @@ async function getFarmContext() {
     const owner = await getOwnerContactInfo();
 
     let context = 'คุณคือบอทผู้ช่วยตอบคำถามลูกค้าของฟาร์มผักสดอัจฉริยะ FarmGAP AI ที่เพาะปลูกตามมาตรฐาน GAP และผสานระบบ E-Commerce\n';
-    context += `\n[ข้อมูลฟาร์มและช่องทางติดต่อเจ้าของฟาร์ม/แอดมิน]:\n`;
+    context += `\n[ข้อมูลฟาร์ม]:\n`;
     context += `- ชื่อฟาร์ม: ${owner.farmName}\n`;
     context += `- ผู้ดูแล/เจ้าของฟาร์ม: คุณ${owner.displayName}\n`;
-    context += `- เบอร์โทรศัพท์ติดต่อโดยตรง: ${owner.phone}\n`;
-    context += `- ช่องทางการติดต่อ: ลูกค้าสามารถโทรติดต่อที่เบอร์ ${owner.phone} ได้โดยตรง หรือพิมพ์ข้อความในแชทนี้ได้ตลอดเวลา\n`;
 
     context += '\n[ข้อมูลสต็อกสินค้าพร้อมขายวันนี้แบบเรียลไทม์]:\n';
     if (products.length > 0) {
@@ -247,13 +300,17 @@ async function getFarmContext() {
       context += '- กำลังเตรียมดินและบำรุงแปลงปลูกใหม่\n';
     }
     
+    context += '\n[คำสั่งพิเศษเรื่องการขอดูเมนู/รายการผัก]:\n';
+    context += 'หากสิ่งที่ลูกค้าถามหรือต้องการคือการขอดูรายการผัก เมนูผัก หรือถามว่ามีเมนูอะไรบ้าง มีผักอะไรบ้าง หรือวันนี้มีอะไรขายบ้าง ให้ตอบเพียงคำว่า [SHOW_MENU_CARD] สั้นๆ เท่านั้น (ระบบจะส่งการ์ดเมนูผักสวยงามให้ลูกค้าโดยอัตโนมัติ)\n';
+
     context += '\n[กฎและนโยบายสำคัญในการตอบคำถามลูกค้า]:\n';
     context += '1. ตอบคำถามภาษาไทยอย่างสุภาพ มีหางเสียง "ครับ/ค่ะ" สั้นกระชับเข้าใจง่าย และให้ข้อมูลที่เป็นประโยชน์สูงสุด\n';
-    context += `2. กฎเรื่องเบอร์ติดต่อ (สำคัญมาก): หากลูกค้าถามหาเบอร์ติดต่อ, ขอเบอร์โทร, ขอเบอร์ฟาร์ม, หรือต้องการคุยกับคน/แอดมิน/เจ้าของ ให้ระบุเบอร์โทรศัพท์ของเจ้าของฟาร์มคือ "${owner.phone}" (คุณ${owner.displayName} ฟาร์ม ${owner.farmName}) เสมออย่างชัดเจน ห้ามตอบเลี่ยงว่าให้คุยแต่กับ AI!\n`;
+    context += `2. กฎเรื่องเบอร์ติดต่อเจ้าของฟาร์ม (สำคัญมาก): ให้ระบุเบอร์โทรศัพท์ ${owner.phone} (คุณ${owner.displayName} ฟาร์ม ${owner.farmName}) "เฉพาะ" ในกรณีที่ลูกค้าถามหาเบอร์ติดต่อ ขอเบอร์โทร ขอคุยกับเจ้าของฟาร์ม/แอดมิน หรือกรณีขอเงินคืนเท่านั้น! ห้ามใส่เบอร์ติดต่อหรือชวนโทรหาเจ้าของฟาร์มท้ายคำตอบทั่วไปโดยเด็ดขาด!\n`;
     context += `3. กฎเรื่องการขอเงินคืน (Refund): หากลูกค้าสอบถามว่า "ขอเงินคืนยังไง", "ขอเงินคืน", "โอนเงินแล้วขอยกเลิกออเดอร์" หรือทำนองเดียวกัน ให้ตอบอย่างสุภาพว่า ทางฟาร์มยินดีคืนเงินให้ตามยอดจริง โดยมีขั้นตอนง่ายๆ คือ:\n   - ส่งรูปภาพสลิปที่โอนเงินเข้ามาในแชทนี้\n   - พิมพ์แจ้งเลขบัญชีธนาคาร หรือเบอร์พร้อมเพย์ และชื่อบัญชีสำหรับรับเงินคืน\n   - ทางเจ้าของฟาร์มจะตรวจสอบและโอนเงินคืนให้โดยเร็ว หรือลูกค้าสามารถโทรแจ้งเจ้าของฟาร์มโดยตรงได้ที่เบอร์ ${owner.phone} (คุณ${owner.displayName})\n`;
     context += '4. อ้างอิงสต็อกผักสดและสถานะแปลงเพาะปลูกข้างต้นในการตอบให้สอดคล้องกันอย่างถูกต้อง\n';
     context += '5. แจ้งลูกค้าว่าสามารถสั่งซื้อผักสดได้โดยตรงในแชทนี้เลย (เช่น "สั่งกรีนโอ๊ค 2 แพ็ค") หรือพิมพ์ "เมนูผัก" เพื่อดูสินค้าทั้งหมด โดยฟาร์มรองรับทั้งการ "โอนเงิน/สแกน QR" และ "เก็บเงินปลายทาง (COD)"\n';
-    context += '6. หากลูกค้าถามเรื่องสถานะพัสดุหรือออเดอร์ ให้แนะนำพิมพ์คำว่า "เช็คสถานะ" เพื่อตรวจสถานะออเดอร์ล่าสุด หรือพิมพ์ "ดูประวัติ" เพื่อดูประวัติการสั่งซื้อทั้งหมดในแชท';
+    context += '6. หากลูกค้าถามเรื่องสถานะพัสดุหรือออเดอร์ ให้แนะนำพิมพ์คำว่า "เช็คสถานะ" เพื่อตรวจสถานะออเดอร์ล่าสุด หรือพิมพ์ "ดูประวัติ" เพื่อดูประวัติการสั่งซื้อทั้งหมดในแชท\n';
+    context += '7. ข้อห้ามเด็ดขาด: ห้ามแนบข้อความทำนองว่า "หากต้องการสอบถามข้อมูลเพิ่มเติม หรือติดต่อคุณ... โทรได้ที่เบอร์..." ท้ายคำตอบทั่วไปโดยเด็ดขาด!';
     
     return context;
   } catch (err) {
@@ -262,7 +319,47 @@ async function getFarmContext() {
   }
 }
 
-// Helper: สกัดคีย์เวิร์ดชื่อผักทั้งไทย/อังกฤษ/คำย่อสำหรับสินค้าทุกตัวในระบบ
+// Helper: แปลงคำบอกจำนวนและเลขไทยเป็นตัวเลขอารบิก
+function normalizeThaiQuantity(str) {
+  if (!str) return '';
+  let s = str;
+  // แปลงเลขไทย ๑-๙
+  const thaiDigits = ['๐', '๑', '๒', '๓', '๔', '๕', '๖', '๗', '๘', '๙'];
+  thaiDigits.forEach((td, i) => {
+    s = s.replaceAll(td, String(i));
+  });
+
+  // แปลงคำบอกจำนวนพิเศษ เช่น ครึ่งกิโล, ครึ่งถุง
+  s = s.replace(/ครึ่ง\s*(?:กิโล|กีโล|กก|โล|ถุง|แพ็ค|แพค)/g, ' 0.5 โล ');
+  s = s.replace(/(?:^|\s)ครึ่ง(?:\s|$)/g, ' 0.5 ');
+
+  // แปลงคำบอกจำนวนภาษาไทยเดี่ยวๆ
+  const wordToNum = [
+    { words: ['สิบ'], val: '10' },
+    { words: ['เก้า'], val: '9' },
+    { words: ['แปด'], val: '8' },
+    { words: ['เจ็ด'], val: '7' },
+    { words: ['หก'], val: '6' },
+    { words: ['ห้า'], val: '5' },
+    { words: ['สี่'], val: '4' },
+    { words: ['สาม'], val: '3' },
+    { words: ['สอง', 'คู่'], val: '2' },
+    { words: ['หนึ่ง', 'นึง'], val: '1' },
+  ];
+
+  for (const item of wordToNum) {
+    for (const w of item.words) {
+      s = s.replace(
+        new RegExp(`(^|[^ก-๙a-zA-Z0-9])${w}(?:\\s*(?:กิโล|กีโล|กก|โล|แพ็ค|แพค|ถุง|ชิ้น|หัว|ชุด))?(?=[^ก-๙a-zA-Z0-9]|$)`, 'gi'),
+        `$1 ${item.val} `
+      );
+    }
+  }
+
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+// Helper: สกัดคีย์เวิร์ดชื่อผักทั้งไทย/อังกฤษ/คำย่อ/คำสะกดผิดสำหรับสินค้าทุกตัวในระบบ
 function getProductKeywords(productName) {
   const lower = productName.toLowerCase();
   const keywords = [];
@@ -280,7 +377,7 @@ function getProductKeywords(productName) {
   // 2. ดึงชื่อภาษาไทยหลัก ตัดคำตกแต่ง (เช่น ปลอดสาร, สด, GAP, อินทรีย์, พรีเมียม ฯลฯ)
   const cleanThai = lower
     .replace(/\([^)]*\)/g, '')
-    .replace(/ปลอดสาร|สด|gap|อินทรีย์|ซูเปอร์ฟู้ด|โฮมเมด|กรอบพรีเมียม|เนื้อนุ่ม|พรีเมียม/g, '')
+    .replace(/ปลอดสาร|สด|gap|อินทรีย์|ซูเปอร์ฟู้ด|โฮมเมด|กรอบพรีเมียม|เนื้อนุ่ม|พรีเมียม|ถุงใส|ขีด/g, '')
     .trim();
 
   if (cleanThai) {
@@ -291,36 +388,43 @@ function getProductKeywords(productName) {
     }
   }
 
-  // 3. คีย์เวิร์ดภาษาไทยที่ผู้ใช้งานมักพิมพ์บ่อย
+  // 3. คีย์เวิร์ดภาษาไทยและคำพ้องที่ผู้ใช้งานมักพิมพ์บ่อย (รวมคำเว้นวรรค, คำย่อ, และคำพิมพ์ผิด)
+  if (lower.includes('บุ้ง') || lower.includes('morning glory') || lower.includes('spinach')) {
+    keywords.push('ผักบุ้งจีนสด', 'ผักบุ้งจีน', 'ผัก บุ้ง จีน', 'ผักบุ้ง', 'ผัก บุ้ง', 'บุ้งจีน', 'บุ้ง', 'morning glory', 'water spinach');
+  }
+  if (lower.includes('กวางตุ้ง') || lower.includes('choy') || lower.includes('กวางตุง')) {
+    keywords.push('ผักกวางตุ้งสด', 'ผักกวางตุ้ง', 'ผัก กวางตุ้ง', 'กวางตุ้ง', 'กวาง ตุ้ง', 'กวางตุง', 'กวางตุ้งฮ่องเต้', 'choy sum', 'bok choy');
+  }
   if (lower.includes('กาดขาว') || lower.includes('cabbage')) {
-    keywords.push('ผักกาดขาว', 'กาดขาว', 'cabbage');
+    keywords.push('ผักกาดขาวสด', 'ผักกาดขาว', 'ผัก กาดขาว', 'กาดขาว', 'cabbage', 'chinese cabbage');
   }
   if (lower.includes('กาดหอม') || lower.includes('lettuce')) {
-    keywords.push('ผักกาดหอม', 'กาดหอม');
+    keywords.push('ผักกาดหอมสด', 'ผักกาดหอม', 'ผัก กาดหอม', 'กาดหอม', 'lettuce');
   }
-  if (lower.includes('ฟิล') || lower.includes('ฟิน') || lower.includes('frillice')) {
-    keywords.push('ฟิลเล่ย์', 'ฟินเล่ย์', 'ฟิลเลย์', 'ฟินเลย์', 'ไอซ์เบิร์ก', 'frillice');
+  if (lower.includes('ฟิล') || lower.includes('ฟิน') || lower.includes('frillice') || lower.includes('ไอซ์เบิร์ก')) {
+    keywords.push('ผักฟิลเล่ย์', 'ผัก ฟิลเล่ย์', 'ฟิลเล่ย์', 'ฟิล เล่ย์', 'ฟินเล่ย์', 'ฟิน เล่ย์', 'ฟิลเลย์', 'ฟินเลย์', 'ฟิลเล', 'ไอซ์เบิร์ก', 'ไอซ์ เบิร์ก', 'ไอสเบิร์ก', 'ไอซ์เบิก', 'frillice');
   }
   if (lower.includes('กรีน') || lower.includes('green')) {
-    keywords.push('กรีนโอ๊ค', 'กรีนโอค', 'กรีน', 'green oak');
+    keywords.push('ผักกรีนโอ๊คสด', 'ผักกรีนโอ๊ค', 'ผัก กรีนโอ๊ค', 'กรีนโอ๊คสด', 'กรีนโอ๊ค', 'กรีน โอ๊ค', 'กรีนโอค', 'กรีน โอค', 'กรีนโอ้ค', 'กรีน', 'ผักกรีน', 'green oak', 'greenoak');
   }
   if (lower.includes('เรด') || lower.includes('red')) {
-    keywords.push('เรดโอ๊ค', 'เรดโอค', 'เรด', 'red oak');
+    keywords.push('ผักเรดโอ๊คสด', 'ผักเรดโอ๊ค', 'ผัก เรดโอ๊ค', 'เรดโอ๊คสด', 'เรดโอ๊ค', 'เรด โอ๊ค', 'เรดโอค', 'เรด โอค', 'เรดโอ้ค', 'เรด', 'ผักเรด', 'red oak', 'redoak');
   }
-  if (lower.includes('คอส') || lower.includes('cos')) {
-    keywords.push('คอส', 'cos');
+  if (lower.includes('คอส') || lower.includes('cos') || lower.includes('โรเมน')) {
+    keywords.push('ผักคอสสด', 'ผักคอส', 'ผัก คอส', 'คอสสด', 'คอส', 'กรีนคอส', 'เรดคอส', 'cos', 'โรเมน', 'romaine', 'คอสสลัด');
   }
   if (lower.includes('บัตเตอร์') || lower.includes('butter')) {
-    keywords.push('บัตเตอร์เฮด', 'บัตเตอร์', 'butterhead');
+    keywords.push('ผักบัตเตอร์เฮดสด', 'ผักบัตเตอร์เฮด', 'ผัก บัตเตอร์เฮด', 'บัตเตอร์เฮด', 'บัตเตอร์ เฮด', 'บัตเตอร์', 'บัตเตอร์เฮต', 'butterhead');
   }
   if (lower.includes('เคล') || lower.includes('kale')) {
-    keywords.push('ผักเคล', 'เคล', 'kale');
+    keywords.push('ผักเคลสด', 'ผักเคล', 'ผัก เคล', 'เคล', 'kale', 'คะน้าใบหยิก');
   }
-  if (lower.includes('น้ำสลัด') || lower.includes('sesame')) {
-    keywords.push('น้ำสลัด', 'งาคั่ว', 'dressing');
+  if (lower.includes('น้ำสลัด') || lower.includes('sesame') || lower.includes('งาคั่ว')) {
+    keywords.push('น้ำสลัด', 'งาคั่ว', 'น้ำสลัดงาคั่ว', 'dressing');
   }
 
-  return [...new Set(keywords.filter(k => k.length >= 2))];
+  // เรียงลำดับจากคำที่ยาวที่สุดไปสั้นที่สุดเสมอ เพื่อให้จับคำที่จำเพาะเจาะจงก่อน
+  return [...new Set(keywords.filter(k => k.length >= 2))].sort((a, b) => b.length - a.length);
 }
 
 // Helper: ใช้ Gemini AI สกัดคำสั่งซื้อกรณีผู้ใช้พิมพ์ภาษาพูดซับซ้อน
@@ -360,7 +464,11 @@ ${productListDesc}
 
 // 3. วิเคราะห์เจตนาและสกัดคำสั่งซื้อจากข้อความธรรมชาติ (Order Intent & Entity Extraction)
 async function extractOrderIntent(text) {
-  const buyKeywords = ['สั่ง', 'ซื้อ', 'เอา', 'รับ', 'จอง', 'order', 'ขอ', 'กิโล', 'กีโล', 'โล', 'แพ็ค', 'แพค', 'ถุง', 'กก'];
+  const buyKeywords = [
+    'สั่ง', 'ซื้อ', 'เอา', 'รับ', 'จอง', 'order', 'ขอ', 'อยากได้', 'อยากสั่ง', 'ต้องการ',
+    'จัด', 'ส่ง', 'จัดส่ง', 'เพิ่ม', 'สัก', 'ซัก', 'กิโล', 'กีโล', 'โล', 'แพ็ค', 'แพค',
+    'ถุง', 'กก', 'กล่อง', 'ชุด', 'ขีด', 'มัด', 'ต้น', 'หัว'
+  ];
   const hasBuyKeyword = buyKeywords.some(k => text.includes(k));
 
   const [products] = await pool.query(
@@ -371,11 +479,124 @@ async function extractOrderIntent(text) {
     return { isOrder: false };
   }
 
-  let matchedItems = [];
-  const lowerText = text.toLowerCase();
+  // 1. ทำความสะอาดข้อความ: ลบลำดับข้อ 1., 2., [1], (1), -, • ออกจากต้นบรรทัด เพื่อป้องกันสับสนกับจำนวนสินค้า
+  let cleanedText = text
+    .split('\n')
+    .map(line => line.replace(/^\s*(?:[0-9]+[.)\]\-:]|\-|\*|•)\s*/, '').trim())
+    .filter(Boolean)
+    .join('\n');
 
-  // 1. ถ้ามีเจตนาซื้อ ให้ใช้ Gemini AI สกัดเป็นอันดับแรก เพื่อความเข้าใจภาษามนุษย์สูงสุด (ดักจับคำพิมพ์ผิด เช่น 10 กีโล, สิบโล)
-  if (hasBuyKeyword) {
+  // 2. แปลงคำบอกจำนวนภาษาไทย (เช่น สองถุง -> 2 ถุง, ครึ่งโล -> 0.5 โล) และเลขไทยเป็นเลขอารบิก
+  const normalizedText = normalizeThaiQuantity(cleanedText);
+  const lowerText = normalizedText.toLowerCase();
+
+  // ตรวจสอบแพทเทิร์น "อย่างละ [ตัวเลข]" (เช่น "เอากรีนโอ๊ค เรดโอ๊ค คอส อย่างละ 2 ถุง")
+  const eachMatch = lowerText.match(/อย่างละ\s*([0-9]+(?:\.[0-9]+)?)/);
+  const defaultEachQty = eachMatch && parseFloat(eachMatch[1]) > 0 ? parseFloat(eachMatch[1]) : null;
+
+  let matchedItems = [];
+  const addedProductIds = new Set();
+
+  // ฟังก์ชันย่อยช่วยสกัดจำนวนสินค้าจากข้อความรอบๆ ชื่อผัก
+  const escapeRx = s => s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+  const extractQuantityForKeyword = (segment, kw) => {
+    let qty = null;
+    const escapedKw = escapeRx(kw);
+    const regexPatterns = [
+      new RegExp(`${escapedKw}[^0-9]{0,25}([0-9]+(?:\\.[0-9]+)?)`, 'i'),
+      new RegExp(`([0-9]+(?:\\.[0-9]+)?)[^0-9]{0,25}${escapedKw}`, 'i'),
+    ];
+
+    for (const rx of regexPatterns) {
+      const match = segment.match(rx);
+      if (match && match[1]) {
+        const parsed = parseFloat(match[1]);
+        if (!isNaN(parsed) && parsed > 0) {
+          qty = parsed;
+          break;
+        }
+      }
+    }
+
+    if (!qty) {
+      const unitMatch = segment.match(new RegExp(`([0-9]+(?:\\.[0-9]+)?)\\s*(?:กิโล|กีโล|กก|ก\\.ก\\.|โล|แพ็ค|แพค|ถุง|ชิ้น|หัว|ชุด)[^0-9]*${escapedKw}`, 'i')) ||
+                        segment.match(new RegExp(`${escapedKw}[^0-9]*([0-9]+(?:\\.[0-9]+)?)\\s*(?:กิโล|กีโล|กก|ก\\.ก\\.|โล|แพ็ค|แพค|ถุง|ชิ้น|หัว|ชุด)`, 'i'));
+      if (unitMatch && unitMatch[1]) {
+        qty = parseFloat(unitMatch[1]);
+      }
+    }
+
+    return qty;
+  };
+
+  // 3. วิเคราะห์แบบแบ่ง Segment (แบ่งตามบรรทัด, จุลภาค, หรือคำเชื่อม "และ", "กับ", "แล้วก็", "+")
+  const segments = lowerText.split(/[\n,+]|\s+และ\s+|\s+กับ\s+|\s+แล้วก็\s+/).map(s => s.trim()).filter(Boolean);
+
+  for (const segment of segments) {
+    for (const product of products) {
+      if (addedProductIds.has(product.id)) continue;
+      const keywords = getProductKeywords(product.name);
+      const matchedKw = keywords.find(kw => segment.includes(kw));
+
+      if (matchedKw) {
+        let qty = extractQuantityForKeyword(segment, matchedKw);
+        if (!qty && defaultEachQty) qty = defaultEachQty;
+        if (!qty) qty = 1;
+
+        matchedItems.push({
+          product_id: product.id,
+          name: product.name,
+          price: Number(product.price),
+          unit: product.unit || 'กก.',
+          quantity: qty,
+          stock_quantity: Number(product.stock_quantity),
+          subtotal: Number(product.price) * qty,
+        });
+        addedProductIds.add(product.id);
+      }
+    }
+  }
+
+  // 4. ถ้ายังไม่พบจากการแบ่ง Segment ให้ลองค้นหาทั่วทั้งประโยค
+  if (matchedItems.length === 0) {
+    for (const product of products) {
+      if (addedProductIds.has(product.id)) continue;
+      const keywords = getProductKeywords(product.name);
+      const matchedKw = keywords.find(kw => lowerText.includes(kw));
+
+      if (matchedKw) {
+        let qty = extractQuantityForKeyword(lowerText, matchedKw);
+        if (!qty && defaultEachQty) qty = defaultEachQty;
+        if (!qty) qty = 1;
+
+        matchedItems.push({
+          product_id: product.id,
+          name: product.name,
+          price: Number(product.price),
+          unit: product.unit || 'กก.',
+          quantity: qty,
+          stock_quantity: Number(product.stock_quantity),
+          subtotal: Number(product.price) * qty,
+        });
+        addedProductIds.add(product.id);
+      }
+    }
+  }
+
+  // กรณีสั่งผักรายการเดียว และในประโยคมีตัวเลขโดดๆ (เช่น "ขอสั่งผักกาดขาว 10")
+  if (matchedItems.length === 1 && matchedItems[0].quantity === 1) {
+    const singleDigitMatch = lowerText.match(/\b([1-9][0-9]*)\b/);
+    if (singleDigitMatch && singleDigitMatch[1]) {
+      const parsedNum = parseInt(singleDigitMatch[1], 10);
+      if (parsedNum > 0 && parsedNum <= 100) {
+        matchedItems[0].quantity = parsedNum;
+        matchedItems[0].subtotal = matchedItems[0].price * matchedItems[0].quantity;
+      }
+    }
+  }
+
+  // 5. หาก Local Matching ของระบบยังสกัดไม่เจอ แต่ผู้ใช้มีเจตนาซื้อผัก จึงค่อยส่งต่อให้ Gemini AI ช่วยเป็น Fallback
+  if (matchedItems.length === 0 && hasBuyKeyword) {
     const geminiResult = await extractOrderWithGemini(text, products);
     if (geminiResult && geminiResult.isOrder && Array.isArray(geminiResult.items) && geminiResult.items.length > 0) {
       for (const gItem of geminiResult.items) {
@@ -396,71 +617,15 @@ async function extractOrderIntent(text) {
     }
   }
 
-  // 2. ถ้า Gemini ไม่ได้ผล หรือไม่ได้ต่อเน็ต ให้ใช้ Regex Keyword Matching อัจฉริยะ (Local Fallback)
-  if (matchedItems.length === 0) {
-    for (const product of products) {
-      const keywords = getProductKeywords(product.name);
-      const matchedKw = keywords.find(kw => lowerText.includes(kw));
-
-      if (matchedKw) {
-        let qty = 1;
-        // ขยายระยะห่างคำเป็น 30 ตัวอักษร เพื่อครอบคลุมคำขยาย (เช่น "ผักกาดขาว ปลอดสาร 10 กิโล")
-        const regexPatterns = [
-          new RegExp(`${matchedKw}[^0-9]{0,30}([0-9]+(?:\\.[0-9]+)?)`, 'i'),
-          new RegExp(`([0-9]+(?:\\.[0-9]+)?)[^0-9]{0,30}${matchedKw}`, 'i'),
-        ];
-
-        for (const rx of regexPatterns) {
-          const match = text.match(rx);
-          if (match && match[1]) {
-            const parsed = parseFloat(match[1]);
-            if (!isNaN(parsed) && parsed > 0) {
-              qty = parsed;
-              break;
-            }
-          }
-        }
-
-        if (qty === 1) {
-          // รองรับหน่วยต่างๆ รวมทั้งคำสะกดผิด เช่น กีโล, กก, โล
-          const unitDigitMatch = text.match(new RegExp(`([0-9]+(?:\\.[0-9]+)?)\\s*(?:กิโล|กีโล|กก|ก\\.ก\\.|โล|แพ็ค|แพค|ถุง|ชิ้น|หัว|ชุด)[^0-9]*${matchedKw}`, 'i')) ||
-                                 text.match(new RegExp(`${matchedKw}[^0-9]*([0-9]+(?:\\.[0-9]+)?)\\s*(?:กิโล|กีโล|กก|ก\\.ก\\.|โล|แพ็ค|แพค|ถุง|ชิ้น|หัว|ชุด)`, 'i'));
-          if (unitDigitMatch && unitDigitMatch[1]) {
-            qty = parseFloat(unitDigitMatch[1]);
-          }
-        }
-
-        matchedItems.push({
-          product_id: product.id,
-          name: product.name,
-          price: Number(product.price),
-          unit: product.unit || 'กก.',
-          quantity: qty,
-          stock_quantity: Number(product.stock_quantity),
-          subtotal: Number(product.price) * qty,
-        });
-      }
-    }
-
-    // กรณีสั่งผักรายการเดียว และในประโยคมีตัวเลขโดดๆ (เช่น "ขอสั่งผักกาดขาว 10")
-    if (matchedItems.length === 1 && matchedItems[0].quantity === 1) {
-      const singleDigitMatch = text.match(/\b([1-9][0-9]*)\b/);
-      if (singleDigitMatch && singleDigitMatch[1]) {
-        matchedItems[0].quantity = parseInt(singleDigitMatch[1], 10);
-        matchedItems[0].subtotal = matchedItems[0].price * matchedItems[0].quantity;
-      }
-    }
-  }
-
   if (matchedItems.length === 0) {
     return { isOrder: false };
   }
 
-  if (!hasBuyKeyword && !text.match(/\d+/)) {
+  if (!hasBuyKeyword && !lowerText.match(/\d+/)) {
     return { isOrder: false };
   }
 
-  // ตรวจสอบสต็อก
+  // ตรวจสอบสต็อกสินค้า
   for (const item of matchedItems) {
     if (item.stock_quantity <= 0) {
       return {
@@ -619,7 +784,7 @@ async function replyOrderDraftConfirmation(replyToken, items, totalAmount) {
                 borderWidth: '1px',
                 cornerRadius: 'md',
                 paddingAll: 'sm',
-                spacing: 'xxs',
+                spacing: 'xs',
                 margin: 'xs',
                 contents: [
                   {
@@ -1381,7 +1546,7 @@ async function replyOrderStatus(replyToken, userId) {
     }
 
     const [orders] = await pool.query(
-      'SELECT id, order_code, total_amount, status, delivery_type, payment_method, tracking_number, created_at FROM orders WHERE customer_id = ? ORDER BY id DESC LIMIT 1',
+      'SELECT * FROM orders WHERE customer_id = ? ORDER BY id DESC LIMIT 1',
       [customers[0].id]
     );
 
@@ -1393,7 +1558,8 @@ async function replyOrderStatus(replyToken, userId) {
     }
 
     const order = orders[0];
-    const isCod = order.payment_method === 'cod';
+    const isCod = order.payment_method?.toLowerCase() === 'cod';
+    const statusLower = (order.status || '').toLowerCase();
     const statusMap = {
       pending: isCod ? { label: 'เตรียมจัดส่ง (เก็บเงินปลายทาง 💵)', color: '#059669' } : { label: 'รอตรวจสอบ/รอแนบสลิป ⏳', color: '#d97706' },
       paid: { label: 'ชำระแล้ว (เตรียมเก็บเกี่ยว/จัดส่ง) 💳', color: '#2563eb' },
@@ -1401,7 +1567,7 @@ async function replyOrderStatus(replyToken, userId) {
       completed: { label: 'จัดส่งสำเร็จเรียบร้อย ✅', color: '#16a34a' },
       cancelled: { label: 'ยกเลิกออเดอร์ ❌', color: '#dc2626' },
     };
-    const currentStatus = statusMap[order.status] || { label: order.status, color: '#333333' };
+    const currentStatus = statusMap[statusLower] || { label: order.status, color: '#333333' };
     const localDate = new Date(order.created_at).toLocaleString('th-TH', {
       year: 'numeric',
       month: 'short',
@@ -1645,6 +1811,17 @@ async function replyOrderStatus(replyToken, userId) {
     });
   } catch (err) {
     console.error('Failed to reply order status:', err.message);
+    try {
+      await client.replyMessage({
+        replyToken: replyToken,
+        messages: [
+          {
+            type: 'text',
+            text: 'ขออภัยครับ เกิดข้อผิดพลาดชั่วคราวในการดึงข้อมูลสถานะออเดอร์ กรุณาลองกดใหม่อีกครั้ง หรือพิมพ์สอบถามเจ้าของฟาร์มได้เลยครับ 🌱',
+          },
+        ],
+      });
+    } catch (_) {}
   }
 }
 
@@ -1889,27 +2066,59 @@ export async function notifyAdminNewOrder(orderData, eventType = 'NEW_ORDER') {
       return;
     }
 
-    const isCompleted = eventType === 'ORDER_COMPLETED' || eventType === 'SLIP_UPLOADED';
-    const title = isCompleted ? '🎉 ลูกค้าสั่งซื้อสำเร็จแล้ว!' : '🔔 มีคำสั่งซื้อใหม่เข้ามา!';
-    const badgeText = isCompleted ? 'สั่งซื้อสำเร็จ' : 'ออเดอร์ใหม่';
-    const badgeBg = isCompleted ? '#15803d' : '#0369a1';
-    const headerBg = isCompleted ? '#14532d' : '#0f172a';
+    // 2. ดึงข้อมูลออเดอร์ ข้อมูลลูกค้า และรายการสินค้าล่าสุดจากฐานข้อมูลจริง (ถ้ามี orderData.id)
+    let resolvedOrder = { ...orderData };
+    if (orderData.id) {
+      try {
+        const [oRows] = await pool.query(`
+          SELECT o.*, c.display_name AS customer_name, c.phone AS customer_phone, c.address AS customer_address
+          FROM orders o
+          LEFT JOIN customers c ON o.customer_id = c.id
+          WHERE o.id = ?
+        `, [orderData.id]);
+        if (oRows.length > 0) {
+          const [itRows] = await pool.query(`
+            SELECT oi.*, p.name AS product_name, p.unit
+            FROM order_items oi
+            LEFT JOIN products p ON oi.product_id = p.id
+            WHERE oi.order_id = ?
+          `, [orderData.id]);
+          resolvedOrder = {
+            ...oRows[0],
+            ...orderData,
+            customer_name: orderData.customer_name || oRows[0].customer_name,
+            customer_phone: orderData.customer_phone || oRows[0].customer_phone,
+            customer_address: orderData.customer_address || oRows[0].customer_address,
+            items: (itRows.length > 0 ? itRows : (orderData.items || [])),
+          };
+        }
+      } catch (dbErr) {
+        console.warn('⚠️ Could not refresh order details from DB for admin notify:', dbErr.message);
+      }
+    }
 
-    const orderCode = orderData.order_code || `ORD-${orderData.id || ''}`;
-    const totalAmount = Number(orderData.total_amount || 0).toLocaleString();
-    const customerName = orderData.customer_name || 'ลูกค้าทั่วไป';
-    const customerPhone = orderData.customer_phone || '-';
-    const customerAddress = orderData.customer_address || '-';
+    const isCompleted = eventType === 'ORDER_COMPLETED' || eventType === 'SLIP_UPLOADED';
+    const isSlip = eventType === 'SLIP_UPLOADED' || Boolean(resolvedOrder.slip_image_url);
+    const title = isSlip ? '💸 ลูกค้าแจ้งชำระเงินแนบสลิปแล้ว!' : (isCompleted ? '🎉 ลูกค้าสั่งซื้อสำเร็จแล้ว!' : '🔔 มีคำสั่งซื้อใหม่เข้ามา!');
+    const badgeText = isSlip ? 'แนบสลิปแล้ว' : (isCompleted ? 'สั่งซื้อสำเร็จ' : 'ออเดอร์ใหม่');
+    const badgeBg = isSlip ? '#0284c7' : (isCompleted ? '#15803d' : '#0369a1');
+    const headerBg = isSlip ? '#075985' : (isCompleted ? '#14532d' : '#0f172a');
+
+    const orderCode = resolvedOrder.order_code || `ORD-${resolvedOrder.id || ''}`;
+    const totalAmount = Number(resolvedOrder.total_amount || 0).toLocaleString();
+    const customerName = resolvedOrder.customer_name || 'ลูกค้าทั่วไป';
+    const customerPhone = resolvedOrder.customer_phone || '-';
+    const customerAddress = resolvedOrder.customer_address || '-';
 
     // เตรียมรายการสินค้า (ถ้ามี)
-    const items = orderData.items || [];
+    const items = resolvedOrder.items || [];
     const itemRows = items.slice(0, 5).map(item => ({
       type: 'box',
       layout: 'horizontal',
       contents: [
         {
           type: 'text',
-          text: `• ${item.product_name || item.name || 'ผักสด'} x${item.quantity}`,
+          text: `• ${item.product_name || item.name || 'ผักสด'} x${Number(item.quantity) || 1} ${item.unit || 'ถุง'}`,
           size: 'xs',
           color: '#374151',
           flex: 8,
@@ -1932,7 +2141,7 @@ export async function notifyAdminNewOrder(orderData, eventType = 'NEW_ORDER') {
     const rawFrontendBase = configuredUrl || process.env.FRONTEND_URL || process.env.DASHBOARD_URL || 'http://localhost:5173';
     const frontendBase = rawFrontendBase.replace(/\/+$/, '');
     const actionUri = process.env.DASHBOARD_ORDER_URL || `${frontendBase}/orders`;
-    const printUri = orderData.id ? `${frontendBase}/orders/${orderData.id}/print` : actionUri;
+    const printUri = resolvedOrder.id ? `${frontendBase}/orders/${resolvedOrder.id}/print` : actionUri;
 
     const flexContents = {
       type: 'bubble',
@@ -2055,9 +2264,9 @@ export async function notifyAdminNewOrder(orderData, eventType = 'NEW_ORDER') {
               },
               {
                 type: 'text',
-                text: `การชำระเงิน: ${orderData.payment_method === 'cod' ? 'เก็บเงินปลายทาง (COD) 💵' : 'โอนเงินผ่านธนาคาร 💳'}`,
+                text: `การชำระเงิน: ${resolvedOrder.payment_method === 'cod' ? 'เก็บเงินปลายทาง (COD) 💵' : 'โอนเงินผ่านธนาคาร 💳'}`,
                 size: 'xs',
-                color: orderData.payment_method === 'cod' ? '#059669' : '#2563eb',
+                color: resolvedOrder.payment_method === 'cod' ? '#059669' : '#2563eb',
                 weight: 'bold',
               },
             ],
@@ -2103,9 +2312,9 @@ export async function notifyAdminNewOrder(orderData, eventType = 'NEW_ORDER') {
                   contents: [
                     {
                       type: 'text',
-                      text: orderData.payment_method === 'cod'
+                      text: resolvedOrder.payment_method === 'cod'
                         ? '💵 ลูกค้าเลือกชำระเงินปลายทาง (COD) จัดเตรียมสินค้าและเก็บเงินสดเมื่อส่งมอบครับ'
-                        : (orderData.slip_image_url
+                        : (resolvedOrder.slip_image_url
                           ? '✅ ลูกค้าแนบสลิปชำระเงินเรียบร้อยแล้ว สามารถตรวจสอบและจัดส่งผักสดได้ทันทีครับ'
                           : '✅ ลูกค้าสั่งซื้อสำเร็จเรียบร้อยแล้ว พร้อมให้ฟาร์มจัดเตรียมผักสดครับ'),
                       size: 'xs',
@@ -2548,31 +2757,44 @@ export async function notifyCustomerOrderStatus(orderId, newStatus, dispatchDeta
   }
 }
 
-// Helper: ตรวจสอบว่าข้อความมีลักษณะเป็นที่อยู่จัดส่งจริงหรือไม่
+// Helper: ตรวจสอบว่าข้อความมีลักษณะเป็นที่อยู่จัดส่งจริงหรือไม่ (รองรับภาษาพูด ชื่อตำบล/อำเภอ/จังหวัด และรหัสไปรษณีย์)
 function isLikelyAddress(str) {
   if (!str || typeof str !== 'string') return false;
   const s = str.trim();
-  if (s.length < 8) return false;
+  if (s.length < 3) return false;
   // ถ้าเป็นเบอร์โทรศัพท์ล้วน ไม่ใช่ที่อยู่
   if (/^0[0-9]{8,9}$/.test(s.replace(/[- ]/g, ''))) return false;
 
+  // คำทักทาย หรือยกเลิก ไม่ใช่ที่อยู่
+  const nonAddressWords = ['สวัสดี', 'ดีครับ', 'ดีค่ะ', 'ยกเลิก', 'ไม่เอา', 'สั่งซื้อ', 'ขอดูเมนู', 'เมนูผัก'];
+  if (nonAddressWords.some(w => s === w || s.startsWith(w + ' '))) return false;
+
   const patterns = [
-    /\b[1-9][0-9]{4}\b/, // รหัสไปรษณีย์ 5 หลัก
+    /\b[1-9][0-9]{3,4}\b/, // รหัสไปรษณีย์ 4-5 หลัก (รองรับพิมพ์ตก 4 หลัก เช่น 9700, 94000)
     /(?:ต\.|ตำบล|แขวง)/,
     /(?:อ\.|อำเภอ|เขต)/,
     /(?:จ\.|จังหวัด)/,
     /(?:ม\.|หมู่|หมู่ที่|มบ\.|หมู่บ้าน)/,
     /(?:ซ\.|ซอย)/,
     /(?:ถ\.|ถนน)/,
-    /(?:บ้านเลขที่|ห้องเลขที่|ชั้น)/,
-    /\b[0-9]{1,4}\/[0-9]{1,4}\b/, // เช่น 122/16
-    /(?:ที่อยู่|ส่งที่|จัดส่งที่|ส่งมาที่)/,
+    /(?:บ้านเลขที่|ห้องเลขที่|ชั้น|ห้อง|ตึก|อาคาร|คอนโด|หอพัก|หอ|มหาลัย|มหาวิทยาลัย|โรงพยาบาล|รพ\.|เทศบาล|อบต\.)/,
+    /\b[0-9]{1,4}\/[0-9]{1,4}\b/, // เช่น 122/16, 57/4
+    /(?:ที่อยู่|ส่งที่|จัดส่งที่|ส่งมาที่|สถานที่ส่ง)/,
+    // รายชื่อจังหวัดและสถานที่สำคัญในไทยที่พบบ่อย
+    /(?:กรุงเทพ|กทม|นนทบุรี|ปทุมธานี|สมุทรปราการ|สมุทรสาคร|นครปฐม|อยุธยา|สระบุรี|ชลบุรี|ระยอง|จันทบุรี|เชียงใหม่|เชียงราย|ลำปาง|ลำพูน|น่าน|พิษณุโลก|สุโขทัย|ขอนแก่น|โคราช|นครราชสีมา|อุดรธานี|อุบลราชธานี|บุรีรัมย์|สุรินทร์|ภูเก็ต|สงขลา|สุราษฎร์ธานี|กระบี่|พังงา|ตรัง|พัทลุง|สตูล|ยะลา|ปัตตานี|นราธิวาส|กาญจนบุรี|ราชบุรี|เพชรบุรี|ประจวบ|หัวหิน|หาดใหญ่|พัทยา|เบตง|หนองจิก|เกาะเปาะ|ตือเบาะ|รูสะมิแล|แม่โจ้)/i,
   ];
 
-  return patterns.some(p => p.test(s));
+  if (patterns.some(p => p.test(s))) return true;
+
+  // หากข้อความมีความยาวพอสมควร (>= 8 ตัวอักษร) มีตัวเลข และมีเว้นวรรค ให้ถือเป็นที่อยู่
+  if (s.length >= 8 && /[0-9]/.test(s) && /\s/.test(s)) {
+    return true;
+  }
+
+  return false;
 }
 
-// Helper: สกัดชื่อผู้รับ เบอร์โทรศัพท์ และที่อยู่จัดส่ง จากข้อความที่ผู้ใช้พิมพ์ (Rule-based Regex)
+// Helper: สกัดชื่อผู้รับ เบอร์โทรศัพท์ และที่อยู่จัดส่ง จากข้อความที่ผู้ใช้พิมพ์ (Rule-based Regex & Structured Heuristics)
 function parseCustomerContact(text) {
   if (!text) return { name: null, phone: null, address: null };
 
@@ -2580,27 +2802,90 @@ function parseCustomerContact(text) {
   let phone = null;
   let address = null;
 
-  // 1. สกัดเบอร์โทรศัพท์ (รองรับ 08x, 09x, 06x, 02x 9-10 หลัก)
-  const phoneMatch = text.match(/(?:^|[^\d])(0[689][0-9]{8}|0[2-57][0-9]{7})(?:[^\d]|$)/);
-  if (phoneMatch && phoneMatch[1]) {
-    phone = phoneMatch[1].replace(/[- ]/g, '');
-  } else {
-    const formattedMatch = text.match(/(?:^|[^\d])(0[0-9]{1,2}[- ]?[0-9]{3,4}[- ]?[0-9]{3,4})(?:[^\d]|$)/);
-    if (formattedMatch && formattedMatch[1]) {
-      const cleaned = formattedMatch[1].replace(/[- ]/g, '');
-      if (cleaned.length >= 9 && cleaned.length <= 10 && cleaned.startsWith('0')) {
-        phone = cleaned;
+  const rawLines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+  // 1. ตรวจสอบกรณีลูกค้าส่งเป็นลำดับบรรทัด (Multi-line Structured Text เช่น 1.ชื่อ บอส \n 2.เบอร์ 095... \n 3.ตือเบาะ...)
+  if (rawLines.length >= 2) {
+    const remainingLines = [];
+
+    for (const line of rawLines) {
+      // 1.1 สกัดเบอร์โทรจากบรรทัด
+      const pMatch = line.match(/(?:^|[^\d])(0[689][0-9]{8}|0[2-57][0-9]{7})(?:[^\d]|$)/) ||
+                     line.match(/(?:^|[^\d])(0[0-9]{1,2}[- ]?[0-9]{3,4}[- ]?[0-9]{3,4})(?:[^\d]|$)/);
+      if (pMatch && pMatch[1]) {
+        const cleaned = pMatch[1].replace(/[- ]/g, '');
+        if (cleaned.length >= 9 && cleaned.length <= 10 && cleaned.startsWith('0')) {
+          if (!phone) phone = cleaned;
+          continue; // บรรทัดนี้คือบรรทัดเบอร์โทร
+        }
+      }
+
+      // 1.2 สกัดชื่อผู้รับจากบรรทัดที่มีคีย์เวิร์ดชื่อ เช่น "1.ชื่อ บอส", "ชื่อ: บอส", "คุณ บอส", "ผู้รับ บอส"
+      const nameMatch = line.match(/^(?:[0-9]+[.)\]\-:]|\-|\*|•)?\s*(?:ชื่อ(?:ผู้รับ)?|คุณ|ผู้รับ)\s*[:\-]?\s*([ก-๙a-zA-Z\s]+)/i);
+      if (nameMatch && nameMatch[1]) {
+        const extracted = nameMatch[1].replace(/(?:เบอร์|โทร|tel|ที่อยู่|ส่งที่|บ้านเลขที่)[\s\S]*/i, '').trim();
+        if (extracted && extracted.length >= 2 && !['ลูกค้า', 'ทั่วไป', 'ผู้รับ'].includes(extracted)) {
+          if (!name) name = extracted;
+          continue;
+        }
+      }
+
+      // 1.3 สกัดที่อยู่จากบรรทัดที่มีคีย์เวิร์ดที่อยู่ เช่น "3.ที่อยู่ 57/4...", "ส่งที่: ..."
+      const addrMatch = line.match(/^(?:[0-9]+[.)\]\-:]|\-|\*|•)?\s*(?:ที่อยู่(?:จัดส่ง)?|ส่งที่|จัดส่ง(?:ที่)?|บ้านเลขที่|สถานที่ส่ง)\s*[:\-]?\s*([\s\S]+)/i);
+      if (addrMatch && addrMatch[1]) {
+        const extracted = addrMatch[1].trim();
+        if (extracted) {
+          if (!address) address = extracted;
+          continue;
+        }
+      }
+
+      // บรรทัดอื่นๆ ที่ยังไม่ได้จำแนก
+      remainingLines.push(line);
+    }
+
+    // 1.4 ถ้ามีบรรทัดที่เหลือและยังขาดที่อยู่ หรือชื่อ ให้ตรวจสอบ
+    for (const remLine of remainingLines) {
+      // ตัดเลขลำดับต้นบรรทัด เช่น "3.ตือเบาะ บอส 9700" -> "ตือเบาะ บอส 9700"
+      const stripped = remLine.replace(/^(?:[0-9]+[.)\]\-:]|\-|\*|•)\s*/, '').trim();
+
+      if (!address && isLikelyAddress(stripped)) {
+        address = stripped;
+      } else if (!name && /^[ก-๙a-zA-Z\s]{2,25}$/.test(stripped) && !isLikelyAddress(stripped)) {
+        name = stripped;
+      } else if (!address && phone && stripped.length >= 5) {
+        // หากได้เบอร์โทรแล้ว บรรทัดที่เหลือที่ยาวพอให้ถือเป็นที่อยู่
+        address = stripped;
       }
     }
   }
 
-  // 2. สกัดชื่อผู้รับ (กรณีมีคำระบุชัดเจน เช่น ชื่อ: สมชาย หรือ ผู้รับ คุณสมใจ)
-  const explicitNameMatch = text.match(/(?:ชื่อ(?:ผู้รับ)?|คุณ|ผู้รับ)\s*[:\-]?\s*([ก-๙a-zA-Z\s]+?)(?=(?:เบอร์|โทร|tel|ที่อยู่|ส่งที่|บ้านเลขที่|\d{9,10}|$))/i);
-  if (explicitNameMatch && explicitNameMatch[1]) {
-    name = explicitNameMatch[1].trim();
+  // 2. ถ้ายังสกัดไม่ครบจากแบบบรรทัด ให้ใช้ Inline Regex ทั้งข้อความ
+  if (!phone) {
+    const phoneMatch = text.match(/(?:^|[^\d])(0[689][0-9]{8}|0[2-57][0-9]{7})(?:[^\d]|$)/);
+    if (phoneMatch && phoneMatch[1]) {
+      phone = phoneMatch[1].replace(/[- ]/g, '');
+    } else {
+      const formattedMatch = text.match(/(?:^|[^\d])(0[0-9]{1,2}[- ]?[0-9]{3,4}[- ]?[0-9]{3,4})(?:[^\d]|$)/);
+      if (formattedMatch && formattedMatch[1]) {
+        const cleaned = formattedMatch[1].replace(/[- ]/g, '');
+        if (cleaned.length >= 9 && cleaned.length <= 10 && cleaned.startsWith('0')) {
+          phone = cleaned;
+        }
+      }
+    }
   }
 
-  // 3. สกัดชื่อหากยังไม่มี (เช่น พิมพ์ "สมใจ มีสุข 0812345678 ที่อยู่ 122/16...")
+  // 2.1 สกัดชื่อผู้รับแบบระบุคำนำหน้า (เช่น "1.ชื่อ บอส", "ชื่อ: สมชาย")
+  if (!name) {
+    const explicitNameMatch = text.match(/(?:[0-9]+[.)\]\-:]|\-|\*|•)?\s*(?:ชื่อ(?:ผู้รับ)?|คุณ|ผู้รับ)\s*[:\-]?\s*([ก-๙a-zA-Z\s]+?)(?=(?:เบอร์|โทร|tel|ที่อยู่|ส่งที่|บ้านเลขที่|\d{9,10}|$|\n))/i);
+    if (explicitNameMatch && explicitNameMatch[1]) {
+      const candidate = explicitNameMatch[1].trim();
+      if (candidate.length >= 2) name = candidate;
+    }
+  }
+
+  // 2.2 สกัดชื่อกรณีขึ้นต้นข้อความ เช่น "สมใจ มีสุข 0812345678 ที่อยู่ 122/16..."
   if (!name) {
     const beforeMatch = text.match(/^([ก-๙a-zA-Z]{2,20}(?:\s+[ก-๙a-zA-Z]{2,20})?)\s+(?:0[689]|\d+\/\d+|ที่อยู่|บ้านเลขที่)/);
     if (beforeMatch && beforeMatch[1]) {
@@ -2612,16 +2897,18 @@ function parseCustomerContact(text) {
     }
   }
 
-  // 4. สกัดที่อยู่จัดส่งแบบระบุคีย์เวิร์ดชัดเจน
-  const explicitAddrMatch = text.match(/(?:ที่อยู่|ส่งที่|จัดส่ง(?:ที่)?|บ้านเลขที่)\s*[:\-]?\s*([\s\S]+?)(?=(?:เบอร์|โทร|ชื่อ|$))/i);
-  if (explicitAddrMatch && explicitAddrMatch[1]) {
-    const rawAddr = explicitAddrMatch[1].trim();
-    if (isLikelyAddress(rawAddr)) {
-      address = rawAddr;
+  // 2.3 สกัดที่อยู่จัดส่งแบบระบุคีย์เวิร์ดชัดเจน
+  if (!address) {
+    const explicitAddrMatch = text.match(/(?:ที่อยู่(?:จัดส่ง)?|ส่งที่|จัดส่ง(?:ที่)?|บ้านเลขที่|สถานที่ส่ง)\s*[:\-]?\s*([\s\S]+?)(?=(?:เบอร์|โทร|tel|ชื่อ|$))/i);
+    if (explicitAddrMatch && explicitAddrMatch[1]) {
+      const rawAddr = explicitAddrMatch[1].trim();
+      if (isLikelyAddress(rawAddr)) {
+        address = rawAddr;
+      }
     }
   }
 
-  // 5. หากยังไม่ได้ที่อยู่ ให้ลบเบอร์โทร และชื่อ (ถ้ามี) ออกจากข้อความ แล้วเช็คว่าส่วนที่เหลือเป็นที่อยู่หรือไม่
+  // 2.4 หากยังไม่ได้ที่อยู่ ให้ลบเบอร์โทร และชื่อ ออกจากข้อความ แล้วเช็คว่าส่วนที่เหลือคือที่อยู่หรือไม่
   if (!address) {
     let remainder = text;
     if (phone) {
@@ -2630,10 +2917,13 @@ function parseCustomerContact(text) {
     if (name) {
       remainder = remainder.replace(name, ' ');
     }
-    remainder = remainder.replace(/(?:ชื่อผู้รับ|ชื่อ|เบอร์โทร|เบอร์|โทร|tel|ที่อยู่จัดส่ง|ที่อยู่|ส่งที่)\s*[:\-]?/gi, ' ');
+    remainder = remainder.replace(/(?:[0-9]+[.)\]\-:]|\-|\*|•)?\s*(?:ชื่อผู้รับ|ชื่อ|เบอร์โทร|เบอร์|โทร|tel|ที่อยู่จัดส่ง|ที่อยู่|ส่งที่|สถานที่ส่ง)\s*[:\-]?/gi, ' ');
     remainder = remainder.replace(/\s+/g, ' ').trim();
 
     if (isLikelyAddress(remainder)) {
+      address = remainder;
+    } else if (phone && remainder.length >= 6 && !remainder.match(/^(?:สั่ง|ซื้อ|เอา|รับ|ขอ|ยกเลิก|สวัสดี|ดีครับ)/)) {
+      // เมื่อมีเบอร์โทรแล้ว และข้อความที่เหลือมีความยาวพอสมควร ไม่ใช่คำทักทายหรือคำสั่งซื้อ ให้จัดเป็นที่อยู่
       address = remainder;
     }
   }
@@ -2689,7 +2979,17 @@ async function parseSmartCustomerContact(text) {
     return regexResult;
   }
 
-  // หากขาด ให้ Gemini AI ช่วยวิเคราะห์ข้อความธรรมชาติ
+  // ป้องกันการเรียก Gemini โดยไม่จำเป็น: หากข้อความไม่มีลักษณะของเบอร์โทร หรือที่อยู่เลย ให้คืนค่าตาม Regex ทันที
+  const hasPhone = /(?:^|[^\d])(0[689][0-9]{8}|0[2-57][0-9]{7})(?:[^\d]|$)/.test(text) ||
+                   /(?:^|[^\d])(0[0-9]{1,2}[- ]?[0-9]{3,4}[- ]?[0-9]{3,4})(?:[^\d]|$)/.test(text);
+  const hasAddr = isLikelyAddress(text);
+  const hasContactKeyword = /(?:ชื่อ|คุณ|ผู้รับ|เบอร์|โทร|tel|ที่อยู่|ส่งที่|จัดส่ง|บ้านเลขที่)/i.test(text);
+
+  if (!hasPhone && !hasAddr && !hasContactKeyword) {
+    return regexResult;
+  }
+
+  // หากมีสัญญาณของข้อมูลจัดส่ง แต่ Regex สกัดได้ไม่ครบ ให้ Gemini AI ช่วยวิเคราะห์ข้อความธรรมชาติ
   try {
     const aiResult = await extractContactInfoWithGemini(text);
     if (aiResult) {
@@ -3023,7 +3323,7 @@ async function replyPaymentMethodSelection(replyToken, draftData) {
             backgroundColor: '#f1f8f3',
             cornerRadius: 'md',
             paddingAll: 'sm',
-            spacing: 'xxs',
+            spacing: 'xs',
             contents: [
               {
                 type: 'text',
@@ -3841,6 +4141,22 @@ async function handleEvent(event) {
 
     // Fetch active session state
     const session = await getChatSession(userId);
+    const lowerTrimText = text.toLowerCase().trim();
+
+    // 1. Global Greeting Handler: เมื่อลูกค้าทักทาย (สวัสดี, หวัดดี, hello, hi ฯลฯ)
+    // ส่งการ์ดต้อนรับ replyWelcome ทันทีใน 0.02 วินาที ไม่ผ่าน Gemini และไม่อยู่ใต้สถานะใดๆ
+    const isGreeting = (
+      ['สวัสดี', 'หวัดดี', 'ดีครับ', 'ดีค่ะ', 'hello', 'hi', 'hey', 'start', 'เริ่มต้น', 'เริ่ม'].includes(lowerTrimText) ||
+      lowerTrimText.startsWith('สวัสดี') ||
+      lowerTrimText.startsWith('หวัดดี') ||
+      lowerTrimText === 'ยินดีที่ได้รู้จัก'
+    );
+    if (isGreeting) {
+      if (session && session.state === 'AWAITING_ADDRESS') {
+        await clearChatSession(userId);
+      }
+      return replyWelcome(replyToken);
+    }
 
     // Helper: ดักจับเจตนายกเลิกออเดอร์ในทุกรูปแบบภาษาคน (รวมถึงคำลงท้าย ครับ/ค่ะ, ข้อความยาว, หรือพิมพ์ผิด เช่น ยกเลิกช)
     function isCancelIntent(rawText) {
@@ -3879,10 +4195,13 @@ async function handleEvent(event) {
       }
     }
 
-    // วิเคราะห์เจตนายกเลิก: ตรวจสอบทั้ง Regex แบบ Fast-path และใช้ Gemini AI ช่วยวิเคราะห์ข้อความภาษาธรรมชาติ
+    // วิเคราะห์เจตนายกเลิก: ตรวจสอบทั้ง Regex แบบ Fast-path และใช้ Gemini AI เฉพาะกรณีที่มีคำบอกเหตุผลยกเลิก
     let shouldCancel = isCancelIntent(text);
-    if (!shouldCancel && session.state !== 'IDLE') {
-      shouldCancel = await isCancelWithGemini(text);
+    if (!shouldCancel && session.state !== 'IDLE' && !isGreeting) {
+      const cancelKeywords = ['เปลี่ยน', 'สะดวก', 'บาย', 'เซิล', 'ผ่าน', 'พอ', 'หยุด', 'ไม่พร้อม', 'ไว้ก่อน'];
+      if (cancelKeywords.some(k => lowerTrimText.includes(k))) {
+        shouldCancel = await isCancelWithGemini(text);
+      }
     }
 
     // Global cancellation handler (เข้าใจภาษาธรรมชาติ เช่น ยกเลิกช, ยกเลิก ครับ, ขอยกเลิก, ไม่เอาแล้ว, ภาษาพูดนอกบท)
@@ -3932,6 +4251,22 @@ async function handleEvent(event) {
       const totalAmount = session.draft_data.totalAmount || session.draft_data.total_amount;
       const draft = session.draft_data;
 
+      // 1. ตรวจสอบว่าผู้ใช้สั่งซื้อใหม่ หรือต้องการเปลี่ยนรายการผักในออเดอร์หรือไม่
+      const orderCheck = await extractOrderIntent(text);
+      if (orderCheck.isOrder && orderCheck.items && orderCheck.items.length > 0) {
+        await setChatSession(userId, 'AWAITING_ADDRESS', null, {
+          ...draft,
+          items: orderCheck.items,
+          totalAmount: orderCheck.totalAmount,
+        });
+        return replyOrderDraftConfirmation(replyToken, orderCheck.items, orderCheck.totalAmount);
+      }
+
+      // 2. ตรวจสอบว่าผู้ใช้ขอดูเมนูผักหรือไม่
+      if (isMenuInquiry(text)) {
+        return replyVegMenu(replyToken, userId);
+      }
+
       // Extract clean name, phone, address with hybrid AI & Regex
       const parsedContact = await parseSmartCustomerContact(text);
 
@@ -3956,10 +4291,14 @@ async function handleEvent(event) {
         missingList.push('👤 ชื่อ-นามสกุล หรือชื่อเล่นของผู้รับ');
       }
 
-      // ตรวจสอบว่าในข้อความนี้ มีข้อมูลติดต่อใหม่ (เบอร์ หรือ ที่อยู่) ที่ตรวจจับได้หรือไม่
-      const providedContactInThisMsg = parsedContact.phone || (parsedContact.address && isLikelyAddress(parsedContact.address));
+      // ตรวจสอบว่าในข้อความนี้ มีข้อมูลติดต่อ (ชื่อ หรือ เบอร์ หรือ ที่อยู่) หรือไม่
+      const providedContactInThisMsg = Boolean(
+        parsedContact.name ||
+        parsedContact.phone ||
+        parsedContact.address
+      );
 
-      // ถ้าในข้อความนี้ไม่มีข้อมูลที่อยู่หรือเบอร์โทรเลย และยังมีข้อมูลที่ขาดอยู่
+      // ถ้าในข้อความนี้ไม่มีข้อมูลที่อยู่ เบอร์ หรือชื่อเลย และยังมีข้อมูลที่ขาดอยู่
       // แสดงว่าผู้ใช้กำลังพิมพ์สอบถามคำถาม หรือพูดคุยทั่วไป -> ให้ Gemini AI ตอบคำถามตามจริงทันที ไม่ตอบตัดบทซ้ำเดิม
       if (!providedContactInThisMsg && missingList.length > 0) {
         try {
@@ -3969,7 +4308,7 @@ async function handleEvent(event) {
 [สถานะปัจจุบันของลูกค้า]: ลูกค้ากำลังทำรายการสั่งซื้อผักสด (${itemsSummary} ยอดรวม ฿${Number(totalAmount).toLocaleString()} บาท) และอยู่ในขั้นตอนพิมพ์แจ้งข้อมูลจัดส่ง (ชื่อ, เบอร์โทร, ที่อยู่)
 [คำสั่งสำหรับ AI]:
 1. ตอบคำถามหรือข้อความของลูกค้าอย่างสุภาพ เป็นมิตร และชาญฉลาดตามคำถามจริง
-2. ต่อท้ายคำตอบด้วยข้อความแนะนำสั้นๆ: "📝 (สำหรับรายการสั่งซื้อ ${itemsSummary} เมื่อสะดวกแล้ว สามารถพิมพ์แจ้งชื่อ เบอร์โทร และที่อยู่จัดส่งในแชทนี้ได้เลยครับ หรือพิมพ์ 'ยกเลิก' หากต้องการยกเลิกครับ 🌱)"`;
+2. ต่อท้ายคำตอบด้วยข้อความแนะนำสั้นๆ: "(สามารถพิมพ์แจ้งชื่อ เบอร์โทร และที่อยู่จัดส่งในแชทนี้ได้เลยครับ หรือพิมพ์ 'ยกเลิก' หากต้องการยกเลิกครับ 🌱)"`;
 
           const aiReply = await askGemini(text, addressInstruction);
           return client.replyMessage({
@@ -4160,15 +4499,76 @@ async function handleEvent(event) {
       }
     }
 
+// Helper: ตรวจสอบว่าข้อความที่ลูกค้าพิมพ์มีเจตนาต้องการดูเมนูผักหรือรายการสินค้าหรือไม่
+function isMenuInquiry(rawText) {
+  const clean = String(rawText || '').trim().toLowerCase();
+  if (['เมนูผัก', 'เมนุผัก', 'สั่งซื้อ', 'เมนู', 'เมนุ', 'menu', 'ดูเมนู', 'ดูเมนุ', 'ขอดูเมนู', 'ขอดูเมนุ', 'สั่งผัก', 'ซื้อผัก', 'รายการผัก', 'ผัก', 'รายการสินค้า', 'ผักพร้อมส่ง'].includes(clean)) {
+    return true;
+  }
+
+  const menuKeywords = [
+    'มีเมนูอะไร',
+    'มีเมนุอะไร',
+    'เมนูอะไรบ้าง',
+    'เมนุอะไรบ้าง',
+    'เมนูมีอะไร',
+    'เมนุมีอะไร',
+    'มีเมนู',
+    'มีเมนุ',
+    'มีผักอะไร',
+    'ผักอะไรบ้าง',
+    'ผักมีอะไร',
+    'มีอะไรบ้างวันนี้',
+    'วันนี้มีอะไรบ้าง',
+    'มีอะไรบ้าง',
+    'ขายอะไรบ้าง',
+    'มีอะไรขาย',
+    'ขายอะไร',
+    'ขอดูเมนู',
+    'ขอดูเมนุ',
+    'ดูเมนู',
+    'ดูเมนุ',
+    'ขอเมนู',
+    'ขอเมนุ',
+    'เปิดเมนู',
+    'เปิดเมนุ',
+    'รายการผัก',
+    'รายการสินค้า',
+    'ผักพร้อมส่ง',
+    'ผักสดมีอะไร',
+    'ขอดูผัก',
+    'ดูผัก',
+    'อยากสั่งผัก',
+    'สั่งผักอะไรได้บ้าง',
+    'มีผักไหม',
+    'มีผักมั้ย',
+    'ผักมีไหม',
+    'ผักมีมั้ย',
+    'มีของไหม',
+    'มีของมั้ย',
+    'วันนี้มีผัก',
+  ];
+
+  if (menuKeywords.some(kw => clean.includes(kw))) {
+    const isDirectQuantityOrder = /\d+\s*(กิโล|กก|แพ็ค|ถุง|ขีด|ต้น|กระปุก|กล่อง)/.test(clean);
+    if (!isDirectQuantityOrder) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
     // STATE: IDLE (Standard conversation or new order intent)
-    if (text === 'เมนูผัก' || text === 'สั่งซื้อ') {
+    if (isMenuInquiry(text)) {
       return replyVegMenu(replyToken, userId);
     }
-    const lowerTrimText = text.toLowerCase().trim();
     if (
-      ['เช็คสถานะ', 'ออเดอร์', 'สถานะ', 'สถานะออเดอร์', 'เช็คสถานะออเดอร์', 'ติดตามพัสดุ', 'เช็คพัสดุ'].includes(text) ||
+      ['เช็คสถานะ', 'ออเดอร์', 'สถานะ', 'สถานะออเดอร์', 'เช็คสถานะออเดอร์', 'ติดตามพัสดุ', 'เช็คพัสดุ', 'เช็คออเดอร์', 'ดูสถานะ', 'ตรวจสอบสถานะ'].includes(text) ||
       text.startsWith('เช็คสถานะ') ||
+      text.startsWith('ดูสถานะ') ||
       text === 'status' ||
+      lowerTrimText.includes('เช็คสถานะ') ||
       lowerTrimText.includes('ตามของ') ||
       lowerTrimText.includes('ส่งถึงไหน') ||
       lowerTrimText.includes('ของส่งยัง') ||
@@ -4201,15 +4601,52 @@ async function handleEvent(event) {
     // ตรวจสอบคำถามขอเบอร์โทร / ช่องทางติดต่อเจ้าของฟาร์มโดยตรง
     const isContactInquiry = (
       ['ขอเบอร์', 'เบอร์โทร', 'ขอเบอร์ติดต่อ', 'เบอร์ติดต่อ', 'ติดต่อเจ้าของ', 'ติดต่อคน', 'ติดต่อแอดมิน', 'เบอร์ฟาร์ม', 'ขอเบอร์โทร', 'โทรหาใคร', 'เบอร์โทรศัพท์'].some(k => lowerTrimText.includes(k)) ||
-      (lowerTrimText.includes('เบอร์') && (lowerTrimText.includes('ติดต่อ') || lowerTrimText.includes('โทร') || lowerTrimText.includes('ขอ'))) ||
-      (lowerTrimText.includes('ติดต่อ') && (lowerTrimText.includes('คน') || lowerTrimText.includes('แอดมิน') || lowerTrimText.includes('เจ้าของ') || lowerTrimText.includes('ฟาร์ม')))
-    ) && !lowerTrimText.includes('สั่ง') && !lowerTrimText.includes('ที่อยู่');
+      (lowerTrimText.includes('เบอร์') && (lowerTrimText.includes('เจ้าของ') || lowerTrimText.includes('ฟาร์ม') || lowerTrimText.includes('แอดมิน') || lowerTrimText.includes('ติดต่อ')))
+    );
 
     if (isContactInquiry) {
       return replyOwnerContact(replyToken);
     }
 
-    // Check if user is trying to order directly in chat
+    // Check if customer is attempting to cancel an order from IDLE state
+    const isIdleCancel = isCancelIntent(text) || (await isCancelWithGemini(text));
+    if (isIdleCancel) {
+      try {
+        const [orders] = await pool.query(
+          `SELECT o.id, o.order_code, o.payment_method, o.status 
+           FROM orders o 
+           JOIN customers c ON o.customer_id = c.id 
+           WHERE c.line_user_id = ? 
+           ORDER BY o.id DESC LIMIT 1`,
+          [userId]
+        );
+        if (orders.length > 0) {
+          const lastOrder = orders[0];
+          const st = (lastOrder.status || '').toLowerCase();
+          const pm = (lastOrder.payment_method || '').toLowerCase();
+          if (st === 'pending') {
+            if (pm === 'transfer') {
+              return replyRefundInstructions(replyToken, lastOrder.order_code);
+            } else if (pm === 'cod') {
+              await pool.query('UPDATE orders SET status = "cancelled" WHERE id = ?', [lastOrder.id]);
+              return client.replyMessage({
+                replyToken: replyToken,
+                messages: [
+                  {
+                    type: 'text',
+                    text: `ยกเลิกออเดอร์เก็บเงินปลายทาง (${lastOrder.order_code}) เรียบร้อยแล้วครับ หากต้องการสั่งซื้อใหม่สามารถพิมพ์บอกผักที่ต้องการได้เลยครับ 🌱`,
+                  },
+                ],
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error handling IDLE cancel check:', err.message);
+      }
+    }
+
+    // 1. ตรวจสอบการสั่งซื้อผักสดก่อนเป็นอันดับแรก (Local Order Intent Extraction - ตอบกลับได้ใน < 2ms ไม่ต้องรอ Gemini)
     const orderIntent = await extractOrderIntent(text);
 
     if (orderIntent.isOrder) {
@@ -4231,9 +4668,9 @@ async function handleEvent(event) {
       }
     }
 
-    // Safety Net: หากผู้ใช้พิมพ์ข้อมูลติดต่อ/ที่อยู่ แต่ไม่ได้อยู่ในสถานะ AWAITING_ADDRESS
+    // 2. Smart Address & Contact Parser (เฉพาะกรณีที่ไม่ได้สั่งซื้อ และผู้ใช้พิมพ์ข้อมูลจัดส่งเข้ามา)
     const contactInfo = await parseSmartCustomerContact(text);
-    if (contactInfo.phone || (contactInfo.address && isLikelyAddress(contactInfo.address) && (text.includes('ที่อยู่') || text.includes('เบอร์') || contactInfo.name))) {
+    if (contactInfo.hasAddress || (contactInfo.phone && contactInfo.address)) {
       try {
         await pool.query(
           'UPDATE customers SET address = COALESCE(?, address), phone = COALESCE(?, phone), display_name = COALESCE(?, display_name) WHERE line_user_id = ?',
@@ -4256,29 +4693,41 @@ async function handleEvent(event) {
     try {
       const systemInstruction = await getFarmContext();
       const responseText = await askGemini(text, systemInstruction);
-      await client.replyMessage({
-        replyToken: replyToken,
-        messages: [{ type: 'text', text: responseText }],
-      });
+
+      // หาก AI วิเคราะห์แล้วว่าลูกค้าอยากดูเมนูผัก ให้แสดง Flex Message เมนูผักสวยๆ ทันที
+      if (responseText.includes('[SHOW_MENU_CARD]') || isMenuInquiry(responseText)) {
+        return replyVegMenu(replyToken, userId);
+      }
+
+      try {
+        await client.replyMessage({
+          replyToken: replyToken,
+          messages: [{ type: 'text', text: responseText }],
+        });
+      } catch (replyErr) {
+        console.error('Failed to reply message to LINE:', replyErr.message);
+      }
     } catch (err) {
-      console.error('Error forwarding message to Gemini API:', err.message);
-      await replyVegMenu(replyToken, userId);
+      console.error('Error in conversational AI processing:', err.message);
+      try {
+        await replyVegMenu(replyToken, userId);
+      } catch (_) {}
     }
   }
 }
 
 // Router Webhook listener
-lineRouter.post('/webhook', signatureVerifier, async (req, res) => {
+lineRouter.post('/webhook', signatureVerifier, (req, res) => {
   const events = req.body.events;
+  // Acknowledge LINE immediately with 200 OK to prevent LINE webhook timeout and retries
+  res.status(200).send('OK');
+
   if (!events || !Array.isArray(events)) {
-    return res.status(200).send('OK');
+    return;
   }
 
-  try {
-    await Promise.all(events.map(handleEvent));
-    res.status(200).send('OK');
-  } catch (error) {
-    console.error('Error in LINE webhook controller:', error);
-    res.status(500).send('Webhook error');
-  }
+  // Handle events asynchronously
+  Promise.all(events.map(handleEvent)).catch(error => {
+    console.error('Error in LINE webhook background processing:', error);
+  });
 });

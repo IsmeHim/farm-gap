@@ -223,24 +223,96 @@ export default function Orders() {
     }
   };
 
-  const getStatusBadge = (status) => {
+  const getStatusBadge = (order) => {
+    if (!order) return null;
+    const status = typeof order === 'string' ? order : order.status;
+    const isCod = typeof order === 'object' && order.payment_method === 'cod';
+
+    if (isCod) {
+      switch (status) {
+        case 'pending':
+          return (
+            <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap shadow-2xs">
+              <Truck className="w-3 h-3 text-emerald-600" />
+              <span>💵 เก็บปลายทาง (รอส่ง)</span>
+            </span>
+          );
+        case 'shipping':
+          return (
+            <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap">
+              <Truck className="w-3 h-3" />
+              <span>กำลังจัดส่ง (COD)</span>
+            </span>
+          );
+        case 'completed':
+          return (
+            <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 border border-green-200 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap">
+              <CheckCircle2 className="w-3 h-3" />
+              <span>เก็บเงินสำเร็จแล้ว</span>
+            </span>
+          );
+        case 'cancelled':
+          return (
+            <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-700 border border-rose-200 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap">
+              <XCircle className="w-3 h-3" />
+              <span>ยกเลิกแล้ว</span>
+            </span>
+          );
+        default:
+          return <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full text-xs font-bold">{status}</span>;
+      }
+    }
+
     switch (status) {
       case 'pending':
-        return <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-full text-xs font-bold"><Clock className="w-3 h-3" /> รอตรวจสลิป</span>;
+        return typeof order === 'object' && order.slip_image_url ? (
+          <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap">
+            <Clock className="w-3 h-3" /> รอตรวจสลิป
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 bg-slate-50 text-slate-700 border border-slate-200 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap">
+            <Clock className="w-3 h-3" /> รอลูกค้าโอนเงิน
+          </span>
+        );
       case 'paid':
-        return <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-full text-xs font-bold"><CheckCircle2 className="w-3 h-3" /> ชำระแล้ว / เตรียมของ</span>;
+        return (
+          <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap">
+            <CheckCircle2 className="w-3 h-3" /> ชำระแล้ว / เตรียมของ
+          </span>
+        );
       case 'shipping':
-        return <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-1 rounded-full text-xs font-bold"><Truck className="w-3 h-3" /> กำลังจัดส่ง</span>;
+        return (
+          <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap">
+            <Truck className="w-3 h-3" /> กำลังจัดส่ง
+          </span>
+        );
       case 'completed':
-        return <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 border border-green-200 px-2.5 py-1 rounded-full text-xs font-bold"><CheckCircle2 className="w-3 h-3" /> จัดส่งสำเร็จ</span>;
+        return (
+          <span className="inline-flex items-center gap-1 bg-green-50 text-green-700 border border-green-200 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap">
+            <CheckCircle2 className="w-3 h-3" /> จัดส่งสำเร็จ
+          </span>
+        );
       case 'cancelled':
-        return <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-700 border border-rose-200 px-2.5 py-1 rounded-full text-xs font-bold"><XCircle className="w-3 h-3" /> ยกเลิกแล้ว</span>;
+        return (
+          <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-700 border border-rose-200 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap">
+            <XCircle className="w-3 h-3" /> ยกเลิกแล้ว
+          </span>
+        );
       default:
         return <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full text-xs font-bold">{status}</span>;
     }
   };
 
-  const getStatusText = (status) => {
+  const getStatusText = (status, paymentMethod = null) => {
+    if (paymentMethod === 'cod') {
+      switch (status) {
+        case 'pending': return 'เก็บเงินปลายทาง (รอจัดส่ง)';
+        case 'shipping': return 'กำลังจัดส่ง (COD)';
+        case 'completed': return 'เก็บเงินสำเร็จแล้ว';
+        case 'cancelled': return 'ยกเลิกออเดอร์';
+        default: return status;
+      }
+    }
     switch (status) {
       case 'pending': return 'รอตรวจสลิป';
       case 'paid': return 'ชำระแล้ว (เตรียมของ)';
@@ -252,7 +324,15 @@ export default function Orders() {
   };
 
   const filteredOrders = orders.filter(o => {
-    const matchTab = activeTab === 'all' || o.status === activeTab;
+    let matchTab = false;
+    if (activeTab === 'all') matchTab = true;
+    else if (activeTab === 'pending') matchTab = o.status === 'pending' && o.payment_method !== 'cod';
+    else if (activeTab === 'cod') matchTab = o.payment_method === 'cod' && o.status !== 'cancelled';
+    else if (activeTab === 'paid') matchTab = o.status === 'paid';
+    else if (activeTab === 'shipping') matchTab = o.status === 'shipping';
+    else if (activeTab === 'completed') matchTab = o.status === 'completed';
+    else if (activeTab === 'cancelled') matchTab = o.status === 'cancelled';
+
     const matchSearch = search === '' || 
       o.order_code?.toLowerCase().includes(search.toLowerCase()) ||
       o.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -260,7 +340,8 @@ export default function Orders() {
     return matchTab && matchSearch;
   });
 
-  const pendingCount = orders.filter(o => o.status === 'pending').length;
+  const pendingSlipCount = orders.filter(o => o.status === 'pending' && o.payment_method !== 'cod').length;
+  const codCount = orders.filter(o => o.payment_method === 'cod' && (o.status === 'pending' || o.status === 'shipping')).length;
   const shippingCount = orders.filter(o => o.status === 'shipping').length;
   const totalRevenue = orders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
 
@@ -311,15 +392,15 @@ export default function Orders() {
           <div className="text-xl sm:text-2xl font-black text-[#173f2a]">{orders.length} <span className="text-xs font-normal text-slate-400">รายการ</span></div>
         </div>
         <div className="surface rounded-2xl p-4 border border-amber-200/60 bg-amber-50/40 shadow-xs">
-          <div className="text-[11px] text-amber-700 font-semibold mb-1 flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> รอตรวจสลิป</div>
-          <div className="text-xl sm:text-2xl font-black text-amber-800">{pendingCount} <span className="text-xs font-normal text-amber-600">ออเดอร์</span></div>
-        </div>
-        <div className="surface rounded-2xl p-4 border border-purple-200/60 bg-purple-50/40 shadow-xs">
-          <div className="text-[11px] text-purple-700 font-semibold mb-1 flex items-center gap-1"><Truck className="w-3.5 h-3.5" /> กำลังจัดส่ง</div>
-          <div className="text-xl sm:text-2xl font-black text-purple-800">{shippingCount} <span className="text-xs font-normal text-purple-600">ออเดอร์</span></div>
+          <div className="text-[11px] text-amber-700 font-semibold mb-1 flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> รอตรวจสลิปโอน</div>
+          <div className="text-xl sm:text-2xl font-black text-amber-800">{pendingSlipCount} <span className="text-xs font-normal text-amber-600">ออเดอร์</span></div>
         </div>
         <div className="surface rounded-2xl p-4 border border-emerald-200/60 bg-emerald-50/40 shadow-xs">
-          <div className="text-[11px] text-emerald-700 font-semibold mb-1">ยอดขายรวมจาก LINE</div>
+          <div className="text-[11px] text-emerald-800 font-semibold mb-1 flex items-center gap-1"><Truck className="w-3.5 h-3.5 text-emerald-700" /> เก็บปลายทาง (COD)</div>
+          <div className="text-xl sm:text-2xl font-black text-emerald-900">{codCount} <span className="text-xs font-normal text-emerald-700">ออเดอร์</span></div>
+        </div>
+        <div className="surface rounded-2xl p-4 border border-slate-200/60 bg-white shadow-xs">
+          <div className="text-[11px] text-slate-600 font-semibold mb-1">ยอดขายรวมจาก LINE</div>
           <div className="text-xl sm:text-2xl font-black text-[#173f2a]">฿{totalRevenue.toLocaleString()}</div>
         </div>
       </div>
@@ -331,7 +412,8 @@ export default function Orders() {
           <div className="flex flex-wrap gap-1.5 text-xs font-bold">
             {[
               { key: 'all', label: 'ทั้งหมด', count: orders.length },
-              { key: 'pending', label: 'รอตรวจสลิป', count: pendingCount },
+              { key: 'pending', label: 'รอตรวจสลิป', count: pendingSlipCount },
+              { key: 'cod', label: 'เก็บปลายทาง (COD)', count: orders.filter(o => o.payment_method === 'cod' && o.status !== 'cancelled').length },
               { key: 'paid', label: 'ชำระแล้ว', count: orders.filter(o => o.status === 'paid').length },
               { key: 'shipping', label: 'กำลังจัดส่ง', count: shippingCount },
               { key: 'completed', label: 'จัดส่งสำเร็จ', count: orders.filter(o => o.status === 'completed').length },
@@ -393,7 +475,7 @@ export default function Orders() {
                       </div>
                     </div>
                     <div className="shrink-0">
-                      {getStatusBadge(o.status)}
+                      {getStatusBadge(o)}
                     </div>
                   </div>
 
@@ -420,7 +502,11 @@ export default function Orders() {
                     <div className="space-y-0.5">
                       <span className="text-[10px] uppercase font-bold text-slate-400">สลิปโอนเงิน</span>
                       <div className="mt-0.5">
-                        {o.slip_image_url ? (
+                        {o.payment_method === 'cod' ? (
+                          <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            💵 เก็บปลายทาง
+                          </span>
+                        ) : o.slip_image_url ? (
                           <button
                             onClick={() => setSlipModalImage(o.slip_image_url)}
                             className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-800 bg-blue-50/90 hover:bg-blue-100 active:bg-blue-200 px-2.5 py-1 rounded-lg border border-blue-200/90 transition cursor-pointer shadow-2xs"
@@ -460,14 +546,25 @@ export default function Orders() {
 
                     {/* Lifecycle Primary Action Button (Full-width prominence) */}
                     {o.status === 'pending' && (
-                      <button
-                        onClick={() => handleUpdateStatus(o.id, 'paid')}
-                        disabled={updatingId === o.id}
-                        className="w-full inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white text-xs font-bold py-2.5 px-3 rounded-xl transition shadow-xs cursor-pointer disabled:opacity-50 whitespace-nowrap"
-                      >
-                        <Check className="w-4 h-4" />
-                        <span>{updatingId === o.id ? 'กำลังบันทึก...' : 'อนุมัติสลิป (ชำระแล้ว)'}</span>
-                      </button>
+                      o.payment_method === 'cod' ? (
+                        <button
+                          onClick={() => openDispatchModal(o)}
+                          disabled={updatingId === o.id}
+                          className="w-full inline-flex items-center justify-center gap-1.5 bg-[#173f2a] hover:bg-[#20573a] active:scale-[0.99] text-white text-xs font-bold py-2.5 px-3 rounded-xl transition shadow-xs cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                        >
+                          <Truck className="w-4 h-4 text-emerald-300" />
+                          <span>บันทึกจัดส่งสินค้า (เก็บเงินปลายทาง)</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleUpdateStatus(o.id, 'paid')}
+                          disabled={updatingId === o.id}
+                          className="w-full inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white text-xs font-bold py-2.5 px-3 rounded-xl transition shadow-xs cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                        >
+                          <Check className="w-4 h-4" />
+                          <span>{updatingId === o.id ? 'กำลังบันทึก...' : 'อนุมัติสลิป (ชำระแล้ว)'}</span>
+                        </button>
+                      )
                     )}
                     {o.status === 'paid' && (
                       <button
@@ -552,7 +649,11 @@ export default function Orders() {
                       ฿{Number(o.total_amount).toLocaleString()}
                     </td>
                     <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                      {o.slip_image_url ? (
+                      {o.payment_method === 'cod' ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                          💵 เก็บปลายทาง
+                        </span>
+                      ) : o.slip_image_url ? (
                         <button
                           onClick={() => setSlipModalImage(o.slip_image_url)}
                           className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-800 bg-blue-50/80 hover:bg-blue-100 active:bg-blue-200 px-2.5 py-1 rounded-lg border border-blue-200 transition shadow-2xs cursor-pointer"
@@ -565,7 +666,7 @@ export default function Orders() {
                       )}
                     </td>
                     <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                      {getStatusBadge(o.status)}
+                      {getStatusBadge(o)}
                     </td>
                     <td className="px-4 py-3.5 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5 flex-nowrap">
@@ -591,7 +692,17 @@ export default function Orders() {
                         </button>
                         
                         {/* Primary Action Button on Desktop */}
-                        {o.status === 'pending' && (
+                        {o.status === 'pending' && o.payment_method === 'cod' && (
+                          <button
+                            onClick={() => openDispatchModal(o)}
+                            disabled={updatingId === o.id}
+                            className="inline-flex items-center gap-1.5 bg-[#173f2a] hover:bg-[#20573a] active:scale-95 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition shadow-2xs cursor-pointer whitespace-nowrap disabled:opacity-50"
+                          >
+                            <Truck className="w-3.5 h-3.5 text-emerald-300" />
+                            <span>ส่งของ (COD)</span>
+                          </button>
+                        )}
+                        {o.status === 'pending' && o.payment_method !== 'cod' && (
                           <button
                             onClick={() => handleUpdateStatus(o.id, 'paid')}
                             disabled={updatingId === o.id}
@@ -639,7 +750,7 @@ export default function Orders() {
               <div>
                 <h3 className="font-bold text-base text-slate-800 flex items-center gap-2">
                   <span>ใบสั่งซื้อ #{selectedOrder.order_code}</span>
-                  {getStatusBadge(selectedOrder.status)}
+                  {getStatusBadge(selectedOrder)}
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
                   สั่งซื้อเมื่อ: {selectedOrder.created_at ? format(new Date(selectedOrder.created_at), 'dd/MM/yyyy HH:mm น.') : '-'}
@@ -688,95 +799,108 @@ export default function Orders() {
               </div>
             </div>
 
-            {/* PromptPay Dynamic QR with Locked Amount */}
-            <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700">
-                    <QrCode className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                      <span>QR Code พร้อมเพย์ สำหรับออเดอร์นี้</span>
-                      <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                        <Lock className="w-2.5 h-2.5" /> ล็อกยอด ฿{Number(selectedOrder.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </span>
+            {/* Payment Method Details (COD vs PromptPay) */}
+            {selectedOrder.payment_method === 'cod' ? (
+              <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-4 space-y-2">
+                <div className="flex items-center gap-2 text-amber-900 font-bold text-xs sm:text-sm">
+                  <span className="text-lg">💵</span>
+                  <span>วิธีชำระเงิน: เก็บเงินปลายทาง (COD)</span>
+                </div>
+                <p className="text-xs text-amber-800 leading-relaxed">
+                  ลูกค้าระบุชำระเงินสดปลายทางเมื่อรับสินค้า <strong>ไม่ต้องรอตรวจสลิปโอนเงิน</strong> สามารถจัดเตรียมและส่งพัสดุได้ทันที โดยพนักงานจัดส่งจะเรียกเก็บเงินสดจำนวน <span className="font-black text-emerald-800 text-sm">฿{Number(selectedOrder.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </p>
+              </div>
+            ) : (
+              /* PromptPay Dynamic QR with Locked Amount */
+              <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700">
+                      <QrCode className="w-4 h-4" />
                     </div>
-                    <p className="text-[11px] text-slate-500">
-                      EMVCo Dynamic QR ลูกค้าสแกนแล้วยอดเงินจะขึ้นตรงเป๊ะทันที ป้องกันโอนผิด
-                    </p>
+                    <div>
+                      <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                        <span>QR Code พร้อมเพย์ สำหรับออเดอร์นี้</span>
+                        <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Lock className="w-2.5 h-2.5" /> ล็อกยอด ฿{Number(selectedOrder.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        EMVCo Dynamic QR ลูกค้าสแกนแล้วยอดเงินจะขึ้นตรงเป๊ะทันที ป้องกันโอนผิด
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {promptPayNumber ? (
-                <div className="flex flex-col sm:flex-row items-center gap-4 bg-white p-3 rounded-xl border border-slate-100">
-                  {orderPromptPayQr ? (
-                    <div className="flex flex-col items-center shrink-0">
-                      <div className="bg-[#003B71] text-white py-0.5 px-3 rounded-t-md text-center w-full">
-                        <span className="text-[8px] font-black uppercase tracking-wider">THAI QR PAYMENT</span>
+                {promptPayNumber ? (
+                  <div className="flex flex-col sm:flex-row items-center gap-4 bg-white p-3 rounded-xl border border-slate-100">
+                    {orderPromptPayQr ? (
+                      <div className="flex flex-col items-center shrink-0">
+                        <div className="bg-[#003B71] text-white py-0.5 px-3 rounded-t-md text-center w-full">
+                          <span className="text-[8px] font-black uppercase tracking-wider">THAI QR PAYMENT</span>
+                        </div>
+                        <img
+                          src={orderPromptPayQr}
+                          alt="Order PromptPay QR"
+                          className="w-28 h-28 object-contain border border-t-0 rounded-b-md"
+                        />
                       </div>
-                      <img
-                        src={orderPromptPayQr}
-                        alt="Order PromptPay QR"
-                        className="w-28 h-28 object-contain border border-t-0 rounded-b-md"
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-28 h-28 flex items-center justify-center bg-slate-50 text-slate-400 text-xs rounded-xl border">
-                      กำลังสร้าง QR...
-                    </div>
-                  )}
+                    ) : (
+                      <div className="w-28 h-28 flex items-center justify-center bg-slate-50 text-slate-400 text-xs rounded-xl border">
+                        กำลังสร้าง QR...
+                      </div>
+                    )}
 
-                  <div className="flex-1 space-y-2 text-xs w-full">
-                    <div className="space-y-1">
-                      <div className="text-slate-500 text-[11px]">
-                        เบอร์พร้อมเพย์: <span className="font-mono font-bold text-slate-800">{promptPayNumber}</span>
+                    <div className="flex-1 space-y-2 text-xs w-full">
+                      <div className="space-y-1">
+                        <div className="text-slate-500 text-[11px]">
+                          เบอร์พร้อมเพย์: <span className="font-mono font-bold text-slate-800">{promptPayNumber}</span>
+                        </div>
+                        <div className="text-slate-500 text-[11px]">
+                          ยอดชำระที่ล็อก: <span className="font-black text-emerald-800 text-sm">฿{Number(selectedOrder.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
                       </div>
-                      <div className="text-slate-500 text-[11px]">
-                        ยอดชำระที่ล็อก: <span className="font-black text-emerald-800 text-sm">฿{Number(selectedOrder.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                      </div>
-                    </div>
 
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      {orderPromptPayQr && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {orderPromptPayQr && (
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadOrderQr(selectedOrder, orderPromptPayQr)}
+                            className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg transition shadow-xs cursor-pointer"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>บันทึกรูป QR ส่งลูกค้า</span>
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={() => handleDownloadOrderQr(selectedOrder, orderPromptPayQr)}
-                          className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg transition shadow-xs cursor-pointer"
+                          onClick={() => handleCopyOrderText(promptPayNumber, 'เบอร์พร้อมเพย์')}
+                          className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-[11px] px-2.5 py-1.5 rounded-lg transition cursor-pointer"
                         >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>บันทึกรูป QR ส่งลูกค้า</span>
+                          <Copy className="w-3 h-3 text-slate-500" />
+                          <span>{copiedField === 'เบอร์พร้อมเพย์' ? 'คัดลอกแล้ว' : 'คัดลอกเบอร์'}</span>
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleCopyOrderText(promptPayNumber, 'เบอร์พร้อมเพย์')}
-                        className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-[11px] px-2.5 py-1.5 rounded-lg transition cursor-pointer"
-                      >
-                        <Copy className="w-3 h-3 text-slate-500" />
-                        <span>{copiedField === 'เบอร์พร้อมเพย์' ? 'คัดลอกแล้ว' : 'คัดลอกเบอร์'}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleCopyOrderText(Number(selectedOrder.total_amount).toFixed(2), 'ยอดเงิน')}
-                        className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-[11px] px-2.5 py-1.5 rounded-lg transition cursor-pointer"
-                      >
-                        <Copy className="w-3 h-3 text-slate-500" />
-                        <span>{copiedField === 'ยอดเงิน' ? 'คัดลอกแล้ว' : 'คัดลอกยอด'}</span>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyOrderText(Number(selectedOrder.total_amount).toFixed(2), 'ยอดเงิน')}
+                          className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-[11px] px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+                        >
+                          <Copy className="w-3 h-3 text-slate-500" />
+                          <span>{copiedField === 'ยอดเงิน' ? 'คัดลอกแล้ว' : 'คัดลอกยอด'}</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="text-xs text-amber-800 bg-amber-50 p-3 rounded-xl border border-amber-200 flex items-center justify-between">
-                  <span>ยังไม่ได้ตั้งค่าเบอร์พร้อมเพย์ของฟาร์ม</span>
-                  <Link to="/profile" className="font-bold underline text-amber-900 hover:text-emerald-700">
-                    ไปตั้งค่าในโปรไฟล์ &rarr;
-                  </Link>
-                </div>
-              )}
-            </div>
+                ) : (
+                  <div className="text-xs text-amber-800 bg-amber-50 p-3 rounded-xl border border-amber-200 flex items-center justify-between">
+                    <span>ยังไม่ได้ตั้งค่าเบอร์พร้อมเพย์ของฟาร์ม</span>
+                    <Link to="/profile" className="font-bold underline text-amber-900 hover:text-emerald-700">
+                      ไปตั้งค่าในโปรไฟล์ &rarr;
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Payment slip preview */}
             {selectedOrder.slip_image_url && (
@@ -820,7 +944,7 @@ export default function Orders() {
             <div className="border-t border-slate-100 pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="text-xs font-semibold text-slate-500">เปลี่ยนสถานะออเดอร์:</div>
               <div className="flex flex-wrap items-center gap-2">
-                {selectedOrder.status !== 'paid' && (
+                {selectedOrder.status !== 'paid' && selectedOrder.payment_method !== 'cod' && (
                   <button
                     onClick={() => handleUpdateStatus(selectedOrder.id, 'paid')}
                     className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition shadow-xs cursor-pointer"
@@ -829,13 +953,24 @@ export default function Orders() {
                     <span>อนุมัติสลิป (ชำระแล้ว)</span>
                   </button>
                 )}
-                <button
-                  onClick={() => openDispatchModal(selectedOrder)}
-                  className="inline-flex items-center gap-1.5 bg-[#173f2a] hover:bg-[#20573a] active:scale-95 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition shadow-xs cursor-pointer"
-                >
-                  <Truck className="w-3.5 h-3.5 text-emerald-300" />
-                  <span>จัดส่งสินค้า (ลงสมุด GAP #6)</span>
-                </button>
+                {selectedOrder.status === 'pending' && selectedOrder.payment_method === 'cod' && (
+                  <button
+                    onClick={() => openDispatchModal(selectedOrder)}
+                    className="inline-flex items-center gap-1.5 bg-[#173f2a] hover:bg-[#20573a] active:scale-95 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition shadow-xs cursor-pointer"
+                  >
+                    <Truck className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>ส่งของ (COD)</span>
+                  </button>
+                )}
+                {selectedOrder.status === 'paid' && (
+                  <button
+                    onClick={() => openDispatchModal(selectedOrder)}
+                    className="inline-flex items-center gap-1.5 bg-[#173f2a] hover:bg-[#20573a] active:scale-95 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition shadow-xs cursor-pointer"
+                  >
+                    <Truck className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>จัดส่งสินค้า (ลงสมุด GAP #6)</span>
+                  </button>
+                )}
                 {selectedOrder.status !== 'completed' && (
                   <button
                     onClick={() => handleUpdateStatus(selectedOrder.id, 'completed')}
