@@ -3,8 +3,8 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth.jsx';
 import {
   BadgeCheck,
+  BookOpen,
   Bug,
-  ClipboardList,
   Droplets,
   ExternalLink,
   FileText,
@@ -19,6 +19,7 @@ import {
   ReceiptText,
   ShoppingBag,
   Sparkles,
+  Sprout,
   TrendingUp,
   UserCog,
   Users,
@@ -28,7 +29,9 @@ import {
 
 const items = [
   { to: '/', icon: LayoutDashboard, label: 'แดชบอร์ด', end: true },
-  { to: '/plots', icon: Map, label: 'แปลงปลูก' },
+  { to: '/plots', icon: Map, label: 'แปลงปลูก 6 แคร่' },
+  { to: '/crops', icon: Sprout, label: 'คลังชนิดผัก' },
+  { to: '/diary', icon: BookOpen, label: 'ไดอารี่รอบปลูก' },
   { to: '/water', icon: Droplets, label: 'น้ำ' },
   { to: '/chemicals', icon: FlaskConical, label: 'ปุ๋ย/สารเคมี' },
   { to: '/pests', icon: Bug, label: 'ศัตรูพืช' },
@@ -37,9 +40,7 @@ const items = [
   { to: '/orders', icon: ReceiptText, label: 'คำสั่งซื้อ (LINE)' },
   { to: '/sales-report', icon: TrendingUp, label: 'รายงานรายได้ (Export)' },
   { to: '/storage', icon: Package, label: 'ขนส่ง/เก็บ' },
-  { to: '/workers', icon: Users, label: 'คนงาน' },
   { to: '/costs', icon: Wallet, label: 'ต้นทุน' },
-  { to: '/checklists', icon: ClipboardList, label: 'Checklist GAP' },
   { to: '/report', icon: FileText, label: 'รายงาน GAP' },
   { to: '/profile', icon: UserCog, label: 'ตั้งค่าฟาร์ม & บัญชี' },
 ];

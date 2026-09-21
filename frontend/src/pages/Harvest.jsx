@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import LogManager from '../components/LogManager.jsx';
 import { api } from '../lib/api';
+import { useAuth } from '../lib/auth.jsx';
 import { toast } from 'sonner';
 import {
   Send,
@@ -27,6 +29,8 @@ import { format } from 'date-fns';
 import { getCropCycleId } from '../lib/cropCycle.js';
 
 export default function Harvest() {
+  const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [sendingId, setSendingId] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -34,25 +38,28 @@ export default function Harvest() {
   const [smartModalOpen, setSmartModalOpen] = useState(false);
   const [plots, setPlots] = useState([]);
   const [products, setProducts] = useState([]);
+  const [crops, setCrops] = useState([]);
+  const [batches, setBatches] = useState([]);
   const [loadingPlots, setLoadingPlots] = useState(false);
 
   const [form, setForm] = useState({
     plot_id: '',
     harvest_date: format(new Date(), 'yyyy-MM-dd'),
-    quantity: '',
-    unit: 'kg',
+    total_weight_kg: 30,
+    weight_per_unit_kg: 0.40,
+    package_type: 'ถุงใสขนาด 9x18 นิ้ว (4 ขีด)',
     quality_grade: 'A',
-    worker_name: '',
-    notes: '',
-    // Stock sync fields
+    worker_name: user?.display_name || 'เจ้าของฟาร์ม',
+    notes: 'ตัดแต่งราก คัดแยกใบเหลือง ล้างด้วยน้ำสะอาด บรรจุถุงเจาะรูระบายอากาศ',
+    sale_channel: 'ขายปลีกหน้าฟาร์ม + ตลาดนัดชุมชน + LINE Shop',
     sync_to_stock: true,
-    price: '',
+    price: 20,
     image_url: '',
     is_available: true,
   });
 
   const [submitting, setSubmitting] = useState(false);
-  const [successResult, setSuccessResult] = useState(null); // holds { harvest, product, lot_code, phi_warning }
+  const [successResult, setSuccessResult] = useState(null); // holds { harvest, product, lot_code, phi_warning, summary }
   const [qrModalItem, setQrModalItem] = useState(null);
 
   // Targeted Push Notification Modal state
@@ -77,37 +84,82 @@ export default function Harvest() {
   const loadPrerequisites = async () => {
     setLoadingPlots(true);
     try {
-      const [plRes, prRes] = await Promise.all([
+      const [plRes, prRes, crRes, baRes] = await Promise.all([
         api.get('/api/plots'),
         api.get('/api/products').catch(() => ({ data: [] })),
+        api.get('/api/crops').catch(() => ({ data: [] })),
+        api.get('/api/batches').catch(() => ({ data: [] })),
       ]);
-      setPlots(plRes.data);
-      setProducts(prRes.data);
+      setPlots(plRes.data || []);
+      setProducts(prRes.data || []);
+      setCrops(crRes.data || []);
+      setBatches(baRes.data || []);
+      return { 
+        plots: plRes.data || [], 
+        products: prRes.data || [], 
+        crops: crRes.data || [], 
+        batches: baRes.data || [] 
+      };
     } catch (e) {
       console.warn('Failed to load plots/products:', e.message);
+      return { plots: [], products: [], crops: [], batches: [] };
     } finally {
       setLoadingPlots(false);
     }
   };
 
   const openSmartHarvest = async (defaultPlotId = null) => {
-    await loadPrerequisites();
+    const data = await loadPrerequisites();
+    const targetPlot = (data.plots || []).find(p => p.id === Number(defaultPlotId));
+    let initialPackage = 'ถุงใสขนาด 9x18 นิ้ว (4 ขีด)';
+    let initialPrice = 20;
+
+    if (targetPlot && targetPlot.crop_name) {
+      const foundCrop = (data.crops || []).find(c => 
+        targetPlot.crop_name.toLowerCase().includes(c.name.toLowerCase()) || 
+        c.name.toLowerCase().includes(targetPlot.crop_name.toLowerCase())
+      );
+      if (foundCrop) {
+        initialPackage = foundCrop.default_bag_size || initialPackage;
+        initialPrice = foundCrop.default_price ? Number(foundCrop.default_price) : initialPrice;
+      }
+    }
+
     setForm({
-      plot_id: defaultPlotId || '',
+      plot_id: defaultPlotId ? String(defaultPlotId) : '',
       harvest_date: format(new Date(), 'yyyy-MM-dd'),
-      quantity: '',
-      unit: 'kg',
+      total_weight_kg: 30,
+      weight_per_unit_kg: 0.40,
+      package_type: initialPackage,
       quality_grade: 'A',
-      worker_name: '',
-      notes: '',
+      worker_name: user?.display_name || 'เจ้าของฟาร์ม',
+      notes: 'ตัดแต่งราก คัดแยกใบเหลือง ล้างด้วยน้ำสะอาด บรรจุถุงเจาะรูระบายอากาศ',
+      sale_channel: 'ขายปลีกหน้าฟาร์ม + ตลาดนัดชุมชน + LINE Shop',
       sync_to_stock: true,
-      price: '',
+      price: initialPrice,
       image_url: '',
       is_available: true,
     });
     setSuccessResult(null);
     setSmartModalOpen(true);
   };
+
+  useEffect(() => {
+    const plotIdParam = searchParams.get('plot_id');
+    const smartParam = searchParams.get('smart');
+    if (plotIdParam && smartParam === 'true') {
+      openSmartHarvest(plotIdParam);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (user?.display_name) {
+      setForm(prev => ({
+        ...prev,
+        worker_name: (prev.worker_name === 'เจ้าของฟาร์ม' || !prev.worker_name || prev.worker_name === 'สมคิด (เจ้าของสวน)') ? user.display_name : prev.worker_name
+      }));
+    }
+  }, [user]);
 
   // Selected plot object
   const selectedPlot = plots.find(p => p.id === Number(form.plot_id));
@@ -122,12 +174,22 @@ export default function Harvest() {
       )
     : null;
 
-  // Pre-fill price from matched product if not set
+  // Update packaging and price when user selects a different plot
   useEffect(() => {
-    if (matchedProduct && !form.price) {
-      setForm(prev => ({ ...prev, price: matchedProduct.price }));
+    if (selectedPlot && selectedPlot.crop_name && selectedPlot.crop_name !== '-') {
+      const foundCrop = crops.find(c => 
+        selectedPlot.crop_name.toLowerCase().includes(c.name.toLowerCase()) || 
+        c.name.toLowerCase().includes(selectedPlot.crop_name.toLowerCase())
+      );
+      if (foundCrop) {
+        setForm(prev => ({
+          ...prev,
+          package_type: foundCrop.default_bag_size || prev.package_type,
+          price: foundCrop.default_price ? Number(foundCrop.default_price) : (matchedProduct?.price || prev.price)
+        }));
+      }
     }
-  }, [matchedProduct]);
+  }, [form.plot_id, selectedPlot, crops]);
 
   const handleSmartSubmit = async (e) => {
     e.preventDefault();
@@ -135,8 +197,9 @@ export default function Harvest() {
       toast.error('กรุณาเลือกแปลงที่เก็บผลผลิต');
       return;
     }
-    if (!form.quantity || Number(form.quantity) <= 0) {
-      toast.error('กรุณาระบุจำนวนที่เก็บผลผลิตให้ถูกต้อง');
+    const weightVal = Number(form.total_weight_kg);
+    if (!weightVal || weightVal <= 0) {
+      toast.error('กรุณาระบุน้ำหนักรวมที่เก็บผลผลิตให้ถูกต้อง');
       return;
     }
 
@@ -145,13 +208,18 @@ export default function Harvest() {
       const payload = {
         plot_id: Number(form.plot_id),
         harvest_date: form.harvest_date,
-        quantity: Number(form.quantity),
-        unit: form.unit,
+        total_weight_kg: weightVal,
+        quantity: weightVal,
+        unit: 'กก.',
+        weight_per_unit_kg: Number(form.weight_per_unit_kg) || 0.4,
+        package_type: form.package_type,
+        price_per_unit: Number(form.price) || 20,
+        price: Number(form.price) || 20,
+        sale_channel: form.sale_channel,
         quality_grade: form.quality_grade,
         worker_name: form.worker_name,
         notes: form.notes,
         sync_to_stock: form.sync_to_stock,
-        price: form.price ? Number(form.price) : undefined,
         image_url: form.image_url || undefined,
         is_available: form.is_available,
         product_id: matchedProduct ? matchedProduct.id : undefined,
@@ -531,42 +599,137 @@ export default function Harvest() {
           </div>
         )}
         fields={[
-          { key: 'harvest_date', label: 'วันที่เก็บผลผลิต', type: 'date', placeholder: 'เลือกวันที่เก็บ', required: true },
-          { key: 'plot_id', label: 'แปลง', placeholder: '-- เลือกแปลง --', required: true },
-          { key: 'quantity', label: 'จำนวน', type: 'number', placeholder: 'เช่น 100', required: true },
-          { key: 'unit', label: 'หน่วย', placeholder: 'เช่น kg', default: 'kg' },
-          { key: 'quality_grade', label: 'เกรด', type: 'select', options: ['A', 'B', 'C'], placeholder: '-- เลือกเกรด --' },
-          { key: 'lot_code', label: 'Lot Code (สำหรับ QR)', placeholder: 'Lot Code สำหรับ QR' },
-          { key: 'revenue', label: 'รายได้ (THB)', type: 'number', placeholder: 'เช่น 5000' },
-          { key: 'harvest_hygiene', label: 'สุขอนามัยการเก็บผลผลิต', type: 'select', options: ['สะอาด', 'ปนเปื้อน', 'รอตรวจสอบ'], placeholder: '-- เลือกสถานะ --' },
-          { key: 'postharvest_handling', label: 'การจัดการหลังเก็บผลผลิต', placeholder: 'เช่น ล้าง/คัดเกรด/บรรจุ' },
-          { key: 'worker_name', label: 'ผู้ปฏิบัติ', placeholder: 'ชื่อผู้ปฏิบัติ' },
-          { key: 'notes', label: 'หมายเหตุ', type: 'textarea', placeholder: 'หมายเหตุเพิ่มเติม', hideInTable: true },
+          {
+            key: 'harvest_date',
+            label: 'วันที่เก็บผลผลิต',
+            type: 'date',
+            placeholder: 'เลือกวันที่เก็บ',
+            required: true,
+            render: (val) => (
+              <span className="font-mono font-bold text-slate-800 whitespace-nowrap text-xs">
+                {val ? format(new Date(val), 'dd/MM/yyyy') : '—'}
+              </span>
+            ),
+          },
+          {
+            key: 'plot_id',
+            label: 'แปลง / แคร่',
+            placeholder: '-- เลือกแปลง --',
+            required: true,
+          },
+          {
+            key: 'quantity',
+            label: 'จำนวน',
+            type: 'number',
+            placeholder: 'เช่น 100',
+            required: true,
+            render: (val) => (
+              <span className="font-mono font-black text-slate-900 text-sm whitespace-nowrap">
+                {Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
+              </span>
+            ),
+          },
+          {
+            key: 'unit',
+            label: 'หน่วย',
+            placeholder: 'เช่น kg',
+            default: 'kg',
+            render: (val) => (
+              <span className="font-bold text-slate-700 bg-slate-100/90 px-2 py-0.5 rounded-md border border-slate-200/80 whitespace-nowrap text-[11px]">
+                {val || 'กก.'}
+              </span>
+            ),
+          },
+          {
+            key: 'quality_grade',
+            label: 'เกรด',
+            type: 'select',
+            options: ['A', 'B', 'C'],
+            placeholder: '-- เลือกเกรด --',
+          },
+          {
+            key: 'lot_code',
+            label: 'Lot Code (สำหรับ QR)',
+            placeholder: 'Lot Code สำหรับ QR',
+            render: (val) => (
+              <span className="font-mono font-bold text-xs text-slate-800 bg-slate-100 px-2 py-1 rounded-md border border-slate-200 whitespace-nowrap shadow-2xs">
+                {val || '—'}
+              </span>
+            ),
+          },
+          {
+            key: 'revenue',
+            label: 'รายได้ (THB)',
+            type: 'number',
+            placeholder: 'เช่น 5000',
+            render: (val) => (
+              <span className="font-mono font-black text-amber-700 text-sm whitespace-nowrap">
+                {val !== null && val !== undefined && val !== ''
+                  ? `฿${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : '—'}
+              </span>
+            ),
+          },
+          {
+            key: 'harvest_hygiene',
+            label: 'สุขอนามัยการเก็บผลผลิต',
+            type: 'select',
+            options: ['สะอาด', 'ปนเปื้อน', 'รอตรวจสอบ'],
+            placeholder: '-- เลือกสถานะ --',
+          },
+          {
+            key: 'postharvest_handling',
+            label: 'การจัดการหลังเก็บผลผลิต',
+            placeholder: 'เช่น ล้าง/คัดเกรด/บรรจุ',
+            render: (val) => (
+              <span className="block min-w-[170px] max-w-[260px] text-xs font-medium text-slate-700 truncate" title={val || ''}>
+                {val || '—'}
+              </span>
+            ),
+          },
+          {
+            key: 'worker_name',
+            label: 'ผู้ปฏิบัติ',
+            placeholder: 'ชื่อผู้ปฏิบัติ',
+            render: (val) => (
+              <span className="font-semibold text-slate-800 whitespace-nowrap text-xs">
+                {val ? `👤 ${val}` : '—'}
+              </span>
+            ),
+          },
+          {
+            key: 'notes',
+            label: 'หมายเหตุ',
+            type: 'textarea',
+            placeholder: 'หมายเหตุเพิ่มเติม',
+            hideInTable: true,
+          },
         ]}
       />
 
       {/* Modal: Smart Harvest & Auto Stock Sync */}
       {smartModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 space-y-5 animate-in fade-in zoom-in-95 duration-200 my-8">
-            {/* Header */}
-            <div className="flex items-start justify-between border-b border-slate-100 pb-3.5">
-              <div className="space-y-1">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-white rounded-3xl max-w-xl w-full max-h-[92vh] sm:max-h-[88vh] flex flex-col shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+            {/* Header (Pinned Top) */}
+            <div className="px-5 py-4 sm:px-6 sm:py-4.5 border-b border-slate-100 flex items-start justify-between shrink-0 bg-white">
+              <div className="space-y-0.5 pr-2">
                 <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-xl bg-amber-100 text-amber-900">
-                    <Sparkles className="w-5 h-5 text-amber-700 fill-current" />
+                  <span className="p-1.5 rounded-xl bg-amber-100 text-amber-900 shrink-0">
+                    <Sparkles className="w-4 h-4 text-amber-700 fill-current" />
                   </span>
-                  <h3 className="font-black text-slate-800 text-base sm:text-lg">
+                  <h3 className="font-black text-slate-800 text-base sm:text-lg leading-tight">
                     บันทึกเก็บผลผลิตอัจฉริยะ (Smart Harvest)
                   </h3>
                 </div>
-                <p className="text-xs text-slate-500">
+                <p className="text-[11px] sm:text-xs text-slate-500">
                   ระบบจะบันทึกมาตรฐาน GAP ปรับสถานะแปลง และโยกผลผลิตเข้าสต็อกขายหน้าร้าน LINE ให้อัตโนมัติ
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setSmartModalOpen(false)}
-                className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
+                className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition shrink-0 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -574,61 +737,64 @@ export default function Harvest() {
 
             {/* If Already Submitted and Success Result is available */}
             {successResult ? (
-              <div className="space-y-4 py-2">
-                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-center space-y-2">
-                  <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
-                  <h4 className="font-bold text-emerald-900 text-base">
-                    บันทึกการเก็บผลผลิตและอัปเดตสต็อกเรียบร้อย!
-                  </h4>
-                  <p className="text-xs text-emerald-700">
-                    {successResult.message}
-                  </p>
-                </div>
-
-                {/* Lot Code & QR Traceability Card */}
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
-                      `${window.location.origin}/trace/${successResult.lot_code}`
-                    )}`}
-                    alt="Trace QR Code"
-                    className="w-24 h-24 bg-white p-1 rounded-xl border border-slate-200 shadow-xs shrink-0"
-                  />
-                  <div className="space-y-1 text-xs">
-                    <div className="text-slate-500 text-[11px] font-bold uppercase tracking-wider">GAP Lot Code</div>
-                    <div className="font-mono font-bold text-sm text-slate-800">{successResult.lot_code}</div>
-                    <p className="text-[11px] text-slate-500">
-                      สแกนเพื่อเปิดดูประวัติแปลง การใช้น้ำ และความปลอดภัยมาตรฐาน GAP
+              <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4">
+                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-center space-y-2">
+                    <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
+                    <h4 className="font-bold text-emerald-900 text-base">
+                      บันทึกการเก็บผลผลิตและอัปเดตสต็อกเรียบร้อย!
+                    </h4>
+                    <p className="text-xs text-emerald-700">
+                      {successResult.message}
                     </p>
-                    <div className="pt-1 flex gap-2 justify-center sm:justify-start">
-                      <a
-                        href={`/trace/${successResult.lot_code}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:underline"
-                      >
-                        เปิดหน้าตรวจสอบย้อนกลับ <ExternalLink className="w-3 h-3" />
-                      </a>
-                    </div>
                   </div>
-                </div>
 
-                {/* Synced Product Summary */}
-                {successResult.product && (
-                  <div className="bg-blue-50/70 border border-blue-200/80 rounded-2xl p-3.5 text-xs text-blue-900 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Store className="w-4 h-4 text-blue-700" />
-                      <span>
-                        สต็อกหน้าร้าน <strong>{successResult.product.name}</strong>: ปัจจุบันมี{' '}
-                        <strong>{successResult.product.stock_quantity} กก.</strong> (เพิ่มขึ้น +{successResult.product.added_stock} กก.)
-                      </span>
+                  {/* Lot Code & QR Traceability Card */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
+                        `${window.location.origin}/trace/${successResult.lot_code}`
+                      )}`}
+                      alt="Trace QR Code"
+                      className="w-24 h-24 bg-white p-1 rounded-xl border border-slate-200 shadow-xs shrink-0"
+                    />
+                    <div className="space-y-1 text-xs">
+                      <div className="text-slate-500 text-[11px] font-bold uppercase tracking-wider">GAP Lot Code</div>
+                      <div className="font-mono font-bold text-sm text-slate-800">{successResult.lot_code}</div>
+                      <p className="text-[11px] text-slate-500">
+                        สแกนเพื่อเปิดดูประวัติแปลง การใช้น้ำ และความปลอดภัยมาตรฐาน GAP
+                      </p>
+                      <div className="pt-1 flex gap-2 justify-center sm:justify-start">
+                        <a
+                          href={`/trace/${successResult.lot_code}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:underline"
+                        >
+                          เปิดหน้าตรวจสอบย้อนกลับ <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
                     </div>
                   </div>
-                )}
+
+                  {/* Synced Product Summary */}
+                  {successResult.product && (
+                    <div className="bg-blue-50/70 border border-blue-200/80 rounded-2xl p-3.5 text-xs text-blue-900 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Store className="w-4 h-4 text-blue-700" />
+                        <span>
+                          สต็อกหน้าร้าน <strong>{successResult.product.name}</strong>: ปัจจุบันมี{' '}
+                          <strong>{successResult.product.stock_quantity} กก.</strong> (เพิ่มขึ้น +{successResult.product.added_stock} กก.)
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* Actions */}
-                <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
+                <div className="px-5 py-3.5 border-t border-slate-100 bg-slate-50 flex justify-end shrink-0">
                   <button
+                    type="button"
                     onClick={() => {
                       setSmartModalOpen(false);
                       setSuccessResult(null);
@@ -641,7 +807,8 @@ export default function Harvest() {
               </div>
             ) : (
               /* Form */
-              <form onSubmit={handleSmartSubmit} className="space-y-4">
+              <form onSubmit={handleSmartSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 text-xs">
                 {/* 1. Select Plot */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
@@ -665,99 +832,187 @@ export default function Harvest() {
 
                 {/* Plot Quick Info */}
                 {selectedPlot && (
-                  <div className="p-3 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl text-xs text-emerald-900 flex items-center justify-between">
-                    <div>
-                      <div>พืช: <strong>{selectedPlot.crop_name}</strong></div>
-                      <div className="text-[11px] text-emerald-700">
-                        วันปลูก: {selectedPlot.planting_date ? format(new Date(selectedPlot.planting_date), 'dd/MM/yyyy') : '-'}
+                  <div className="p-3.5 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl text-xs text-emerald-900 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div>พืช: <strong>{selectedPlot.crop_name}</strong></div>
+                        <div className="text-[11px] text-emerald-700">
+                          วันปลูก: {selectedPlot.planting_date ? format(new Date(selectedPlot.planting_date), 'dd/MM/yyyy') : '-'}
+                        </div>
                       </div>
+                      <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300">
+                        #{getCropCycleId(selectedPlot)} (รอบที่ {selectedPlot.cycle_number || 1})
+                      </span>
                     </div>
-                    <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300">
-                      #{getCropCycleId(selectedPlot)} (รอบที่ {selectedPlot.cycle_number || 1})
-                    </span>
+
+                    {/* Progress Indicator */}
+                    <div className="pt-2 border-t border-emerald-200/60 flex items-center justify-between text-[11px]">
+                      <span className="font-bold text-slate-700 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>ความคืบหน้ารอบปลูก:</span>
+                      </span>
+                      <span className="font-black text-amber-900 bg-amber-100/90 px-2.5 py-0.5 rounded-full border border-amber-300 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                        100% ครบกำหนดพร้อมเก็บเกี่ยวเข้าสต็อก
+                      </span>
+                    </div>
                   </div>
                 )}
 
-                {/* Harvest Details: Date & Quantity */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Harvest Details: Total Weight & Packaging */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" /> วันที่เก็บ
+                    <label className="text-xs font-bold text-slate-900 flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-slate-400" /> วันที่เก็บเกี่ยว
                     </label>
                     <input
                       type="date"
                       required
                       value={form.harvest_date}
                       onChange={e => setForm(prev => ({ ...prev, harvest_date: e.target.value }))}
-                      className="input text-xs w-full py-2 px-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600"
+                      className="input text-xs w-full py-2.5 px-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600 bg-white"
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700">
-                      จำนวนที่เก็บได้ <span className="text-rose-500">*</span>
+                    <label className="text-xs font-bold text-slate-900">
+                      น้ำหนักรวมที่เก็บได้ (กก.) <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="number"
-                      step="0.1"
+                      step="0.5"
                       required
                       placeholder="เช่น 30"
-                      value={form.quantity}
-                      onChange={e => setForm(prev => ({ ...prev, quantity: e.target.value }))}
-                      className="input text-xs w-full py-2 px-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600 font-bold text-emerald-800"
+                      value={form.total_weight_kg}
+                      onChange={e => setForm(prev => ({ ...prev, total_weight_kg: e.target.value }))}
+                      className="input text-xs w-full py-2.5 px-3 rounded-xl border-2 border-slate-300 focus:outline-none focus:border-emerald-600 font-bold text-slate-950 bg-white"
                     />
+                    <span className="text-[11px] text-slate-500">ผลผลิตเฉลี่ย 30 กก. ต่อ 1 แคร่</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-900">
+                      น้ำหนักต่อถุง (กก.) <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      required
+                      value={form.weight_per_unit_kg}
+                      onChange={e => setForm(prev => ({ ...prev, weight_per_unit_kg: e.target.value }))}
+                      className="input text-xs w-full py-2.5 px-3 rounded-xl border-2 border-slate-300 focus:outline-none focus:border-emerald-600 font-bold text-slate-950 bg-white"
+                    />
+                    <span className="text-[11px] text-slate-500">0.40 = 4 ขีด (มาตรฐานบรรจุฟาร์ม)</span>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700">หน่วย</label>
+                    <label className="text-xs font-bold text-slate-900">ขนาดบรรจุภัณฑ์</label>
                     <input
                       type="text"
-                      value={form.unit}
-                      onChange={e => setForm(prev => ({ ...prev, unit: e.target.value }))}
-                      className="input text-xs w-full py-2 px-3 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600"
+                      value={form.package_type}
+                      onChange={e => setForm(prev => ({ ...prev, package_type: e.target.value }))}
+                      className="input text-xs w-full py-2.5 px-3 rounded-xl border-2 border-slate-300 focus:outline-none focus:border-emerald-600 font-semibold text-slate-950 bg-white"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700">เกรดคุณภาพ</label>
+                    <label className="text-xs font-bold text-slate-900">
+                      ราคาขายต่อถุง (บาท) <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="1"
+                      required
+                      value={form.price}
+                      onChange={e => setForm(prev => ({ ...prev, price: e.target.value }))}
+                      className="input text-base w-full py-2 px-3 rounded-xl border-2 border-emerald-500 font-black text-emerald-800 bg-white"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-900">เกรดคุณภาพ</label>
                     <select
                       value={form.quality_grade}
                       onChange={e => setForm(prev => ({ ...prev, quality_grade: e.target.value }))}
-                      className="input text-xs w-full py-2 px-3 rounded-xl border border-slate-200 bg-white"
+                      className="input text-xs w-full py-2.5 px-3 rounded-xl border border-slate-200 bg-white font-medium"
                     >
-                      <option value="A">เกรด A (พรีเมียม สวยงาม)</option>
+                      <option value="A">เกรด A (พรีเมียม สด กรอบ)</option>
                       <option value="B">เกรด B (มาตรฐาน)</option>
                       <option value="C">เกรด C (คละ/แปรรูป)</option>
                     </select>
                   </div>
+                </div>
+
+                {/* Auto Calculated Summary Preview (ตรงตาม FarmXNext) */}
+                <div className="bg-emerald-50/80 rounded-2xl p-4 border-2 border-emerald-200 flex items-center justify-between shadow-2xs">
+                  <div>
+                    <span className="text-xs font-bold text-emerald-900">คำนวณจำนวนถุงอัตโนมัติ:</span>
+                    <p className="text-2xl font-black text-emerald-950 mt-0.5">
+                      {Math.max(1, Math.floor(Number(form.total_weight_kg || 0) / (Number(form.weight_per_unit_kg) || 0.4)))}{' '}
+                      <span className="text-xs font-medium text-emerald-800">ถุง</span>
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-bold text-emerald-900">มูลค่ารวมคาดการณ์:</span>
+                    <p className="text-2xl font-black text-emerald-950 mt-0.5">
+                      ฿{(
+                        Math.max(1, Math.floor(Number(form.total_weight_kg || 0) / (Number(form.weight_per_unit_kg) || 0.4))) *
+                        Number(form.price || 0)
+                      ).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-900">ช่องทางการจำหน่าย</label>
+                    <input
+                      type="text"
+                      value={form.sale_channel}
+                      onChange={e => setForm(prev => ({ ...prev, sale_channel: e.target.value }))}
+                      className="input text-xs w-full py-2.5 px-3 rounded-xl border border-slate-200 bg-white"
+                    />
+                  </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700">ผู้ปฏิบัติงาน</label>
+                    <label className="text-xs font-bold text-slate-900">ผู้ปฏิบัติงาน</label>
                     <input
                       type="text"
                       placeholder="ชื่อผู้ตัด/คัดเกรด"
                       value={form.worker_name}
                       onChange={e => setForm(prev => ({ ...prev, worker_name: e.target.value }))}
-                      className="input text-xs w-full py-2 px-3 rounded-xl border border-slate-200"
+                      className="input text-xs w-full py-2.5 px-3 rounded-xl border border-slate-200 bg-white"
                     />
                   </div>
                 </div>
 
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-900">
+                    บันทึกขั้นตอนหลังเก็บเกี่ยว (GAP ข้อ 5-6)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={form.notes}
+                    onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))}
+                    className="input text-xs w-full py-2 px-3 rounded-xl border border-slate-200 bg-white font-medium"
+                  />
+                </div>
+
                 {/* 3. Auto Stock Sync Section */}
-                <div className="border-t border-slate-100 pt-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-800 flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={form.sync_to_stock}
-                        onChange={e => setForm(prev => ({ ...prev, sync_to_stock: e.target.checked }))}
-                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
-                      />
-                      <span>📦 นำผลผลิตเข้าสต็อกหน้าร้าน LINE อัตโนมัติ</span>
-                    </label>
-                  </div>
+                <div className="border-t border-slate-100 pt-3 space-y-2">
+                  <label className="text-xs font-bold text-slate-800 flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.sync_to_stock}
+                      onChange={e => setForm(prev => ({ ...prev, sync_to_stock: e.target.checked }))}
+                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                    />
+                    <span>📦 นำผลผลิตเข้าสต็อกหน้าร้าน LINE อัตโนมัติ (เพิ่ม {Math.max(1, Math.floor(Number(form.total_weight_kg || 0) / (Number(form.weight_per_unit_kg) || 0.4)))} ถุง)</span>
+                  </label>
 
                   {form.sync_to_stock && (
                     <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
@@ -768,21 +1023,27 @@ export default function Harvest() {
                             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                             พบสินค้าในคลัง: "{matchedProduct.name}"
                           </div>
-                          <p className="text-[11px] text-slate-600">
-                            สต็อกเดิม: <strong>{matchedProduct.stock_quantity} {matchedProduct.unit || 'กก.'}</strong> ➔ บวกเพิ่ม{' '}
-                            <strong>{form.quantity || 0} {form.unit}</strong> = รวมเป็น{' '}
-                            <strong>{(Number(matchedProduct.stock_quantity) || 0) + (Number(form.quantity) || 0)} {form.unit}</strong>
-                          </p>
+                          {(() => {
+                            const calculatedBags = Math.max(1, Math.floor(Number(form.total_weight_kg || 0) / (Number(form.weight_per_unit_kg) || 0.4)));
+                            const oldStock = Number(matchedProduct.stock_quantity) || 0;
+                            return (
+                              <p className="text-[11px] text-slate-600">
+                                สต็อกเดิม: <strong>{oldStock} ถุง</strong> ➔ บวกเพิ่ม{' '}
+                                <strong className="text-emerald-700">+{calculatedBags} ถุง</strong> ({form.package_type}) = สต็อกใหม่รวมเป็น{' '}
+                                <strong className="text-slate-900">{oldStock + calculatedBags} ถุง</strong>
+                              </p>
+                            );
+                          })()}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                             <div className="space-y-1">
-                              <label className="text-[11px] font-semibold text-slate-600">ราคาขายหน้าร้าน (บาท/{form.unit})</label>
+                              <label className="text-[11px] font-semibold text-slate-600">ราคาขายต่อถุง (บาท)</label>
                               <input
                                 type="number"
-                                step="0.5"
+                                step="1"
                                 value={form.price}
                                 onChange={e => setForm(prev => ({ ...prev, price: e.target.value }))}
                                 placeholder={`เดิม ${matchedProduct.price} บาท`}
-                                className="input text-xs w-full py-1.5 px-3 rounded-xl border border-slate-200 bg-white"
+                                className="input text-xs w-full py-1.5 px-3 rounded-xl border border-slate-200 bg-white font-bold"
                               />
                             </div>
                             <div className="space-y-1">
@@ -803,21 +1064,21 @@ export default function Harvest() {
                         <div className="space-y-3">
                           <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs font-bold flex items-center gap-2">
                             <Sparkles className="w-4 h-4 text-amber-600" />
-                            ✨ ตรวจพบว่าเป็นผักรายการใหม่! กรุณาระบุราคาเพื่อเปิดขายหน้าร้าน
+                            ✨ ตรวจพบว่าเป็นผักรายการใหม่! ระบบจะสร้างสินค้าถุงละ 4 ขีด และเปิดขายหน้าร้านให้อัตโนมัติ
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1">
                               <label className="text-xs font-bold text-slate-700">
-                                ราคาขายหน้าร้าน (บาท/{form.unit}) <span className="text-rose-500">*</span>
+                                ราคาขายต่อถุง (บาท) <span className="text-rose-500">*</span>
                               </label>
                               <input
                                 type="number"
                                 required={form.sync_to_stock}
-                                step="0.5"
-                                placeholder="เช่น 50"
+                                step="1"
+                                placeholder="เช่น 20"
                                 value={form.price}
                                 onChange={e => setForm(prev => ({ ...prev, price: e.target.value }))}
-                                className="input text-xs w-full py-2 px-3 rounded-xl border border-slate-200 bg-white font-bold"
+                                className="input text-xs w-full py-2 px-3 rounded-xl border border-slate-200 bg-white font-bold text-emerald-800"
                               />
                             </div>
                             <div className="space-y-1">
@@ -849,23 +1110,24 @@ export default function Harvest() {
                     </div>
                   )}
                 </div>
+              </div>
 
-                {/* Submit Buttons */}
-                <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
+                {/* Pinned Footer Action Bar */}
+                <div className="px-4 py-3 sm:px-6 sm:py-3.5 border-t border-slate-100 bg-slate-50/95 backdrop-blur-xs flex items-center justify-between gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={() => setSmartModalOpen(false)}
-                    className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+                    className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200/80 transition cursor-pointer"
                   >
                     ยกเลิก
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="px-5 py-2.5 bg-gradient-to-r from-emerald-700 to-green-700 hover:from-emerald-800 hover:to-green-800 active:scale-95 text-white rounded-xl text-xs font-bold shadow-md transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                    className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 active:scale-95 text-white rounded-xl text-xs font-black shadow-md transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
                   >
                     <PackageCheck className="w-4 h-4" />
-                    {submitting ? 'กำลังบันทึกและลงสต็อก...' : '✓ ยืนยันเก็บผลผลิตและลงสต็อก'}
+                    <span>{submitting ? 'กำลังบันทึกและลงสต็อก...' : '✓ ยืนยันเก็บผลผลิตและลงสต็อก'}</span>
                   </button>
                 </div>
               </form>
@@ -902,7 +1164,7 @@ export default function Harvest() {
             </div>
 
             {/* Modal Body: Scrollable */}
-            <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 min-h-0 space-y-5">
               {/* 1. Audience Selector */}
               <div className="space-y-2">
                 <label className="text-xs font-black uppercase text-slate-700 flex items-center gap-1.5">
@@ -1183,7 +1445,7 @@ export default function Harvest() {
             </div>
 
             {/* Modal Actions Footer */}
-            <div className="p-4 border-t border-slate-100 flex items-center justify-between gap-2 bg-slate-50/80">
+            <div className="p-4 border-t border-slate-100 flex items-center justify-between gap-2 bg-slate-50/80 shrink-0">
               <button
                 type="button"
                 onClick={() => setPushModalItem(null)}

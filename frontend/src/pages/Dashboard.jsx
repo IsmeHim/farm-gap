@@ -1,20 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { addDays, format, isAfter } from 'date-fns';
 import {
   AlertTriangle,
+  ArrowUpRight,
   BadgeCheck,
   Bot,
   CheckCircle2,
   ClipboardList,
   Droplets,
+  FileText,
+  Layers,
   Leaf,
   LineChart,
   Map,
   PackageCheck,
+  PlusCircle,
   ShieldCheck,
+  ShoppingBag,
   Sparkles,
+  Sprout,
   Users,
   Wallet,
   Zap,
@@ -49,13 +56,35 @@ const CustomChartTooltip = ({ active, payload, label, prefix = '', suffix = '' }
   return null;
 };
 
+const formatThaiDate = (dateStr) => {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '-';
+  const day = d.getDate();
+  const month = d.getMonth() + 1;
+  let year = d.getFullYear();
+  if (year < 2400) year += 543;
+  return `${day}/${month}/${year}`;
+};
+
+const getDaysPlanted = (dateStr) => {
+  if (!dateStr) return 0;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return 0;
+  const now = new Date();
+  const diff = now.getTime() - d.getTime();
+  return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+};
+
 export default function Dashboard() {
-  const [stats, setStats] = useState({ plots: 0, harvest: 0, revenue: 0, cost: 0, checklistFails: 0, products: 0, stockValue: 0 });
+  const navigate = useNavigate();
+  const [stats, setStats] = useState({ plots: 0, harvest: 0, revenue: 0, cost: 0, products: 0, stockValue: 0 });
+  const [plotsList, setPlotsList] = useState([]);
+  const [batchesList, setBatchesList] = useState([]);
   const [chart, setChart] = useState([]);
   const [revenueChart, setRevenueChart] = useState([]);
   const [phiAlerts, setPhiAlerts] = useState([]);
   const [waterAlerts, setWaterAlerts] = useState([]);
-  const [hygieneAlerts, setHygieneAlerts] = useState([]);
   const [clusters, setClusters] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [runningAi, setRunningAi] = useState(false);
@@ -84,27 +113,29 @@ export default function Dashboard() {
 
   useEffect(() => {
     (async () => {
-      const [plots, harvest, costs, chems, water, workers, checklists, products] = await Promise.all([
+      const [plots, harvest, costs, chems, water, products, batches] = await Promise.all([
         api.get('/api/plots'),
         api.get('/api/harvest'),
         api.get('/api/costs'),
         api.get('/api/chemicals'),
         api.get('/api/water'),
-        api.get('/api/workers'),
-        api.get('/api/checklists'),
         api.get('/api/products').catch(() => ({ data: [] })),
+        api.get('/api/batches').catch(() => ({ data: [] })),
       ]);
 
-      const actPlots = plots.data.filter(p => p.status === 'active');
+      const sortedPlots = (plots.data || []).slice().sort((a, b) => (a.plot_number || a.id) - (b.plot_number || b.id));
+      setPlotsList(sortedPlots);
+      setBatchesList(batches.data || []);
+
+      const actPlots = plots.data.filter(p => p.status === 'active' || p.status === 'growing' || p.status === 'harvest_ready');
       setActivePlots(actPlots);
 
       const rev = harvest.data.reduce((s, h) => s + Number(h.revenue || 0), 0);
       const cost = costs.data.reduce((s, c) => s + Number(c.amount || 0), 0);
       const qty = harvest.data.reduce((s, h) => s + Number(h.quantity || 0), 0);
-      const checklistFails = checklists.data.filter(c => !c.field_inspection_pass || !c.hygiene_check).length;
       const availableProducts = products.data.filter(p => p.status === 'available' && Number(p.stock_quantity) > 0);
       const stockValue = products.data.reduce((s, p) => s + Number(p.price || 0) * Number(p.stock_quantity || 0), 0);
-      setStats({ plots: plots.data.length, harvest: qty, revenue: rev, cost, checklistFails, products: availableProducts.length, stockValue });
+      setStats({ plots: plots.data.length, harvest: qty, revenue: rev, cost, products: availableProducts.length, stockValue });
 
       const harvestByMonth = {};
       const revenueByMonth = {};
@@ -125,8 +156,6 @@ export default function Dashboard() {
       const waterList = water.data.filter(w => w.contamination_check || w.water_quality === 'ไม่ผ่าน');
       setWaterAlerts(waterList.map(w => ({ ...w, plot_name: plots.data.find(p => p.id === w.plot_id)?.name })));
 
-      const hygieneList = workers.data.filter(w => !w.hygiene_training || !w.personal_hygiene_check);
-      setHygieneAlerts(hygieneList);
       fetchAiData();
       fetchWaterStatus();
     })();
@@ -149,20 +178,70 @@ export default function Dashboard() {
     }
   };
 
-  const totalAlerts = phiAlerts.length + waterAlerts.length + hygieneAlerts.length + stats.checklistFails;
+  const totalAlerts = phiAlerts.length + waterAlerts.length;
   const profit = stats.revenue - stats.cost;
 
-  const heroMetrics = useMemo(() => [
-    { label: 'รายได้', value: `฿${stats.revenue.toLocaleString()}`, icon: Wallet },
-    { label: 'กำไรโดยประมาณ', value: `฿${profit.toLocaleString()}`, icon: LineChart },
-    { label: 'สินค้า Live', value: `${stats.products} รายการ`, icon: PackageCheck },
-  ], [stats, profit]);
+  const readyPlotsCount = useMemo(() => {
+    return plotsList.filter(p => {
+      const batch = batchesList.find(b => b.plot_id === p.id && (b.status === 'growing' || b.status === 'harvest_ready'))
+        || batchesList.find(b => b.id === p.current_batch_id);
+      const expectedDate = batch?.expected_harvest_date || p.expected_harvest_date;
+      return p.status === 'harvest_ready' || batch?.status === 'harvest_ready' || (expectedDate && new Date(expectedDate) <= new Date());
+    }).length;
+  }, [plotsList, batchesList]);
+
+  const growingPlotsCount = Math.max(0, activePlots.length - readyPlotsCount);
+  const isAllWatered = activePlots.length > 0 && (todayWater.wateredPlotIds || []).length >= activePlots.length;
 
   const cards = [
-    { label: 'แปลงปลูก', value: stats.plots, detail: 'แปลงที่อยู่ในระบบ', icon: Map, accent: 'bg-emerald-100 text-emerald-800' },
-    { label: 'ผลผลิตรวม', value: `${stats.harvest.toFixed(1)} kg`, detail: 'จากบันทึกเก็บผลผลิต', icon: Leaf, accent: 'bg-lime-100 text-lime-800' },
-    { label: 'มูลค่าสต็อก', value: `฿${stats.stockValue.toLocaleString()}`, detail: 'สินค้าคงเหลือพร้อมขาย', icon: PackageCheck, accent: 'bg-amber-100 text-amber-800' },
-    { label: 'จุดที่ต้องดูแล', value: totalAlerts, detail: 'รวม alert GAP และงานค้าง', icon: AlertTriangle, accent: 'bg-rose-100 text-rose-800' },
+    {
+      label: 'รายได้รวม',
+      value: `฿${stats.revenue.toLocaleString()}`,
+      detail: `กำไรสุทธิ ฿${profit.toLocaleString()}`,
+      icon: Wallet,
+      accent: 'bg-amber-100 text-amber-800',
+      badgeClass: profit >= 0 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/60' : 'bg-rose-50 text-rose-800 border border-rose-200/60',
+    },
+    {
+      label: 'แปลงปลูก',
+      value: `${activePlots.length}/${stats.plots} แปลง`,
+      detail: readyPlotsCount > 0 ? `พร้อมเก็บ ${readyPlotsCount} แปลง` : `กำลังปลูก ${growingPlotsCount} แปลง`,
+      icon: Map,
+      accent: 'bg-emerald-100 text-emerald-800',
+      badgeClass: readyPlotsCount > 0 ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200/60',
+    },
+    {
+      label: 'ผลผลิตรวม',
+      value: `${stats.harvest.toFixed(1)} kg`,
+      detail: 'เก็บเกี่ยวสะสม',
+      icon: Leaf,
+      accent: 'bg-lime-100 text-lime-800',
+      badgeClass: 'bg-lime-50 text-lime-800 border border-lime-200/60',
+    },
+    {
+      label: 'สินค้า Live',
+      value: `${stats.products} รายการ`,
+      detail: `มูลค่าสต็อก ฿${stats.stockValue.toLocaleString()}`,
+      icon: PackageCheck,
+      accent: 'bg-sky-100 text-sky-800',
+      badgeClass: 'bg-sky-50 text-sky-800 border border-sky-200/60',
+    },
+    {
+      label: 'รดน้ำวันนี้',
+      value: `${(todayWater.wateredPlotIds || []).length}/${activePlots.length}`,
+      detail: isAllWatered ? '✓ ครบทุกแปลงแล้ว' : `ขาด ${activePlots.length - (todayWater.wateredPlotIds || []).length} แปลง`,
+      icon: Droplets,
+      accent: isAllWatered ? 'bg-emerald-100 text-emerald-800' : 'bg-teal-100 text-teal-800',
+      badgeClass: isAllWatered ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/60' : 'bg-amber-50 text-amber-900 border border-amber-200',
+    },
+    {
+      label: 'สถานะ GAP',
+      value: totalAlerts === 0 ? 'ปลอดภัย' : `${totalAlerts} จุดเสี่ยง`,
+      detail: totalAlerts === 0 ? 'เกณฑ์ปลอดภัย 100%' : `PHI: ${phiAlerts.length} | น้ำ: ${waterAlerts.length}`,
+      icon: totalAlerts === 0 ? ShieldCheck : AlertTriangle,
+      accent: totalAlerts === 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800',
+      badgeClass: totalAlerts === 0 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/60' : 'bg-rose-50 text-rose-800 border border-rose-200/60',
+    },
   ];
 
   const handleRunAi = async () => {
@@ -182,68 +261,99 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Hero Section */}
-      <section className="surface overflow-hidden rounded-3xl p-6 md:p-8 shadow-sm">
-        <div className="grid gap-8 xl:grid-cols-[1.25fr_.75fr] xl:items-end">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3.5 py-1 text-xs font-black uppercase tracking-[.16em] text-[#9a6721]">
-              <BadgeCheck className="h-4 w-4" />
-              gap command center
-            </div>
-            <h1 className="mt-4 max-w-4xl text-3xl font-black leading-tight text-[#173f2a] md:text-5xl">
-              ภาพรวมฟาร์มและหน้าร้านในจอเดียว
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 md:text-base">
-              ติดตามผลผลิต ความเสี่ยง GAP สต็อกสินค้า และพฤติกรรมลูกค้า เพื่อให้ฟาร์มเดินแบบเป็นระบบและพร้อมขายทุกวัน
-            </p>
+      {/* Modern Executive Header */}
+      <section className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white/90 backdrop-blur-md rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs">
+        <div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200/80 px-3 py-1 text-xs font-bold text-emerald-800">
+              <BadgeCheck className="h-3.5 w-3.5 text-emerald-600" />
+              มาตรฐาน GAP เกษตรปลอดภัย
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+              <Sprout className="h-3.5 w-3.5 text-emerald-600" />
+              ผักสลัด 6 แคร่
+            </span>
           </div>
+          <h1 className="mt-2 text-2xl sm:text-3xl font-black tracking-tight text-[#173f2a]">
+            แดชบอร์ดภาพรวมฟาร์ม (Farm Overview)
+          </h1>
+          <p className="mt-1 text-xs sm:text-sm text-slate-500 font-medium">
+            ระบบติดตามผลผลิต การให้น้ำ ความเสี่ยง GAP สต็อกสินค้า และลูกค้าในจุดเดียว
+          </p>
+        </div>
 
-          <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-            {heroMetrics.map(metric => (
-              <div key={metric.label} className="rounded-2xl border border-white/80 bg-white/85 p-4 shadow-xs backdrop-blur-sm transition hover:shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="text-xs font-bold uppercase tracking-[.16em] text-slate-500">{metric.label}</div>
-                  <metric.icon className="h-4 w-4 text-[#b5812d]" />
-                </div>
-                <div className="mt-2 text-2xl font-black text-[#173f2a]">{metric.value}</div>
-              </div>
-            ))}
-          </div>
+        {/* Quick Navigation Shortcuts */}
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
+          <Link
+            to="/report"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+          >
+            <FileText className="w-4 h-4 text-slate-500" />
+            <span>พิมพ์รายงาน GAP</span>
+          </Link>
+          <Link
+            to="/water"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 text-xs font-bold transition cursor-pointer"
+          >
+            <Droplets className="w-4 h-4 text-emerald-600" />
+            <span>จัดการระบบน้ำ</span>
+          </Link>
+          <Link
+            to="/plots"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#173f2a] hover:bg-[#123020] text-white text-xs font-bold shadow-xs transition cursor-pointer"
+          >
+            <Layers className="w-4 h-4 text-emerald-300" />
+            <span>จัดการแปลงปลูก</span>
+          </Link>
         </div>
       </section>
 
       {/* Daily Routine Quick Action Bar */}
       {activePlots.length > 0 && (
-        <section className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+        <section className={`rounded-2xl p-4 sm:p-5 border transition shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
+          isAllWatered
+            ? 'bg-emerald-50/60 border-emerald-200/90'
+            : 'bg-white border-slate-200/90'
+        }`}>
           <div className="flex items-center gap-3.5">
-            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-700 shrink-0">
-              <Droplets className="w-6 h-6 text-emerald-600" />
+            <div className={`p-3 rounded-xl border shrink-0 ${
+              isAllWatered
+                ? 'bg-emerald-100/80 border-emerald-300 text-emerald-800'
+                : 'bg-teal-50 border-teal-200 text-teal-700'
+            }`}>
+              <Droplets className="w-5 h-5 text-emerald-600" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-black text-slate-900 text-sm sm:text-base tracking-tight flex items-center gap-2">
+                <h3 className="font-black text-slate-900 text-sm sm:text-base tracking-tight">
                   ⚡ กิจวัตรการให้น้ำประจำวัน (Daily Watering Routine)
                 </h3>
-                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                  isAllWatered
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                    : 'bg-amber-100 text-amber-900 border-amber-200'
+                }`}>
                   รดแล้ว {(todayWater.wateredPlotIds || []).length} / {activePlots.length} แปลง
                 </span>
               </div>
-              <p className="text-xs text-slate-600 font-medium mt-1">
-                กดบันทึกรดน้ำทุกแปลงที่กำลังปลูกด้วยค่า Preset อัตโนมัติ โดยไม่ต้องเข้าไปจดทีละแปลง
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                {isAllWatered
+                  ? 'ระบบบันทึกการให้น้ำครบถ้วนทุกแปลงแล้ววันนี้ ข้อมูลพร้อมเข้าสมุดจด GAP'
+                  : 'กดปุ่มเพื่อบันทึกการรดน้ำอัตโนมัติพร้อมกันทุกแปลงที่กำลังปลูก โดยไม่ต้องเข้าไปจดทีละแปลง'}
               </p>
             </div>
           </div>
 
           <button
             onClick={handleWaterAllToday}
-            disabled={wateringLoading || (todayWater.wateredPlotIds || []).length >= activePlots.length}
-            className={`inline-flex items-center justify-center gap-2 font-black px-5 py-3 rounded-2xl text-xs sm:text-sm shadow-sm transition active:scale-95 cursor-pointer whitespace-nowrap shrink-0 ${
-              (todayWater.wateredPlotIds || []).length >= activePlots.length
-                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 cursor-not-allowed'
-                : 'bg-amber-400 hover:bg-amber-500 text-slate-950 shadow-amber-200'
+            disabled={wateringLoading || isAllWatered}
+            className={`inline-flex items-center justify-center gap-2 font-black px-4 py-2.5 rounded-xl text-xs sm:text-sm shadow-xs transition active:scale-95 cursor-pointer whitespace-nowrap shrink-0 w-full sm:w-auto ${
+              isAllWatered
+                ? 'bg-emerald-100/80 text-emerald-800 border border-emerald-200 cursor-not-allowed'
+                : 'bg-amber-400 hover:bg-amber-500 text-slate-950 shadow-amber-200/50'
             }`}
           >
-            {(todayWater.wateredPlotIds || []).length >= activePlots.length ? (
+            {isAllWatered ? (
               <>
                 <CheckCircle2 className="w-4 h-4 text-emerald-700" />
                 <span>รดน้ำครบทุกแปลงแล้ววันนี้</span>
@@ -251,25 +361,200 @@ export default function Dashboard() {
             ) : (
               <>
                 <Zap className="w-4 h-4 fill-current text-slate-950" />
-                <span>⚡ รดน้ำทุกแปลงวันนี้ ({activePlots.length - (todayWater.wateredPlotIds || []).length} แปลง)</span>
+                <span>⚡ รดน้ำทุกแปลงทันที ({activePlots.length - (todayWater.wateredPlotIds || []).length} แปลง)</span>
               </>
             )}
           </button>
         </section>
       )}
 
-      {/* KPI Cards */}
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Unified Executive KPI Cards (6 Grid) */}
+      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
         {cards.map(card => (
-          <div key={card.label} className="premium-panel rounded-3xl p-5 shadow-xs transition hover:shadow-md hover:-translate-y-0.5">
-            <div className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl ${card.accent} shadow-2xs`}>
-              <card.icon className="h-6 w-6" />
+          <div
+            key={card.label}
+            className="bg-white/95 rounded-2xl p-4 sm:p-4.5 border border-slate-200/80 shadow-xs hover:shadow-md hover:border-emerald-200/80 transition-all flex flex-col justify-between"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 truncate" title={card.label}>
+                {card.label}
+              </span>
+              <div className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${card.accent} shrink-0`}>
+                <card.icon className="h-4.5 w-4.5" />
+              </div>
             </div>
-            <div className="mt-4 text-xs font-bold uppercase tracking-[.16em] text-slate-500">{card.label}</div>
-            <div className="mt-1.5 text-3xl font-black text-[#173f2a]">{card.value}</div>
-            <p className="mt-2 text-xs text-slate-500">{card.detail}</p>
+            <div className="mt-2.5">
+              <div className="text-xl sm:text-2xl font-black tracking-tight text-[#173f2a] truncate" title={String(card.value)}>
+                {card.value}
+              </div>
+              <div className="mt-1.5 flex items-center text-[11px] font-semibold">
+                <span className={`px-2 py-0.5 rounded-md truncate max-w-full ${card.badgeClass || 'bg-slate-100 text-slate-600'}`}>
+                  {card.detail}
+                </span>
+              </div>
+            </div>
           </div>
         ))}
+      </section>
+
+      {/* 6 Plots Overview (ผังแปลงปลูก 6 แคร่ - Current Plots Status) */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-black text-[#173f2a] flex items-center gap-2">
+              <Layers className="w-5 h-5 text-emerald-600" />
+              ผังแปลงปลูก 6 แคร่ (Current Plots Status)
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">ติดตามสถานะการเพาะปลูกและการเก็บเกี่ยวแบบ Real-time</p>
+          </div>
+          <Link
+            to="/plots"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200/80 text-xs font-bold hover:bg-emerald-100 transition cursor-pointer"
+          >
+            <span>จัดการแปลงทั้งหมด</span> <ArrowUpRight className="w-4 h-4" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {plotsList.map((plot) => {
+            // Find active batch for this plot
+            const batch = batchesList.find(b => b.plot_id === plot.id && (b.status === 'growing' || b.status === 'harvest_ready'))
+              || batchesList.find(b => b.id === plot.current_batch_id);
+
+            const hasCrop = (plot.status === 'growing' || plot.status === 'harvest_ready' || plot.status === 'active') &&
+              plot.crop_name && plot.crop_name !== '-';
+
+            const cropName = batch?.crop_name || (hasCrop ? plot.crop_name : '');
+            const cropCategory = batch?.crop_category || (
+              cropName.includes('โอ๊ค') || cropName.includes('ฟิลเล่ย์') || cropName.includes('คอส') || cropName.includes('บัตเตอร์')
+                ? 'ผักสลัด'
+                : 'ผักกินใบ'
+            );
+
+            const startDate = batch?.start_date || plot.planting_date;
+            const expectedDate = batch?.expected_harvest_date || plot.expected_harvest_date;
+            const growthDays = batch?.growth_days || 30;
+            const autoWater = batch?.auto_water !== undefined ? Boolean(batch.auto_water) : true;
+
+            const daysPlanted = startDate ? getDaysPlanted(startDate) : 0;
+            const isReady = plot.status === 'harvest_ready' || batch?.status === 'harvest_ready' || (expectedDate && new Date(expectedDate) <= new Date());
+            const isGrowing = !isReady && hasCrop;
+            const isEmpty = !isReady && !isGrowing;
+
+            const progress = isReady ? 100 : Math.min(100, Math.max(0, Math.round((daysPlanted / (growthDays || 30)) * 100)));
+
+            return (
+              <div
+                key={plot.id}
+                className={`bg-white rounded-2xl border transition-all hover:shadow-md relative overflow-hidden flex flex-col justify-between p-5 ${
+                  isReady
+                    ? 'border-2 border-amber-300 ring-2 ring-amber-400/20 shadow-xs'
+                    : isGrowing
+                    ? 'border border-emerald-200 shadow-xs'
+                    : 'border border-slate-200 bg-slate-50/40'
+                }`}
+              >
+                {/* Top: Plot Number & Status Badge */}
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-7 h-7 rounded-lg bg-slate-900 text-white font-bold text-xs flex items-center justify-center shrink-0">
+                        #{plot.plot_number || plot.id}
+                      </span>
+                      <h3 className="font-bold text-slate-900 text-sm">{plot.name}</h3>
+                    </div>
+                    <span
+                      className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
+                        isReady
+                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                          : isGrowing
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1'
+                          : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {isReady ? '🔔 พร้อมเก็บเกี่ยว' : isGrowing ? '🌱 กำลังปลูก' : 'ว่าง / พักแปลง'}
+                    </span>
+                  </div>
+
+                  {/* Middle: Crop Info or Empty State */}
+                  {isGrowing || isReady ? (
+                    <div className="mt-3 bg-emerald-50/50 rounded-xl p-3.5 border border-emerald-100">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm sm:text-base font-bold text-emerald-950 truncate max-w-[190px]" title={cropName}>
+                          {cropName}
+                        </span>
+                        <span className="text-xs text-emerald-700 font-medium whitespace-nowrap">{cropCategory}</span>
+                      </div>
+                      <div className="mt-2 text-xs text-slate-600 space-y-1">
+                        <div className="flex justify-between">
+                          <span>วันที่ปลูก:</span>
+                          <span className="font-medium text-slate-800">
+                            {formatThaiDate(startDate)} ({daysPlanted} วัน)
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>คาดการณ์เก็บเกี่ยว:</span>
+                          <span className="font-medium text-slate-800">
+                            {formatThaiDate(expectedDate)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Progress Bar */}
+                      <div className="mt-3">
+                        <div className="flex justify-between text-[11px] text-slate-500 mb-1">
+                          <span>ความคืบหน้ารอบปลูก</span>
+                          <span className="font-bold text-emerald-700">
+                            {progress}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                          <div
+                            className="bg-emerald-500 h-full rounded-full transition-all"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3 bg-slate-100/70 rounded-xl p-4 text-center border border-dashed border-slate-300">
+                      <p className="text-xs text-slate-500 font-medium">แปลงว่าง พร้อมเริ่มรอบปลูกใหม่</p>
+                      <p className="text-[11px] text-slate-400 mt-1 truncate" title={plot.soil_recipe}>
+                        {plot.soil_recipe ? `${plot.soil_recipe.substring(0, 45)}...` : 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ...'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Bottom Actions */}
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                  <span className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                    <Droplets className="w-3.5 h-3.5 text-blue-500" />
+                    {autoWater ? 'รดน้ำอัตโนมัติ' : 'รดน้ำปกติ'}
+                  </span>
+
+                  {isGrowing || isReady ? (
+                    <button
+                      onClick={() => navigate(`/harvest?plot_id=${plot.id}&smart=true`)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
+                    >
+                      <ShoppingBag className="w-3.5 h-3.5" />
+                      <span>เก็บเกี่ยวเข้าคลัง</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => navigate(`/plots?plot_id=${plot.id}&start=true`)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium transition cursor-pointer"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      <span>เริ่มปลูกผัก</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </section>
 
       {/* Charts Section */}
@@ -331,7 +616,7 @@ export default function Dashboard() {
 
       {/* GAP Risk Center Section (Full Width) */}
       <section>
-        <AlertHub phiAlerts={phiAlerts} waterAlerts={waterAlerts} hygieneAlerts={hygieneAlerts} checklistFails={stats.checklistFails} />
+        <AlertHub phiAlerts={phiAlerts} waterAlerts={waterAlerts} />
       </section>
 
       {/* Customer Intelligence Section (Full Width) */}
@@ -347,7 +632,7 @@ export default function Dashboard() {
   );
 }
 
-function AlertHub({ phiAlerts, waterAlerts, hygieneAlerts, checklistFails }) {
+function AlertHub({ phiAlerts, waterAlerts }) {
   const groups = [
     {
       title: 'PHI ห้ามเก็บผลผลิต',
@@ -365,15 +650,9 @@ function AlertHub({ phiAlerts, waterAlerts, hygieneAlerts, checklistFails }) {
       badgeColor: 'bg-rose-100 text-rose-800',
       iconColor: 'text-rose-600',
     },
-    {
-      title: 'สุขอนามัยคนงาน',
-      icon: ShieldCheck,
-      items: hygieneAlerts.map(w => `${w.name} ยังไม่ผ่านการอบรมหรือเช็กสุขอนามัย`),
-      color: 'border-sky-200 bg-sky-50/80 text-sky-900',
-      badgeColor: 'bg-sky-100 text-sky-800',
-      iconColor: 'text-sky-600',
-    },
   ];
+
+  const totalWarnings = phiAlerts.length + waterAlerts.length;
 
   return (
     <div className="premium-panel rounded-3xl p-6 shadow-xs border border-emerald-900/10">
@@ -386,15 +665,15 @@ function AlertHub({ phiAlerts, waterAlerts, hygieneAlerts, checklistFails }) {
           <h2 className="mt-2 text-xl font-black text-[#173f2a]">ศูนย์เตือนความเสี่ยง GAP</h2>
           <p className="text-sm text-slate-500">จุดที่ต้องจัดการและเฝ้าระวังก่อนกระทบมาตรฐานการรับรอง GAP</p>
         </div>
-        {checklistFails > 0 ? (
-          <div className="inline-flex items-center gap-2 rounded-2xl bg-rose-100 border border-rose-200 px-4 py-2 text-xs font-bold text-rose-700 self-start sm:self-auto">
+        {totalWarnings > 0 ? (
+          <div className="inline-flex items-center gap-2 rounded-2xl bg-amber-100 border border-amber-200 px-4 py-2 text-xs font-bold text-amber-800 self-start sm:self-auto">
             <AlertTriangle className="h-4 w-4" />
-            Checklist ไม่ผ่าน {checklistFails} รายการ
+            มีจุดเฝ้าระวัง {totalWarnings} รายการ
           </div>
         ) : (
           <div className="inline-flex items-center gap-2 rounded-2xl bg-emerald-100 border border-emerald-200 px-4 py-2 text-xs font-bold text-emerald-800 self-start sm:self-auto">
             <CheckCircle2 className="h-4 w-4" />
-            Checklist ผ่านเกณฑ์ทั้งหมด
+            ความเสี่ยงอยู่ในเกณฑ์ปลอดภัย
           </div>
         )}
       </div>

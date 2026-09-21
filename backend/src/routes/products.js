@@ -56,7 +56,7 @@ productsRouter.post('/', async (req, res) => {
         name,
         category || 'ผักสลัด',
         price,
-        unit || 'กก.',
+        unit || 'ถุง',
         stock_quantity || 0,
         image_url || null,
         status || 'available',

@@ -14,7 +14,7 @@ r.post('/register', async (req, res) => {
       'INSERT INTO users (email, password_hash, display_name, farm_name) VALUES (?,?,?,?)',
       [email, hash, display_name || null, farm_name || null]
     );
-    const token = jwt.sign({ id: result.insertId, email, role: 'owner' }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    const token = jwt.sign({ id: result.insertId, email, role: 'owner', display_name: display_name || null }, process.env.JWT_SECRET, { expiresIn: '30d' });
     res.json({ token, user: { id: result.insertId, email, display_name, farm_name, role: 'owner' } });
   } catch (e) {
     if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'email already used' });
@@ -29,7 +29,7 @@ r.post('/login', async (req, res) => {
   const ok = await bcrypt.compare(password, rows[0].password_hash);
   if (!ok) return res.status(401).json({ error: 'invalid credentials' });
   const u = rows[0];
-  const token = jwt.sign({ id: u.id, email: u.email, role: u.role }, process.env.JWT_SECRET, { expiresIn: '30d' });
+  const token = jwt.sign({ id: u.id, email: u.email, role: u.role, display_name: u.display_name }, process.env.JWT_SECRET, { expiresIn: '30d' });
   res.json({ token, user: { id: u.id, email: u.email, display_name: u.display_name, farm_name: u.farm_name, role: u.role } });
 });
 
@@ -37,7 +37,7 @@ r.post('/login', async (req, res) => {
 r.get('/payment-info', async (req, res) => {
   try {
     const [rows] = await pool.query(
-      "SELECT farm_name, display_name, bank_name, bank_account_no, bank_account_name, promptpay_number, promptpay_qr_url FROM users WHERE role = 'owner' LIMIT 1"
+      "SELECT farm_name, display_name, phone, bank_name, bank_account_no, bank_account_name, promptpay_number, promptpay_qr_url FROM users WHERE role = 'owner' LIMIT 1"
     );
     if (!rows[0]) return res.json({});
     res.json(rows[0]);
@@ -53,7 +53,7 @@ r.get('/me', async (req, res) => {
   try {
     const payload = jwt.verify(h.slice(7), process.env.JWT_SECRET);
     const [rows] = await pool.query(
-      'SELECT id, email, display_name, farm_name, role, created_at, bank_name, bank_account_no, bank_account_name, promptpay_number, promptpay_qr_url, line_user_id, frontend_url FROM users WHERE id = ?',
+      'SELECT id, email, display_name, farm_name, phone, role, created_at, bank_name, bank_account_no, bank_account_name, promptpay_number, promptpay_qr_url, line_user_id, frontend_url FROM users WHERE id = ?',
       [payload.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'user not found' });
@@ -72,6 +72,7 @@ r.put('/profile', async (req, res) => {
     const {
       display_name,
       farm_name,
+      phone,
       password,
       bank_name,
       bank_account_no,
@@ -88,6 +89,7 @@ r.put('/profile', async (req, res) => {
         `UPDATE users SET 
           display_name = COALESCE(?, display_name), 
           farm_name = COALESCE(?, farm_name), 
+          phone = COALESCE(?, phone),
           password_hash = ?,
           bank_name = ?,
           bank_account_no = ?,
@@ -100,6 +102,7 @@ r.put('/profile', async (req, res) => {
         [
           display_name,
           farm_name,
+          phone !== undefined ? phone : null,
           hash,
           bank_name !== undefined ? bank_name : null,
           bank_account_no !== undefined ? bank_account_no : null,
@@ -116,6 +119,7 @@ r.put('/profile', async (req, res) => {
         `UPDATE users SET 
           display_name = COALESCE(?, display_name), 
           farm_name = COALESCE(?, farm_name),
+          phone = COALESCE(?, phone),
           bank_name = ?,
           bank_account_no = ?,
           bank_account_name = ?,
@@ -127,6 +131,7 @@ r.put('/profile', async (req, res) => {
         [
           display_name,
           farm_name,
+          phone !== undefined ? phone : null,
           bank_name !== undefined ? bank_name : null,
           bank_account_no !== undefined ? bank_account_no : null,
           bank_account_name !== undefined ? bank_account_name : null,

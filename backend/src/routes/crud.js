@@ -30,6 +30,9 @@ export function crudRouter(table, fields) {
   });
 
   r.post('/', async (req, res) => {
+    if (fields.includes('worker_name') && !req.body.worker_name) {
+      req.body.worker_name = req.user.display_name || 'เจ้าของฟาร์ม';
+    }
     const cols = ['user_id', 'created_by', 'updated_by', ...fields];
     const vals = [req.user.id, req.user.email, req.user.email, ...fields.map(f => req.body[f] ?? null)];
     const placeholders = cols.map(() => '?').join(',');

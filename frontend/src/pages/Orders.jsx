@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
+import { useAuth } from '../lib/auth.jsx';
 import { toast } from 'sonner';
 import { 
   ShoppingBag, 
@@ -23,9 +24,14 @@ import {
   Package,
   TrendingUp,
   X,
-  Printer
+  Printer,
+  QrCode,
+  Download,
+  Copy,
+  Lock
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { generatePromptPayQR } from '../lib/promptpay';
 
 const formatDeliveryDate = (val) => {
   if (!val) return '-';
@@ -43,6 +49,7 @@ const formatDeliveryDate = (val) => {
 };
 
 export default function Orders() {
+  const { user } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
@@ -50,6 +57,58 @@ export default function Orders() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [slipModalImage, setSlipModalImage] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
+  const [orderPromptPayQr, setOrderPromptPayQr] = useState(null);
+  const [promptPayNumber, setPromptPayNumber] = useState(user?.promptpay_number || '');
+  const [copiedField, setCopiedField] = useState(null);
+
+  // Fetch farm profile for promptpay_number if not already loaded in user
+  useEffect(() => {
+    if (user?.promptpay_number) {
+      setPromptPayNumber(user.promptpay_number);
+    } else {
+      api.get('/api/auth/me').then(res => {
+        if (res.data?.promptpay_number) {
+          setPromptPayNumber(res.data.promptpay_number);
+        }
+      }).catch(() => {});
+    }
+  }, [user]);
+
+  // Generate dynamic QR code locking amount when selectedOrder changes
+  useEffect(() => {
+    if (!selectedOrder || !promptPayNumber) {
+      setOrderPromptPayQr(null);
+      return;
+    }
+    let active = true;
+    const amount = Number(selectedOrder.total_amount);
+    generatePromptPayQR(promptPayNumber, amount > 0 ? amount : undefined, { width: 320, margin: 1 })
+      .then(url => {
+        if (active) setOrderPromptPayQr(url);
+      })
+      .catch(err => {
+        console.error('Failed to generate order PromptPay QR:', err);
+      });
+    return () => { active = false; };
+  }, [selectedOrder, promptPayNumber]);
+
+  const handleDownloadOrderQr = (order, qrUrl) => {
+    if (!qrUrl) return;
+    const a = document.createElement('a');
+    a.href = qrUrl;
+    a.download = `PromptPay-Order-${order?.order_code || 'GAP'}-THB${order?.total_amount || '0'}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    toast.success('ดาวน์โหลดรูปภาพ QR Code พร้อมเพย์เรียบร้อยแล้ว!');
+  };
+
+  const handleCopyOrderText = (text, label) => {
+    navigator.clipboard.writeText(String(text));
+    setCopiedField(label);
+    toast.success(`คัดลอก ${label} แล้ว`);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
 
   // Smart Dispatch Modal state
   const [dispatchModalOrder, setDispatchModalOrder] = useState(null);
@@ -64,7 +123,7 @@ export default function Orders() {
     vehicle_clean_status: true,
     storage_conditions: 'คุมความเย็น 4°C ตลอดการเดินทาง',
     delivery_condition: 'ดี',
-    worker_name: 'ผู้ดูแลฟาร์ม',
+    worker_name: user?.display_name || 'เจ้าของฟาร์ม',
     notes: '',
     sync_to_storage: true,
   });
@@ -136,7 +195,7 @@ export default function Orders() {
       vehicle_clean_status: true,
       storage_conditions: 'บรรจุในกล่อง/ถุงเก็บความสด ป้องกันแสงแดดและความร้อน',
       delivery_condition: 'ดี',
-      worker_name: 'เจ้าของฟาร์ม',
+      worker_name: user?.display_name || 'เจ้าของฟาร์ม',
       notes: itemsSummary ? `จัดส่งออเดอร์ #${fullOrder.order_code} [${itemsSummary}]` : `จัดส่งออเดอร์ #${fullOrder.order_code}`,
       sync_to_storage: true,
     });
@@ -438,18 +497,18 @@ export default function Orders() {
       </div>
 
         {/* DESKTOP & TABLET LANDSCAPE VIEW: Sleek Table (hidden on mobile & iPad portrait, block on lg:) */}
-        <div className="hidden lg:block table-responsive">
+        <div className="hidden lg:block overflow-x-auto rounded-xl border border-slate-200/90 bg-white shadow-2xs">
           <table className="min-w-full text-xs">
-            <thead className="bg-slate-50/90 border-b border-slate-200">
+            <thead className="bg-slate-50/95 border-b border-slate-200 text-slate-700">
               <tr>
-                <th className="text-left px-4 py-3 font-bold text-slate-600">รหัสออเดอร์</th>
-                <th className="text-left px-4 py-3 font-bold text-slate-600">ลูกค้า</th>
-                <th className="text-left px-4 py-3 font-bold text-slate-600">วันที่สั่ง / นัดหมาย</th>
-                <th className="text-left px-4 py-3 font-bold text-slate-600">การจัดส่ง</th>
-                <th className="text-right px-4 py-3 font-bold text-slate-600">ยอดเงิน</th>
-                <th className="text-center px-4 py-3 font-bold text-slate-600">สลิปโอนเงิน</th>
-                <th className="text-center px-4 py-3 font-bold text-slate-600">สถานะ</th>
-                <th className="text-right px-4 py-3 font-bold text-slate-600">การจัดการ</th>
+                <th className="text-left px-4 py-3.5 font-bold whitespace-nowrap min-w-[150px]">รหัสออเดอร์</th>
+                <th className="text-left px-4 py-3.5 font-bold whitespace-nowrap min-w-[200px]">ลูกค้า</th>
+                <th className="text-left px-4 py-3.5 font-bold whitespace-nowrap min-w-[160px]">วันที่สั่ง / นัดหมาย</th>
+                <th className="text-left px-4 py-3.5 font-bold whitespace-nowrap min-w-[130px]">การจัดส่ง</th>
+                <th className="text-right px-4 py-3.5 font-bold whitespace-nowrap min-w-[100px]">ยอดเงิน</th>
+                <th className="text-center px-4 py-3.5 font-bold whitespace-nowrap min-w-[100px]">สลิปโอนเงิน</th>
+                <th className="text-center px-4 py-3.5 font-bold whitespace-nowrap min-w-[130px]">สถานะ</th>
+                <th className="text-right px-4 py-3.5 font-bold whitespace-nowrap min-w-[250px]">การจัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -459,25 +518,28 @@ export default function Orders() {
                 <tr><td colSpan={8} className="text-center py-12 text-slate-400">ไม่พบรายการคำสั่งซื้อ</td></tr>
               ) : (
                 filteredOrders.map(o => (
-                  <tr key={o.id} className="hover:bg-emerald-50/30 transition">
-                    <td className="px-4 py-3.5 font-bold text-[#173f2a] whitespace-nowrap">
+                  <tr key={o.id} className="hover:bg-emerald-50/40 transition">
+                    <td className="px-4 py-3.5 font-bold text-[#173f2a] whitespace-nowrap min-w-[150px]">
                       <button 
                         onClick={() => viewOrderDetails(o)}
                         className="text-left hover:underline text-emerald-800 font-mono font-bold cursor-pointer"
+                        title="คลิกเพื่อดูรายละเอียดออเดอร์"
                       >
                         {o.order_code}
                       </button>
                     </td>
-                    <td className="px-4 py-3.5">
-                      <div className="font-bold text-slate-800">{o.customer_name || 'ลูกค้าทั่วไป'}</div>
-                      <div className="text-[11px] text-slate-400 flex items-center gap-1">
-                        <Phone className="w-3 h-3 text-slate-300 shrink-0" />
+                    <td className="px-4 py-3.5 whitespace-nowrap min-w-[200px]">
+                      <div className="font-bold text-slate-800 text-xs truncate max-w-[240px]" title={o.customer_name}>
+                        {o.customer_name || 'ลูกค้าทั่วไป'}
+                      </div>
+                      <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5 font-mono">
+                        <Phone className="w-3 h-3 text-slate-400 shrink-0" />
                         <span>{o.customer_phone || '-'}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap">
+                    <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap min-w-[160px]">
                       <div>สั่งเมื่อ: {o.created_at ? format(new Date(o.created_at), 'dd/MM/yy HH:mm') : '-'}</div>
-                      <div className="text-[11px] text-emerald-700 font-semibold">
+                      <div className="text-[11px] text-emerald-700 font-semibold mt-0.5">
                         นัดรับ: {formatDeliveryDate(o.delivery_date)}
                       </div>
                     </td>
@@ -624,6 +686,96 @@ export default function Orders() {
                 <span>ยอดชำระทั้งหมด:</span>
                 <span className="text-[#173f2a] text-base">฿{Number(selectedOrder.total_amount).toLocaleString()}</span>
               </div>
+            </div>
+
+            {/* PromptPay Dynamic QR with Locked Amount */}
+            <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700">
+                    <QrCode className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                      <span>QR Code พร้อมเพย์ สำหรับออเดอร์นี้</span>
+                      <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Lock className="w-2.5 h-2.5" /> ล็อกยอด ฿{Number(selectedOrder.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      EMVCo Dynamic QR ลูกค้าสแกนแล้วยอดเงินจะขึ้นตรงเป๊ะทันที ป้องกันโอนผิด
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {promptPayNumber ? (
+                <div className="flex flex-col sm:flex-row items-center gap-4 bg-white p-3 rounded-xl border border-slate-100">
+                  {orderPromptPayQr ? (
+                    <div className="flex flex-col items-center shrink-0">
+                      <div className="bg-[#003B71] text-white py-0.5 px-3 rounded-t-md text-center w-full">
+                        <span className="text-[8px] font-black uppercase tracking-wider">THAI QR PAYMENT</span>
+                      </div>
+                      <img
+                        src={orderPromptPayQr}
+                        alt="Order PromptPay QR"
+                        className="w-28 h-28 object-contain border border-t-0 rounded-b-md"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-28 h-28 flex items-center justify-center bg-slate-50 text-slate-400 text-xs rounded-xl border">
+                      กำลังสร้าง QR...
+                    </div>
+                  )}
+
+                  <div className="flex-1 space-y-2 text-xs w-full">
+                    <div className="space-y-1">
+                      <div className="text-slate-500 text-[11px]">
+                        เบอร์พร้อมเพย์: <span className="font-mono font-bold text-slate-800">{promptPayNumber}</span>
+                      </div>
+                      <div className="text-slate-500 text-[11px]">
+                        ยอดชำระที่ล็อก: <span className="font-black text-emerald-800 text-sm">฿{Number(selectedOrder.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {orderPromptPayQr && (
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadOrderQr(selectedOrder, orderPromptPayQr)}
+                          className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg transition shadow-xs cursor-pointer"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>บันทึกรูป QR ส่งลูกค้า</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleCopyOrderText(promptPayNumber, 'เบอร์พร้อมเพย์')}
+                        className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-[11px] px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+                      >
+                        <Copy className="w-3 h-3 text-slate-500" />
+                        <span>{copiedField === 'เบอร์พร้อมเพย์' ? 'คัดลอกแล้ว' : 'คัดลอกเบอร์'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyOrderText(Number(selectedOrder.total_amount).toFixed(2), 'ยอดเงิน')}
+                        className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-[11px] px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+                      >
+                        <Copy className="w-3 h-3 text-slate-500" />
+                        <span>{copiedField === 'ยอดเงิน' ? 'คัดลอกแล้ว' : 'คัดลอกยอด'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs text-amber-800 bg-amber-50 p-3 rounded-xl border border-amber-200 flex items-center justify-between">
+                  <span>ยังไม่ได้ตั้งค่าเบอร์พร้อมเพย์ของฟาร์ม</span>
+                  <Link to="/profile" className="font-bold underline text-amber-900 hover:text-emerald-700">
+                    ไปตั้งค่าในโปรไฟล์ &rarr;
+                  </Link>
+                </div>
+              )}
             </div>
 
             {/* Payment slip preview */}

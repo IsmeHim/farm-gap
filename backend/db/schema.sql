@@ -11,13 +11,32 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS crops (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NULL,
+  name VARCHAR(100) NOT NULL,
+  scientific_name VARCHAR(150),
+  category VARCHAR(50) DEFAULT 'ผักสลัด / ผักใบ',
+  growth_days INT DEFAULT 30,
+  nursery_days INT DEFAULT 14,
+  harvest_unit VARCHAR(50) DEFAULT 'กก.',
+  default_bag_size VARCHAR(100) DEFAULT 'ถุงใส 4 ขีด (9x18)',
+  default_price DECIMAL(10,2) DEFAULT 20.00,
+  icon VARCHAR(50) DEFAULT 'leaf',
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS plots (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,
+  plot_number INT DEFAULT 1,
   name VARCHAR(255) NOT NULL,
-  crop_name VARCHAR(255) NOT NULL,
+  dimension VARCHAR(100) DEFAULT 'แคร่ 2 x 6 เมตร',
+  soil_recipe TEXT,
+  crop_name VARCHAR(255) NULL,
   area_sqm DECIMAL(10,2),
-  planting_date DATE NOT NULL,
+  planting_date DATE NULL,
   expected_harvest_date DATE,
   water_source VARCHAR(255),
   water_source_type VARCHAR(100),
@@ -26,13 +45,33 @@ CREATE TABLE IF NOT EXISTS plots (
   previous_crop_history TEXT,
   field_safety_status VARCHAR(50) DEFAULT 'ปลอดภัย',
   soil_notes TEXT,
-  status VARCHAR(50) DEFAULT 'active',
+  status VARCHAR(50) DEFAULT 'empty',
+  current_batch_id INT NULL,
   notes TEXT,
   created_by VARCHAR(255),
   updated_by VARCHAR(255),
   updated_at TIMESTAMP NULL DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS planting_batches (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  batch_code VARCHAR(50) NOT NULL,
+  plot_id INT NOT NULL,
+  crop_id INT NOT NULL,
+  start_date DATE NOT NULL,
+  expected_harvest_date DATE NOT NULL,
+  actual_harvest_date DATE NULL,
+  status VARCHAR(50) DEFAULT 'growing',
+  auto_water BOOLEAN DEFAULT TRUE,
+  water_schedule VARCHAR(150) DEFAULT 'เช้า-เย็น (น้ำสะอาดมาตรฐาน GAP)',
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (plot_id) REFERENCES plots(id) ON DELETE CASCADE,
+  FOREIGN KEY (crop_id) REFERENCES crops(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS water_logs (
@@ -142,23 +181,6 @@ CREATE TABLE IF NOT EXISTS storage_logs (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS workers (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
-  name VARCHAR(255) NOT NULL,
-  role VARCHAR(100),
-  phone VARCHAR(50),
-  hygiene_training BOOLEAN DEFAULT FALSE,
-  training_date DATE,
-  personal_hygiene_check BOOLEAN DEFAULT FALSE,
-  health_status VARCHAR(50),
-  created_by VARCHAR(255),
-  updated_by VARCHAR(255),
-  updated_at TIMESTAMP NULL DEFAULT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
 CREATE TABLE IF NOT EXISTS cost_logs (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,
@@ -174,26 +196,6 @@ CREATE TABLE IF NOT EXISTS cost_logs (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS gap_checklists (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
-  plot_id INT NOT NULL,
-  check_date DATE NOT NULL,
-  inspector_name VARCHAR(255),
-  field_inspection_pass BOOLEAN DEFAULT FALSE,
-  cleaning_check BOOLEAN DEFAULT FALSE,
-  pest_management_check BOOLEAN DEFAULT FALSE,
-  water_quality_check BOOLEAN DEFAULT FALSE,
-  chemical_usage_check BOOLEAN DEFAULT FALSE,
-  hygiene_check BOOLEAN DEFAULT FALSE,
-  notes TEXT,
-  created_by VARCHAR(255),
-  updated_by VARCHAR(255),
-  updated_at TIMESTAMP NULL DEFAULT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (plot_id) REFERENCES plots(id) ON DELETE CASCADE
-);
 
 CREATE TABLE IF NOT EXISTS audit_logs (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -250,7 +252,7 @@ CREATE TABLE IF NOT EXISTS orders (
   delivery_type VARCHAR(50) DEFAULT 'delivery',
   payment_method VARCHAR(50) DEFAULT 'transfer',
   delivery_date DATE,
-  slip_image_url TEXT,
+  slip_image_url LONGTEXT,
   notes TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
@@ -286,5 +288,27 @@ CREATE TABLE IF NOT EXISTS line_chat_sessions (
   draft_data JSON NULL,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS crop_activities (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  plot_id INT NOT NULL,
+  cycle_id INT NULL,
+  activity_date DATE NOT NULL,
+  stage ENUM('soil_prep', 'seed_nursery', 'planting', 'maintenance', 'fertilizing', 'harvest') NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  materials_used TEXT NULL,
+  details TEXT NULL,
+  water_frequency VARCHAR(100) NULL,
+  operator_name VARCHAR(255) DEFAULT 'เจ้าของฟาร์ม',
+  image_url TEXT NULL,
+  notes TEXT NULL,
+  synced_chem_id INT NULL,
+  synced_water_id INT NULL,
+  synced_harvest_id INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (plot_id) REFERENCES plots(id) ON DELETE CASCADE,
+  FOREIGN KEY (cycle_id) REFERENCES crop_cycles(id) ON DELETE SET NULL
 );
 

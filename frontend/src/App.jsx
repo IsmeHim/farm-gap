@@ -4,17 +4,17 @@ import Login from './pages/Login.jsx';
 import Layout from './components/Layout.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Plots from './pages/Plots.jsx';
+import Crops from './pages/Crops.jsx';
+import CropDiary from './pages/CropDiary.jsx';
 import Water from './pages/Water.jsx';
 import Chemicals from './pages/Chemicals.jsx';
 import Pests from './pages/Pests.jsx';
 import Harvest from './pages/Harvest.jsx';
 import Products from './pages/Products.jsx';
 import Storage from './pages/Storage.jsx';
-import Workers from './pages/Workers.jsx';
 import Costs from './pages/Costs.jsx';
 import Report from './pages/Report.jsx';
 import Trace from './pages/Trace.jsx';
-import Checklists from './pages/Checklists.jsx';
 import Orders from './pages/Orders.jsx';
 import SalesReport from './pages/SalesReport.jsx';
 import LiffOrder from './pages/LiffOrder.jsx';
@@ -40,6 +40,8 @@ export default function App() {
       <Route path="/" element={<Protected><Layout /></Protected>}>
         <Route index element={<Dashboard />} />
         <Route path="plots" element={<Plots />} />
+        <Route path="crops" element={<Crops />} />
+        <Route path="diary" element={<CropDiary />} />
         <Route path="water" element={<Water />} />
         <Route path="chemicals" element={<Chemicals />} />
         <Route path="pests" element={<Pests />} />
@@ -48,9 +50,7 @@ export default function App() {
         <Route path="orders" element={<Orders />} />
         <Route path="sales-report" element={<SalesReport />} />
         <Route path="storage" element={<Storage />} />
-        <Route path="workers" element={<Workers />} />
         <Route path="costs" element={<Costs />} />
-        <Route path="checklists" element={<Checklists />} />
         <Route path="report" element={<Report />} />
         <Route path="profile" element={<Profile />} />
       </Route>

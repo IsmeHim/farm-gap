@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import liff from '@line/liff';
 import { api } from '../lib/api';
-import { Search, Phone, RefreshCw, ShoppingCart, Eye, Calendar, MapPin, Receipt, Clock, CheckCircle2, Truck, XCircle } from 'lucide-react';
+import { Search, Phone, RefreshCw, ShoppingCart, Eye, Calendar, MapPin, Receipt, Clock, CheckCircle2, Truck, XCircle, Download, Copy, Lock, QrCode } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
+import { generatePromptPayQR } from '../lib/promptpay';
 
 export default function LiffHistory() {
   const navigate = useNavigate();
@@ -19,6 +21,9 @@ export default function LiffHistory() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [phoneSearch, setPhoneSearch] = useState('');
   const [searching, setSearching] = useState(false);
+  const [paymentInfo, setPaymentInfo] = useState(null);
+  const [orderQr, setOrderQr] = useState(null);
+  const [copiedText, setCopiedText] = useState(null);
 
   // 1. Initialize LINE LIFF & Auto-Detect Customer
   useEffect(() => {
@@ -72,6 +77,48 @@ export default function LiffHistory() {
         }
       });
   }, []);
+
+  // Load farm payment info (PromptPay and bank details)
+  useEffect(() => {
+    api.get('/api/auth/payment-info')
+      .then(res => setPaymentInfo(res.data))
+      .catch(err => console.warn('Could not load payment info:', err));
+  }, []);
+
+  // Generate dynamic QR code when selectedOrder is pending
+  useEffect(() => {
+    if (!selectedOrder || selectedOrder.status !== 'pending' || !paymentInfo?.promptpay_number) {
+      setOrderQr(null);
+      return;
+    }
+    let active = true;
+    const amount = Number(selectedOrder.total_amount) || undefined;
+    generatePromptPayQR(paymentInfo.promptpay_number, amount, { width: 280, margin: 1 })
+      .then(url => {
+        if (active) setOrderQr(url);
+      })
+      .catch(err => console.error('Failed to generate history order QR:', err));
+    return () => { active = false; };
+  }, [selectedOrder, paymentInfo?.promptpay_number]);
+
+  const handleDownloadQr = () => {
+    const src = orderQr || paymentInfo?.promptpay_qr_url;
+    if (!src) return;
+    const a = document.createElement('a');
+    a.href = src;
+    a.download = `PromptPay-${selectedOrder?.order_code || 'Order'}-THB${selectedOrder?.total_amount || '0'}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    toast.success('ดาวน์โหลดรูปภาพ QR Code พร้อมเพย์เรียบร้อยแล้ว!');
+  };
+
+  const handleCopyText = (text, label) => {
+    navigator.clipboard.writeText(String(text));
+    setCopiedText(label);
+    toast.success(`คัดลอก ${label} แล้ว`);
+    setTimeout(() => setCopiedText(null), 2000);
+  };
 
   // 2. Fetch Customer DB Record and Orders by Line User ID
   const fetchCustomerAndOrders = async (lineUserId) => {
@@ -369,6 +416,84 @@ export default function LiffHistory() {
                 </div>
               </div>
             </div>
+
+            {/* PromptPay QR Code & Bank Transfer Section for Pending Orders */}
+            {selectedOrder.status === 'pending' && (
+              <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-amber-900 text-xs flex items-center gap-1.5">
+                    <Clock className="w-4 h-4 text-amber-600" />
+                    <span>รอการชำระเงิน</span>
+                  </div>
+                  <span className="text-[11px] font-black text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
+                    ยอดชำระ ฿{Number(selectedOrder.total_amount).toLocaleString()}
+                  </span>
+                </div>
+
+                {/* Bank details */}
+                {paymentInfo && (
+                  <div className="bg-white/90 p-3 rounded-xl border border-amber-100 text-xs space-y-1 text-slate-700">
+                    <div className="font-bold text-slate-800 text-[11px] mb-1">ช่องทางการชำระเงิน:</div>
+                    {paymentInfo.bank_name && <div>• ธนาคาร: {paymentInfo.bank_name}</div>}
+                    {paymentInfo.bank_account_no && (
+                      <div className="flex items-center justify-between">
+                        <span>• เลขบัญชี: <span className="font-mono font-bold">{paymentInfo.bank_account_no}</span></span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyText(paymentInfo.bank_account_no, 'เลขบัญชี')}
+                          className="text-[10px] text-blue-700 hover:underline cursor-pointer font-bold"
+                        >
+                          {copiedText === 'เลขบัญชี' ? 'คัดลอกแล้ว' : 'คัดลอก'}
+                        </button>
+                      </div>
+                    )}
+                    {paymentInfo.bank_account_name && <div>• ชื่อบัญชี: {paymentInfo.bank_account_name}</div>}
+                    {paymentInfo.promptpay_number && (
+                      <div className="flex items-center justify-between">
+                        <span>• พร้อมเพย์: <span className="font-mono font-bold">{paymentInfo.promptpay_number}</span></span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyText(paymentInfo.promptpay_number, 'เบอร์พร้อมเพย์')}
+                          className="text-[10px] text-blue-700 hover:underline cursor-pointer font-bold"
+                        >
+                          {copiedText === 'เบอร์พร้อมเพย์' ? 'คัดลอกแล้ว' : 'คัดลอก'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Dynamic QR Code */}
+                {(orderQr || paymentInfo?.promptpay_qr_url) && (
+                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col items-center p-3 space-y-2.5">
+                    <div className="bg-[#003B70] text-white py-1.5 px-3 rounded-md text-center w-full flex items-center justify-between">
+                      <span className="text-[9px] font-black tracking-wider uppercase">THAI QR PAYMENT</span>
+                      <span className="text-[9px] bg-emerald-400 text-slate-950 font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5">
+                        <Lock className="w-2.5 h-2.5" /> ล็อกยอด ฿{Number(selectedOrder.total_amount).toLocaleString()}
+                      </span>
+                    </div>
+
+                    <img
+                      src={orderQr || paymentInfo?.promptpay_qr_url}
+                      alt={`PromptPay QR ฿${selectedOrder.total_amount}`}
+                      className="w-44 h-44 object-contain rounded-lg border border-slate-100"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={handleDownloadQr}
+                      className="w-full inline-flex items-center justify-center gap-1.5 bg-[#003B70] hover:bg-[#00284d] text-white font-bold text-xs py-2.5 px-3 rounded-xl transition cursor-pointer shadow-xs active:scale-95"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>📥 บันทึกรูป QR Code (฿{Number(selectedOrder.total_amount).toLocaleString()})</span>
+                    </button>
+                    <p className="text-[10px] text-slate-400 text-center">
+                      * บันทึกภาพแล้วเปิดสแกนจากแอปธนาคาร ยอดเงินจะล็อกอัตโนมัติ
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Payment Slip Preview */}
             {selectedOrder.slip_image_url && (

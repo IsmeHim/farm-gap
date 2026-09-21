@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import liff from '@line/liff';
 import { api } from '../lib/api';
+import { generatePromptPayQR } from '../lib/promptpay';
+import { toast } from 'sonner';
+import { Download, Copy, Check, Lock, QrCode, Sparkles } from 'lucide-react';
 
 export default function LiffOrder() {
   const navigate = useNavigate();
@@ -31,6 +34,9 @@ export default function LiffOrder() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(null);
   const [paymentInfo, setPaymentInfo] = useState(null);
+  const [dynamicQr, setDynamicQr] = useState('');
+  const [qrLoading, setQrLoading] = useState(false);
+  const [copiedField, setCopiedField] = useState('');
 
   // 0. Fetch farm payment info
   useEffect(() => {
@@ -109,6 +115,57 @@ export default function LiffOrder() {
       const prod = products.find(p => p.id === Number(id));
       return total + (prod ? Number(prod.price) * qty : 0);
     }, 0);
+  };
+
+  const cartTotal = getCartTotal();
+
+  // Generate real-time EMVCo PromptPay Dynamic QR with locked amount
+  useEffect(() => {
+    let active = true;
+    const updateQR = async () => {
+      const promptpayNo = paymentInfo?.promptpay_number;
+      if (!promptpayNo || !promptpayNo.trim()) {
+        setDynamicQr('');
+        return;
+      }
+      try {
+        setQrLoading(true);
+        // If cart total > 0, lock the amount in EMVCo tag 54!
+        const qr = await generatePromptPayQR(promptpayNo, cartTotal > 0 ? cartTotal : undefined, {
+          width: 360,
+          margin: 1,
+        });
+        if (active) setDynamicQr(qr);
+      } catch (err) {
+        console.warn('Failed to generate PromptPay QR:', err);
+        if (active) setDynamicQr('');
+      } finally {
+        if (active) setQrLoading(false);
+      }
+    };
+
+    updateQR();
+    return () => { active = false; };
+  }, [paymentInfo?.promptpay_number, cartTotal]);
+
+  const handleDownloadQr = () => {
+    const qrSrc = dynamicQr || paymentInfo?.promptpay_qr_url;
+    if (!qrSrc) return;
+    const link = document.createElement('a');
+    link.href = qrSrc;
+    link.download = `PromptPay_FarmGAP_${cartTotal > 0 ? cartTotal + 'THB' : 'QR'}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('บันทึกรูป QR Code ลงเครื่องแล้ว สามารถเปิดแอปธนาคารเพื่อสแกนจ่ายได้ทันที');
+  };
+
+  const handleCopyText = (text, fieldName) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text.replace(/[^0-9]/g, ''));
+    setCopiedField(fieldName);
+    toast.success(`คัดลอก${fieldName}เรียบร้อยแล้ว`);
+    setTimeout(() => setCopiedField(''), 2500);
   };
 
   const [recommendations, setRecommendations] = useState([]);
@@ -496,42 +553,127 @@ export default function LiffOrder() {
             </div>
 
             {/* QR Payment Information */}
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
-              <h4 className="font-bold text-xs text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
-                💳 โอนเงินชำระค่าผัก
-              </h4>
-              <div className="text-xs text-slate-600 space-y-1 bg-white p-3 rounded-xl border border-slate-150">
-                <p className="font-semibold text-emerald-800">
-                  {paymentInfo?.bank_name || 'ธนาคารกสิกรไทย (KBANK)'}
-                </p>
-                <p className="text-sm font-bold text-slate-800">
-                  เลขบัญชี: <span className="font-mono">{paymentInfo?.bank_account_no || '123-4-56789-0'}</span>
-                </p>
-                <p className="text-slate-600">
-                  ชื่อบัญชี: {paymentInfo?.bank_account_name || paymentInfo?.display_name || 'บจก. ฟาร์มผักเกษตรดี (FarmGAP)'}
-                </p>
-                {paymentInfo?.promptpay_number && (
-                  <p className="text-slate-600">
-                    พร้อมเพย์: <span className="font-mono font-medium">{paymentInfo.promptpay_number}</span>
-                  </p>
+            <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-4 space-y-3.5">
+              <div className="flex items-center justify-between">
+                <h4 className="font-bold text-xs text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                  <span className="text-base">💳</span> ชำระเงินค่าสินค้า
+                </h4>
+                {cartTotal > 0 && (
+                  <span className="bg-emerald-100 text-emerald-900 text-[11px] font-black px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    ยอดชำระ ฿{cartTotal.toLocaleString()}
+                  </span>
                 )}
               </div>
 
-              {/* Display QR Code if available */}
-              {(paymentInfo?.promptpay_qr_url || (paymentInfo?.promptpay_number && paymentInfo.promptpay_number.trim())) && (
-                <div className="flex flex-col items-center justify-center p-3 bg-white rounded-xl border border-slate-150 text-center">
-                  <p className="text-[11px] font-semibold text-slate-500 mb-2">สแกน QR Code เพื่อชำระเงิน</p>
-                  <img
-                    src={
-                      paymentInfo?.promptpay_qr_url ||
-                      `https://promptpay.io/${paymentInfo.promptpay_number.replace(/[^0-9]/g, '')}${getCartTotal() > 0 ? '/' + getCartTotal() : ''}.png`
-                    }
-                    alt="PromptPay QR"
-                    className="w-36 h-36 object-contain rounded-lg border border-slate-100 shadow-xs"
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                    }}
-                  />
+              {/* Bank Account Information Card */}
+              <div className="text-xs text-slate-700 space-y-1.5 bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <p className="font-bold text-emerald-800 flex items-center gap-1">
+                    <span>🏦 {paymentInfo?.bank_name || 'ธนาคารกสิกรไทย (KBANK)'}</span>
+                  </p>
+                  {paymentInfo?.bank_account_no && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyText(paymentInfo.bank_account_no, 'เลขบัญชี')}
+                      className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1 cursor-pointer bg-emerald-50 px-2 py-0.5 rounded-md hover:bg-emerald-100 transition"
+                    >
+                      {copiedField === 'เลขบัญชี' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedField === 'เลขบัญชี' ? 'คัดลอกแล้ว' : 'คัดลอกเลขบัญชี'}</span>
+                    </button>
+                  )}
+                </div>
+                <p className="text-sm font-black text-slate-900 font-mono tracking-wider">
+                  {paymentInfo?.bank_account_no || '123-4-56789-0'}
+                </p>
+                <p className="text-slate-600 text-[11px]">
+                  ชื่อบัญชี: <span className="font-semibold text-slate-800">{paymentInfo?.bank_account_name || paymentInfo?.display_name || 'บจก. ฟาร์มผักเกษตรดี (FarmGAP)'}</span>
+                </p>
+                {paymentInfo?.promptpay_number && (
+                  <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                    <div>
+                      พร้อมเพย์: <span className="font-mono font-bold text-slate-900">{paymentInfo.promptpay_number}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyText(paymentInfo.promptpay_number, 'เบอร์พร้อมเพย์')}
+                      className="text-emerald-700 hover:text-emerald-900 font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      {copiedField === 'เบอร์พร้อมเพย์' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedField === 'เบอร์พร้อมเพย์' ? 'คัดลอกแล้ว' : 'คัดลอก'}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Display Dynamic PromptPay QR Code with Locked Amount */}
+              {(dynamicQr || paymentInfo?.promptpay_qr_url || (paymentInfo?.promptpay_number && paymentInfo.promptpay_number.trim())) && (
+                <div className="bg-white rounded-2xl border-2 border-[#003B70]/20 overflow-hidden shadow-xs">
+                  {/* Official Thai QR Header */}
+                  <div className="bg-[#003B70] text-white py-2 px-3.5 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="bg-white text-[#003B70] font-black text-[10px] px-1.5 py-0.5 rounded tracking-tighter">
+                        THAI QR
+                      </span>
+                      <span className="font-bold text-xs tracking-wide">พร้อมเพย์ (PromptPay)</span>
+                    </div>
+                    {cartTotal > 0 && (
+                      <span className="bg-emerald-400 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
+                        <Lock className="w-2.5 h-2.5" />
+                        <span>ล็อกยอด ฿{cartTotal.toLocaleString()}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="p-4 flex flex-col items-center justify-center text-center space-y-2.5">
+                    {qrLoading ? (
+                      <div className="w-44 h-44 flex items-center justify-center text-xs text-slate-400">
+                        กำลังสร้าง QR Code...
+                      </div>
+                    ) : (
+                      <div className="relative group p-2 bg-white rounded-xl border border-slate-100 shadow-inner">
+                        <img
+                          src={dynamicQr || paymentInfo?.promptpay_qr_url}
+                          alt={`PromptPay QR ฿${cartTotal}`}
+                          className="w-44 h-44 object-contain rounded-lg"
+                        />
+                      </div>
+                    )}
+
+                    {/* Locked Amount Notice Banner */}
+                    <div className="bg-emerald-50 border border-emerald-200/80 rounded-xl py-2 px-3 w-full">
+                      <div className="text-[11px] text-emerald-800 font-semibold">
+                        ยอดเงินที่ล็อกใน QR Code (ระบบระบุให้อัตโนมัติ)
+                      </div>
+                      <div className="text-xl font-black text-emerald-950 font-mono">
+                        ฿{cartTotal > 0 ? Number(cartTotal).toFixed(2) : '0.00'} บาท
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-0.5">
+                        * สแกนด้วยแอปธนาคารใดก็ได้ ยอดเงินจะปรากฏโดยอัตโนมัติ ไม่ต้องพิมพ์จำนวนเงินเอง
+                      </p>
+                    </div>
+
+                    {/* Quick Action Buttons */}
+                    <div className="flex items-center gap-2 w-full pt-1">
+                      <button
+                        type="button"
+                        onClick={handleDownloadQr}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 bg-[#003B70] hover:bg-[#00284d] text-white text-xs font-bold py-2.5 px-3 rounded-xl transition cursor-pointer shadow-xs active:scale-95"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>บันทึกรูป QR Code</span>
+                      </button>
+                      {paymentInfo?.promptpay_number && (
+                        <button
+                          type="button"
+                          onClick={() => handleCopyText(paymentInfo.promptpay_number, 'เบอร์พร้อมเพย์')}
+                          className="inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold py-2.5 px-3 rounded-xl transition cursor-pointer active:scale-95 border border-slate-200"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>คัดลอกเบอร์</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
               

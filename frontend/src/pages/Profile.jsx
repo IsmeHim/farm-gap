@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../lib/auth.jsx';
 import { api } from '../lib/api';
 import { toast } from 'sonner';
-import { Building, User, Mail, Lock, ShieldCheck, Save, Sparkles, CheckCircle2, Leaf, QrCode, CreditCard, Wallet, ExternalLink, Image as ImageIcon, Bell, Smartphone, Send, Globe } from 'lucide-react';
+import { Building, User, Mail, Lock, ShieldCheck, Save, Sparkles, CheckCircle2, Leaf, QrCode, CreditCard, Wallet, ExternalLink, Image as ImageIcon, Bell, Smartphone, Send, Globe, Download, Check, Copy } from 'lucide-react';
 import { format } from 'date-fns';
+import { generatePromptPayQR } from '../lib/promptpay';
 
 const BANK_OPTIONS = [
   'ธนาคารกสิกรไทย (KBANK)',
@@ -24,6 +25,7 @@ export default function Profile() {
   const [form, setForm] = useState({
     displayName: '',
     farmName: '',
+    phone: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -39,6 +41,10 @@ export default function Profile() {
   const [testingLine, setTestingLine] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [userData, setUserData] = useState(null);
+  const [testAmount, setTestAmount] = useState('150');
+  const [testQrDataUrl, setTestQrDataUrl] = useState(null);
+  const [generatingTestQr, setGeneratingTestQr] = useState(false);
+  const [copiedField, setCopiedField] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -48,6 +54,7 @@ export default function Profile() {
         setForm({
           displayName: res.data.display_name || '',
           farmName: res.data.farm_name || '',
+          phone: res.data.phone || res.data.promptpay_number || '',
           email: res.data.email || '',
           password: '',
           confirmPassword: '',
@@ -59,7 +66,8 @@ export default function Profile() {
           lineUserId: res.data.line_user_id || '',
           frontendUrl: res.data.frontend_url || '',
         });
-      } catch (e) {
+      } catch (err) {
+        console.error(err);
         if (user) {
           setForm(prev => ({
             ...prev,
@@ -80,6 +88,48 @@ export default function Profile() {
       }
     })();
   }, [user]);
+
+  // Generate real-time Dynamic EMVCo QR Code for testing locked amount
+  useEffect(() => {
+    const rawNumber = (form.promptpayNumber || '').replace(/[^0-9]/g, '');
+    if (!rawNumber || (rawNumber.length !== 10 && rawNumber.length !== 13)) {
+      setTestQrDataUrl(null);
+      return;
+    }
+    let active = true;
+    setGeneratingTestQr(true);
+    const amt = parseFloat(testAmount);
+    generatePromptPayQR(rawNumber, !isNaN(amt) && amt > 0 ? amt : undefined, { width: 280, margin: 1 })
+      .then(url => {
+        if (active) setTestQrDataUrl(url);
+      })
+      .catch(err => {
+        console.error('Failed to generate test PromptPay QR:', err);
+      })
+      .finally(() => {
+        if (active) setGeneratingTestQr(false);
+      });
+    return () => { active = false; };
+  }, [form.promptpayNumber, testAmount]);
+
+  const handleDownloadTestQr = () => {
+    if (!testQrDataUrl) return;
+    const a = document.createElement('a');
+    a.href = testQrDataUrl;
+    const amtStr = parseFloat(testAmount) > 0 ? `-${parseFloat(testAmount).toFixed(0)}THB` : '';
+    a.download = `PromptPay-Test${amtStr}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    toast.success('ดาวน์โหลดรูปภาพ QR Code พร้อมเพย์เรียบร้อยแล้ว!');
+  };
+
+  const handleCopyTestText = (text, label) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(label);
+    toast.success(`คัดลอก ${label} แล้ว`);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
 
   const handleGeneratePromptPayQr = () => {
     const rawNumber = (form.promptpayNumber || '').replace(/[^0-9]/g, '');
@@ -137,6 +187,7 @@ export default function Profile() {
       const payload = {
         display_name: form.displayName,
         farm_name: form.farmName,
+        phone: form.phone,
         bank_name: form.bankName,
         bank_account_no: form.bankAccountNo,
         bank_account_name: form.bankAccountName,
@@ -321,6 +372,24 @@ export default function Profile() {
               />
             </div>
 
+            {/* Farm Contact Phone */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <Smartphone className="w-4 h-4 text-emerald-700" />
+                เบอร์โทรศัพท์ติดต่อฟาร์ม (สำหรับลูกค้าโทรสอบถาม / ขอเงินคืน)
+              </label>
+              <input
+                type="tel"
+                value={form.phone}
+                onChange={e => setForm(prev => ({ ...prev, phone: e.target.value }))}
+                placeholder="เช่น 099-068-4331 หรือ 0812345678"
+                className="input text-xs w-full py-2.5 px-3.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600"
+              />
+              <p className="text-[11px] text-slate-400">
+                เบอร์นี้จะถูกนำไปใช้ใน LINE Chatbot เพื่อให้ลูกค้าโทรติดต่อโดยตรง หรือใช้เมื่อลูกค้าสอบถามขั้นตอนขอเงินคืน
+              </p>
+            </div>
+
             {/* Email (Readonly) */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
@@ -467,6 +536,121 @@ export default function Profile() {
                         รูปนี้จะปรากฏในใบแจ้งหนี้ให้ลูกค้าสแกนจ่ายได้ทันที
                       </p>
                     </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Interactive Dynamic PromptPay QR Tester & Live Preview */}
+              <div className="mt-4 p-4 sm:p-5 bg-gradient-to-br from-emerald-50/70 via-white to-blue-50/50 rounded-2xl border-2 border-emerald-200/80 space-y-4 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-100 pb-3">
+                  <div>
+                    <div className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-emerald-600" />
+                      <span>ระบบ QR Code พร้อมเพย์ ล็อกยอดเงินอัตโนมัติ (EMVCo Dynamic QR)</span>
+                      <span className="bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full">ใหม่</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      ระบบสร้าง QR Code มาตรฐาน Thai QR Payment โดยใส่ Tag 54 กำหนดยอดเงินที่ต้องชำระลงไปในตัว QR ทันที เมื่อลูกค้าสแกน แอปธนาคารจะล็อกยอดเงินอัตโนมัติ ป้องกันลูกค้ากรอกตัวเลขผิด 100%
+                    </p>
+                  </div>
+                </div>
+
+                {form.promptpayNumber ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                    {/* Test Amount Controls */}
+                    <div className="space-y-3">
+                      <label className="text-xs font-bold text-slate-700 block">
+                        ทดลองระบุยอดเงินเพื่อทดสอบสแกน (บาท):
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">฿</span>
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={testAmount}
+                          onChange={e => setTestAmount(e.target.value)}
+                          placeholder="เช่น 150"
+                          className="input text-sm font-bold pl-8 pr-4 py-2.5 w-full rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600"
+                        />
+                      </div>
+                      {/* Quick Amount Buttons */}
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="text-[11px] text-slate-400 self-center mr-1">ยอดทดสอบ:</span>
+                        {['50', '100', '150', '250', '500'].map(val => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setTestAmount(val)}
+                            className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition cursor-pointer ${
+                              testAmount === val
+                                ? 'bg-emerald-600 text-white border-emerald-600'
+                                : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50'
+                            }`}
+                          >
+                            ฿{val}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="text-[11px] text-slate-500 space-y-1 bg-white/80 p-3 rounded-xl border border-slate-100">
+                        <div className="flex items-center gap-1.5 font-semibold text-emerald-800">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>เบอร์รับเงิน: <span className="font-mono">{form.promptpayNumber}</span></span>
+                        </div>
+                        <p className="text-slate-500 leading-relaxed">
+                          หยิบมือถือเปิดแอปธนาคาร (เช่น K PLUS, SCB EASY, Krungthai NEXT) ลองสแกน QR รูปด้านข้างนี้ จะพบว่ายอดเงินจะขึ้น <strong className="text-emerald-700">฿{parseFloat(testAmount) > 0 ? parseFloat(testAmount).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</strong> ล็อกไว้ให้อัตโนมัติทันที
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* QR Card Preview */}
+                    <div className="flex flex-col items-center justify-center p-3">
+                      {testQrDataUrl ? (
+                        <div className="bg-white p-3.5 rounded-2xl border-2 border-slate-100 shadow-md flex flex-col items-center w-full max-w-[240px]">
+                          {/* Thai QR Payment header banner */}
+                          <div className="w-full bg-[#003B71] text-white py-1 px-2 rounded-t-lg text-center mb-2">
+                            <div className="text-[9px] font-black tracking-wider uppercase">THAI QR PAYMENT</div>
+                            <div className="text-[8px] opacity-80">พร้อมเพย์</div>
+                          </div>
+
+                          <img
+                            src={testQrDataUrl}
+                            alt="Test PromptPay QR"
+                            className="w-40 h-40 object-contain rounded-lg"
+                          />
+
+                          {parseFloat(testAmount) > 0 ? (
+                            <div className="mt-2 text-center w-full">
+                              <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[11px] font-black px-2.5 py-0.5 rounded-full">
+                                <Lock className="w-3 h-3" /> ล็อกยอด ฿{parseFloat(testAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="mt-2 text-[11px] text-slate-400">QR ไม่ระบุยอด (ผู้โอนกรอกเอง)</div>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={handleDownloadTestQr}
+                            className="mt-3 w-full inline-flex items-center justify-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs py-1.5 px-3 rounded-xl border border-emerald-200 transition cursor-pointer"
+                          >
+                            <Download className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>ดาวน์โหลดรูป QR</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="h-44 flex flex-col items-center justify-center text-slate-400 text-xs">
+                          <QrCode className="w-8 h-8 opacity-40 mb-1" />
+                          <span>{generatingTestQr ? 'กำลังสร้าง QR Code...' : 'กรุณาระบุเบอร์พร้อมเพย์ 10 หลัก'}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-amber-50/70 border border-amber-200 text-amber-900 rounded-xl p-3 text-xs flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>กรอกเบอร์พร้อมเพย์ด้านบน แล้วกดบันทึก ระบบจะเริ่มสร้าง QR ล็อกยอดให้อัตโนมัติทุกออเดอร์ในทันที</span>
                   </div>
                 )}
               </div>

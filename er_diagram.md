@@ -11,7 +11,7 @@
 - **users**: เก็บข้อมูลบัญชีผู้ใช้และฟาร์มของผู้ดูแลระบบ
 - **plots**: เก็บข้อมูลแปลงปลูก พืชที่ปลูก และสถานะแปลง
 - **activity tables**: ได้แก่ `water_logs`, `chemical_logs`, `pest_logs`, `harvest_logs` สำหรับบันทึกกิจกรรมในแต่ละแปลง
-- **support tables**: ได้แก่ `workers`, `cost_logs`, `gap_checklists` สำหรับข้อมูลคนงาน ต้นทุน และการประเมิน GAP
+- **support tables**: ได้แก่ `workers`, `cost_logs` สำหรับข้อมูลคนงานและต้นทุนแปลง
 - **storage_logs**: ใช้บันทึกการจัดเก็บและขนส่งผลผลิตหลังจากเก็บเกี่ยว
 - **customer & sales tables**: ได้แก่ `customer_clusters`, `customers`, `products`, `orders`, `order_items`, `product_recommendations` สำหรับจัดการลูกค้า สินค้า และคำสั่งซื้อ
 - **audit_logs**: ใช้บันทึกประวัติการเพิ่ม/แก้ไข/ลบข้อมูล เพื่อความปลอดภัยและตรวจสอบย้อนหลัง
@@ -37,7 +37,6 @@ ER Diagram นี้แสดงความสัมพันธ์ของข
    - แนวคิดนี้ช่วยให้ติดตามผลผลิตจากแปลงไปจนถึงลูกค้าได้
 
 4. **การตรวจสอบและประวัติ**
-   - `gap_checklists` ใช้สำหรับประเมินว่าฟาร์มปฏิบัติตามมาตรฐาน GAP หรือไม่
    - `audit_logs` จะเก็บทุกการเปลี่ยนแปลงในข้อมูล เพื่อให้ตรวจย้อนกลับได้
 
 5. **ลูกค้าและคำสั่งซื้อ**
@@ -215,25 +214,6 @@ erDiagram
         timestamp created_at
     }
 
-    gap_checklists {
-        int id PK
-        int user_id FK
-        int plot_id FK
-        date check_date
-        string inspector_name
-        boolean field_inspection_pass
-        boolean cleaning_check
-        boolean pest_management_check
-        boolean water_quality_check
-        boolean chemical_usage_check
-        boolean hygiene_check
-        text notes
-        string created_by
-        string updated_by
-        timestamp updated_at
-        timestamp created_at
-    }
-
     audit_logs {
         int id PK
         string table_name
@@ -317,13 +297,11 @@ erDiagram
     users ||--o{ storage_logs : "records"
     users ||--o{ workers : "manages"
     users ||--o{ cost_logs : "records"
-    users ||--o{ gap_checklists : "assesses"
 
     plots ||--o{ water_logs : "has"
     plots ||--o{ chemical_logs : "has"
     plots ||--o{ pest_logs : "has"
     plots ||--o{ harvest_logs : "has"
-    plots ||--o{ gap_checklists : "evaluated_by"
     plots ||--o{ cost_logs : "incurs (logical)"
     plots ||--o{ products : "produces"
 
@@ -349,7 +327,6 @@ erDiagram
 - `plots ||--o{ harvest_logs` หมายถึง แปลงหนึ่งสามารถเก็บเกี่ยวได้หลายล็อต
 - `harvest_logs ||--o{ storage_logs` หมายถึง ล็อตหนึ่งอาจมีบันทึกการเก็บรักษา/ขนส่งหลายรายการ
 - `users ||--o{ workers` หมายถึง ผู้ใช้สามารถมีคนงานได้หลายคน
-- `users ||--o{ gap_checklists` หมายถึง ผู้ใช้สามารถมี checklist GAP ได้หลายครั้ง
 - `audit_logs` ไม่ได้เชื่อมกับตารางใดโดยตรงใน ERD นี้ เพราะเป็นตารางเก็บประวัติทั่วไปสำหรับทุกตาราง
 - `customer_clusters ||--o{ customers` หมายถึง กลุ่มลูกค้าหนึ่งสามารถมีลูกค้าได้หลายคน
 - `customers ||--o{ orders` หมายถึง ลูกค้าหนึ่งสามารถมีคำสั่งซื้อได้หลายคำสั่ง
@@ -361,7 +338,7 @@ erDiagram
 
 ## 5. รายละเอียดตารางฐานข้อมูล (Schema Details)
 
-ระบบฐานข้อมูลของ **FarmGAP** ประกอบด้วย **11 ตาราง** โดยมีรายละเอียดและหน้าที่ดังนี้:
+ระบบฐานข้อมูลของ **FarmGAP** ประกอบด้วย **16 ตาราง** โดยมีรายละเอียดและหน้าที่ดังนี้:
 
 ### 1) users (ตารางข้อมูลผู้ใช้งานและผู้ดูแลระบบ)
 *ใช้จัดเก็บข้อมูลโปรไฟล์ บัญชีผู้ใช้ และสิทธิ์การใช้งาน*
@@ -495,22 +472,7 @@ erDiagram
 * **amount**: `DECIMAL(12,2) NOT NULL` - จำนวนเงินจ่ายจริง (บาท)
 * *ฟิลด์ระบบบันทึกประวัติ*: `created_by`, `updated_by`, `updated_at`, `created_at`
 
-### 10) gap_checklists (ตารางแบบประเมินเช็คลิสต์มาตรฐาน GAP)
-*ใช้ติดตามการปฏิบัติตามมาตรฐาน GAP ของฟาร์ม เพื่อประเมินความพร้อมก่อนหน่วยงานรัฐเข้ามาตรวจจริง*
-* **id**: `INT AUTO_INCREMENT` **[PK]**
-* **user_id**: `INT NOT NULL` **[FK -> users.id]**
-* **plot_id**: `INT NOT NULL` **[FK -> plots.id]** - แปลงปลูกที่ได้รับการตรวจประเมิน
-* **check_date**: `DATE NOT NULL` - วันที่เข้าทำการสำรวจ/ตรวจเช็ค
-* **inspector_name**: `VARCHAR(255)` - ชื่อผู้ประเมินสถานะแปลง
-* **field_inspection_pass**: `BOOLEAN DEFAULT FALSE` - การประเมินพื้นที่ทั่วไป (ผ่าน/ไม่ผ่าน)
-* **cleaning_check**: `BOOLEAN DEFAULT FALSE` - การตรวจสอบความสะอาดและการจัดการขยะ (ผ่าน/ไม่ผ่าน)
-* **pest_management_check**: `BOOLEAN DEFAULT FALSE` - วิธีการจัดการการระบาดของโรคและแมลง (ผ่าน/ไม่ผ่าน)
-* **water_quality_check**: `BOOLEAN DEFAULT FALSE` - แหล่งน้ำและสภาพน้ำปลอดภัยปราศจากการปนเปื้อน (ผ่าน/ไม่ผ่าน)
-* **chemical_usage_check**: `BOOLEAN DEFAULT FALSE` - ความถูกต้องในการจัดเก็บและฉีดพ่นสารเคมี (ผ่าน/ไม่ผ่าน)
-* **hygiene_check**: `BOOLEAN DEFAULT FALSE` - สุขอนามัยส่วนบุคคลของคนงานที่เข้าทำงานในแปลง (ผ่าน/ไม่ผ่าน)
-* *ฟิลด์ระบบบันทึกประวัติ*: `notes`, `created_by`, `updated_by`, `updated_at`, `created_at`
-
-### 11) audit_logs (ตารางประวัติกิจกรรมการบันทึก)
+### 10) audit_logs (ตารางประวัติกิจกรรมการบันทึก)
 *บันทึกกิจกรรมความเคลื่อนไหวในระดับฐานข้อมูล ป้องกันการทุจริตข้อมูล และใช้ตรวจสอบย้อนหลังการแก้ไขข้อมูล (Data Auditing)*
 * **id**: `INT AUTO_INCREMENT` **[PK]** - รหัสล็อกเหตุการณ์
 * **table_name**: `VARCHAR(255) NOT NULL` - ชื่อตารางที่มีการทำรายการ (เช่น plots, chemical_logs)
@@ -521,7 +483,7 @@ erDiagram
 * **new_values**: `JSON` - ค่าข้อมูลใหม่ในรูปแบบ JSON
 * **created_at**: `TIMESTAMP` - วันและเวลาที่เกิดเหตุการณ์การปรับปรุงข้อมูล
 
-### 12) customer_clusters (ตารางกลุ่มลูกค้า)
+### 11) customer_clusters (ตารางกลุ่มลูกค้า)
 *ใช้จัดกลุ่มลูกค้าตามลักษณะหรือประเภทที่คล้ายกัน เพื่อใช้สำหรับการวางแผนการตลาดและการแนะนำสินค้าแบบตรงเป้าหมาย*
 * **id**: `INT AUTO_INCREMENT` **[PK]** - รหัสกลุ่มลูกค้า
 * **cluster_name**: `VARCHAR(100) NOT NULL` - ชื่อกลุ่มลูกค้า เช่น กลุ่มลูกค้าที่ชอบผักสลัดสด
@@ -529,7 +491,7 @@ erDiagram
 * **preferred_crops**: `JSON` - พืชที่ลูกค้าในกลุ่มนี้ชอบหรือมีแนวโน้มซื้อบ่อย
 * **created_at**: `TIMESTAMP` - วันและเวลาที่สร้างกลุ่มลูกค้า
 
-### 13) customers (ตารางลูกค้า)
+### 12) customers (ตารางลูกค้า)
 *เก็บข้อมูลลูกค้าที่เกี่ยวข้องกับระบบและมีการสั่งซื้อสินค้า*
 * **id**: `INT AUTO_INCREMENT` **[PK]** - รหัสลูกค้า
 * **line_user_id**: `VARCHAR(255) UNIQUE NOT NULL` - รหัสผู้ใช้ใน LINE สำหรับระบุตัวตนลูกค้า
@@ -540,7 +502,7 @@ erDiagram
 * **cluster_id**: `INT` **[FK -> customer_clusters.id]** - กลุ่มลูกค้าที่ลูกค้าตนนี้อยู่ใน
 * **created_at**: `TIMESTAMP` - วันและเวลาที่บันทึกข้อมูลลูกค้า
 
-### 14) products (ตารางสินค้า)
+### 13) products (ตารางสินค้า)
 *เก็บข้อมูลสินค้าในระบบ เช่น ผักสลัดที่ปลูกและจำหน่ายให้ลูกค้า*
 * **id**: `INT AUTO_INCREMENT` **[PK]** - รหัสสินค้า
 * **plot_id**: `INT` **[FK -> plots.id]** - แปลงปลูกที่ผลิตสินค้านี้ (ถ้ามีความสัมพันธ์กับแปลง)
@@ -554,7 +516,7 @@ erDiagram
 * **created_at**: `TIMESTAMP` - วันและเวลาที่สร้างสินค้า
 * **updated_at**: `TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP` - วันและเวลาที่แก้ไขสินค้าล่าสุด
 
-### 15) orders (ตารางคำสั่งซื้อ)
+### 14) orders (ตารางคำสั่งซื้อ)
 *เก็บข้อมูลคำสั่งซื้อทั้งหมดของลูกค้าในระบบ*
 * **id**: `INT AUTO_INCREMENT` **[PK]** - รหัสคำสั่งซื้อ
 * **order_code**: `VARCHAR(50) UNIQUE NOT NULL` - รหัสคำสั่งซื้อที่ไม่ซ้ำ
@@ -568,7 +530,7 @@ erDiagram
 * **created_at**: `TIMESTAMP` - วันและเวลาที่สร้างคำสั่งซื้อ
 * **updated_at**: `TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP` - วันและเวลาที่แก้ไขคำสั่งซื้อล่าสุด
 
-### 16) order_items (ตารางรายการสินค้าในคำสั่งซื้อ)
+### 15) order_items (ตารางรายการสินค้าในคำสั่งซื้อ)
 *เก็บข้อมูลรายการสินค้าแต่ละชิ้นที่อยู่ในคำสั่งซื้อ*
 * **id**: `INT AUTO_INCREMENT` **[PK]** - รหัสรายการสินค้า
 * **order_id**: `INT NOT NULL` **[FK -> orders.id]** - คำสั่งซื้อที่รายการนี้เกี่ยวข้อง
@@ -577,7 +539,7 @@ erDiagram
 * **unit_price**: `DECIMAL(10,2) NOT NULL` - ราคาต่อหน่วยของสินค้าในคำสั่งซื้อนั้น
 * **subtotal**: `DECIMAL(10,2) NOT NULL` - ยอดรวมของรายการสินค้านั้น
 
-### 17) product_recommendations (ตารางคำแนะนำสินค้า)
+### 16) product_recommendations (ตารางคำแนะนำสินค้า)
 *เก็บคำแนะนำสินค้าที่เกี่ยวข้องกัน เพื่อใช้ในฟีเจอร์แนะนำสินค้าให้ลูกค้า (Cross-sell / Recommendation)*
 * **id**: `INT AUTO_INCREMENT` **[PK]** - รหัสคำแนะนำสินค้า
 * **product_id**: `INT NOT NULL` **[FK -> products.id]** - สินค้าที่เป็นตัวหลัก

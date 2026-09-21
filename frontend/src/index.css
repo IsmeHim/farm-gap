@@ -145,7 +145,7 @@ tbody tr:hover {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 12mm 10mm 12mm 10mm;
+    margin: 10mm 8mm 10mm 8mm;
   }
 
   *, *::before, *::after {
@@ -189,13 +189,19 @@ tbody tr:hover {
   .gap-section {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
-    margin-bottom: 1.25rem !important;
+    margin-bottom: 1rem !important;
   }
 
   table {
     page-break-inside: auto !important;
     break-inside: auto !important;
     width: 100% !important;
+    table-layout: fixed !important;
+  }
+
+  th, td {
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
   }
 
   tr {

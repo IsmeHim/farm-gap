@@ -111,8 +111,11 @@ ordersRouter.post('/', async (req, res) => {
       items: newItemsRows,
     };
 
-    // แจ้งเตือนเจ้าของฟาร์มเข้า LINE
-    notifyAdminNewOrder(fullOrder, 'NEW_ORDER').catch(e => console.error('notifyAdminNewOrder error:', e.message));
+    // แจ้งเตือนเจ้าของฟาร์มเฉพาะเมื่อออเดอร์สำเร็จ (เช่น เก็บเงินปลายทาง COD หรือมีสลิปชำระเงินแนบมา)
+    // สำหรับออเดอร์โอนเงิน จะแจ้งเตือนเมื่อลูกค้าแนบสลิปชำระเงินสำเร็จ
+    if (payment_method === 'cod' || payment_method === 'cash' || newOrderRows[0]?.status === 'paid' || slip_image_url) {
+      notifyAdminNewOrder(fullOrder, 'ORDER_COMPLETED').catch(e => console.error('notifyAdminNewOrder error:', e.message));
+    }
 
     res.status(201).json(fullOrder);
   } catch (error) {
@@ -332,7 +335,15 @@ ordersRouter.post('/:id/slip', async (req, res) => {
     );
 
     if (updated[0]) {
-      notifyAdminNewOrder(updated[0], 'SLIP_UPLOADED').catch(e => console.error('notifyAdmin slip error:', e.message));
+      const [itemsRows] = await pool.query(
+        `SELECT oi.*, p.name AS product_name, p.unit 
+         FROM order_items oi 
+         JOIN products p ON oi.product_id = p.id 
+         WHERE oi.order_id = ?`,
+        [req.params.id]
+      );
+      updated[0].items = itemsRows;
+      notifyAdminNewOrder(updated[0], 'ORDER_COMPLETED').catch(e => console.error('notifyAdmin slip error:', e.message));
     }
 
     res.json(updated[0]);

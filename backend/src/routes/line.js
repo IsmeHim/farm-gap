@@ -1,7 +1,18 @@
 import { Router } from 'express';
 import { messagingApi } from '@line/bot-sdk';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { pool } from '../db.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadsDir = path.join(__dirname, '../../uploads');
+
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 const { MessagingApiClient } = messagingApi;
 const config = {
@@ -29,6 +40,10 @@ async function initSessionTable() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    // Ensure slip_image_url in orders is LONGTEXT so it never overflows
+    await pool.query(`
+      ALTER TABLE orders MODIFY COLUMN slip_image_url LONGTEXT
+    `).catch(() => {});
   } catch (err) {
     console.error('Failed to init line_chat_sessions table:', err.message);
   }
@@ -127,7 +142,8 @@ async function askGemini(prompt, systemInstruction) {
     return 'สวัสดีครับ! ยินดีต้อนรับสู่ฟาร์มผักมาตรฐาน GAP ปลอดภัย คุณสามารถสั่งซื้อผักสดได้ง่ายๆ โดยพิมพ์แจ้งรายการในแชทได้ทันที เช่น "สั่งกรีนโอ๊ค 2 แพ็ค" หรือสอบถามเกี่ยวกับมาตรฐานความปลอดภัยและสต็อกได้เลยครับ!';
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
+  const model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   const payload = {
     contents: [{ parts: [{ text: prompt }] }],
     systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
@@ -156,7 +172,46 @@ async function askGemini(prompt, systemInstruction) {
   }
 }
 
-// 2. ดึงข้อมูลผักพร้อมขายและแปลงปลูก เพื่อนำมาสร้างเป็น Context ใน AI Chatbot
+// Helper: ดึงข้อมูลติดต่อเจ้าของฟาร์มและข้อมูลบัญชีจากฐานข้อมูลแบบ Dynamic
+async function getOwnerContactInfo() {
+  try {
+    const [rows] = await pool.query(
+      "SELECT farm_name, display_name, phone, promptpay_number, bank_name, bank_account_no, bank_account_name, line_user_id FROM users WHERE (role = 'owner' OR role = 'admin') ORDER BY id ASC LIMIT 1"
+    );
+    if (rows.length > 0) {
+      const u = rows[0];
+      const raw = u.phone || u.promptpay_number || '0990684331';
+      const cleanDigits = String(raw).replace(/[^0-9]/g, '');
+      const formatted = cleanDigits.length === 10
+        ? `${cleanDigits.slice(0, 3)}-${cleanDigits.slice(3, 6)}-${cleanDigits.slice(6)}`
+        : raw;
+      return {
+        farmName: u.farm_name || 'FarmGAP',
+        displayName: u.display_name || 'เจ้าของฟาร์ม',
+        phone: formatted,
+        rawPhone: cleanDigits,
+        bankName: u.bank_name || '',
+        bankAccountNo: u.bank_account_no || '',
+        bankAccountName: u.bank_account_name || u.display_name || '',
+        promptpayNumber: u.promptpay_number || cleanDigits,
+      };
+    }
+  } catch (err) {
+    console.error('Error fetching owner contact info:', err.message);
+  }
+  return {
+    farmName: 'FarmGAP',
+    displayName: 'เจ้าของฟาร์ม',
+    phone: '099-068-4331',
+    rawPhone: '0990684331',
+    bankName: '',
+    bankAccountNo: '',
+    bankAccountName: '',
+    promptpayNumber: '0990684331',
+  };
+}
+
+// 2. ดึงข้อมูลผักพร้อมขาย แปลงปลูก และข้อมูลติดต่อเจ้าของฟาร์ม เพื่อนำมาสร้างเป็น Context ใน AI Chatbot
 async function getFarmContext() {
   try {
     const [products] = await pool.query(
@@ -165,8 +220,15 @@ async function getFarmContext() {
     const [plots] = await pool.query(
       'SELECT name, crop_name, field_safety_status, status FROM plots WHERE status = "active"'
     );
-    
+    const owner = await getOwnerContactInfo();
+
     let context = 'คุณคือบอทผู้ช่วยตอบคำถามลูกค้าของฟาร์มผักสดอัจฉริยะ FarmGAP AI ที่เพาะปลูกตามมาตรฐาน GAP และผสานระบบ E-Commerce\n';
+    context += `\n[ข้อมูลฟาร์มและช่องทางติดต่อเจ้าของฟาร์ม/แอดมิน]:\n`;
+    context += `- ชื่อฟาร์ม: ${owner.farmName}\n`;
+    context += `- ผู้ดูแล/เจ้าของฟาร์ม: คุณ${owner.displayName}\n`;
+    context += `- เบอร์โทรศัพท์ติดต่อโดยตรง: ${owner.phone}\n`;
+    context += `- ช่องทางการติดต่อ: ลูกค้าสามารถโทรติดต่อที่เบอร์ ${owner.phone} ได้โดยตรง หรือพิมพ์ข้อความในแชทนี้ได้ตลอดเวลา\n`;
+
     context += '\n[ข้อมูลสต็อกสินค้าพร้อมขายวันนี้แบบเรียลไทม์]:\n';
     if (products.length > 0) {
       products.forEach(p => {
@@ -185,11 +247,13 @@ async function getFarmContext() {
       context += '- กำลังเตรียมดินและบำรุงแปลงปลูกใหม่\n';
     }
     
-    context += '\n[กฎในการตอบคำถามลูกค้า]:\n';
-    context += '1. ตอบคำถามภาษาไทยอย่างสุภาพ มีหางเสียง "ครับ/ค่ะ" สั้นกระชับเข้าใจง่าย\n';
-    context += '2. อ้างอิงสต็อกผักสดและสถานะแปลงเพาะปลูกข้างต้นในการตอบให้สอดคล้องกันอย่างถูกต้อง\n';
-    context += '3. แจ้งลูกค้าว่าสามารถสั่งซื้อผักสดได้โดยตรงในแชทนี้เลย (เช่น "สั่งกรีนโอ๊ค 2 แพ็ค") หรือพิมพ์ "เมนูผัก" เพื่อดูสินค้าทั้งหมด\n';
-    context += '4. หากลูกค้าถามเรื่องสถานะพัสดุหรือออเดอร์ ให้แนะนำพิมพ์คำว่า "เช็คสถานะ" เพื่อตรวจประวัติล่าสุด';
+    context += '\n[กฎและนโยบายสำคัญในการตอบคำถามลูกค้า]:\n';
+    context += '1. ตอบคำถามภาษาไทยอย่างสุภาพ มีหางเสียง "ครับ/ค่ะ" สั้นกระชับเข้าใจง่าย และให้ข้อมูลที่เป็นประโยชน์สูงสุด\n';
+    context += `2. กฎเรื่องเบอร์ติดต่อ (สำคัญมาก): หากลูกค้าถามหาเบอร์ติดต่อ, ขอเบอร์โทร, ขอเบอร์ฟาร์ม, หรือต้องการคุยกับคน/แอดมิน/เจ้าของ ให้ระบุเบอร์โทรศัพท์ของเจ้าของฟาร์มคือ "${owner.phone}" (คุณ${owner.displayName} ฟาร์ม ${owner.farmName}) เสมออย่างชัดเจน ห้ามตอบเลี่ยงว่าให้คุยแต่กับ AI!\n`;
+    context += `3. กฎเรื่องการขอเงินคืน (Refund): หากลูกค้าสอบถามว่า "ขอเงินคืนยังไง", "ขอเงินคืน", "โอนเงินแล้วขอยกเลิกออเดอร์" หรือทำนองเดียวกัน ให้ตอบอย่างสุภาพว่า ทางฟาร์มยินดีคืนเงินให้ตามยอดจริง โดยมีขั้นตอนง่ายๆ คือ:\n   - ส่งรูปภาพสลิปที่โอนเงินเข้ามาในแชทนี้\n   - พิมพ์แจ้งเลขบัญชีธนาคาร หรือเบอร์พร้อมเพย์ และชื่อบัญชีสำหรับรับเงินคืน\n   - ทางเจ้าของฟาร์มจะตรวจสอบและโอนเงินคืนให้โดยเร็ว หรือลูกค้าสามารถโทรแจ้งเจ้าของฟาร์มโดยตรงได้ที่เบอร์ ${owner.phone} (คุณ${owner.displayName})\n`;
+    context += '4. อ้างอิงสต็อกผักสดและสถานะแปลงเพาะปลูกข้างต้นในการตอบให้สอดคล้องกันอย่างถูกต้อง\n';
+    context += '5. แจ้งลูกค้าว่าสามารถสั่งซื้อผักสดได้โดยตรงในแชทนี้เลย (เช่น "สั่งกรีนโอ๊ค 2 แพ็ค") หรือพิมพ์ "เมนูผัก" เพื่อดูสินค้าทั้งหมด โดยฟาร์มรองรับทั้งการ "โอนเงิน/สแกน QR" และ "เก็บเงินปลายทาง (COD)"\n';
+    context += '6. หากลูกค้าถามเรื่องสถานะพัสดุหรือออเดอร์ ให้แนะนำพิมพ์คำว่า "เช็คสถานะ" เพื่อตรวจสถานะออเดอร์ล่าสุด หรือพิมพ์ "ดูประวัติ" เพื่อดูประวัติการสั่งซื้อทั้งหมดในแชท';
     
     return context;
   } catch (err) {
@@ -484,31 +548,96 @@ async function replyOrderDraftConfirmation(replyToken, items, totalAmount) {
           {
             type: 'box',
             layout: 'vertical',
-            backgroundColor: '#f1f8f3',
-            cornerRadius: 'md',
+            backgroundColor: '#fffbeb',
+            borderColor: '#f59e0b',
+            borderWidth: '2px',
+            cornerRadius: 'lg',
             paddingAll: 'md',
-            spacing: 'xs',
+            spacing: 'sm',
             contents: [
               {
+                type: 'box',
+                layout: 'horizontal',
+                spacing: 'xs',
+                contents: [
+                  {
+                    type: 'text',
+                    text: '📦',
+                    size: 'sm',
+                    flex: 1,
+                  },
+                  {
+                    type: 'text',
+                    text: 'กรุณาพิมพ์แจ้งข้อมูลจัดส่งในแชทนี้',
+                    weight: 'bold',
+                    size: 'sm',
+                    color: '#92400e',
+                    flex: 9,
+                  },
+                ],
+              },
+              {
                 type: 'text',
-                text: '📦 กรุณาพิมพ์แจ้งข้อมูลจัดส่งในแชทนี้:',
+                text: 'พิมพ์ส่ง 3 อย่างนี้ในข้อความเดียวได้เลยครับ:',
+                size: 'xs',
+                color: '#4b5563',
                 weight: 'bold',
-                size: 'xs',
-                color: '#1b5e20',
               },
               {
-                type: 'text',
-                text: '• ชื่อผู้รับ\n• เบอร์โทรศัพท์\n• ที่อยู่จัดส่ง',
-                wrap: true,
-                size: 'xs',
-                color: '#444444',
+                type: 'box',
+                layout: 'vertical',
+                spacing: 'xs',
+                contents: [
+                  {
+                    type: 'text',
+                    text: '1️⃣ ชื่อ-นามสกุล ผู้รับ',
+                    size: 'xs',
+                    weight: 'bold',
+                    color: '#1f2937',
+                  },
+                  {
+                    type: 'text',
+                    text: '2️⃣ เบอร์โทรศัพท์ติดต่อ (10 หลัก)',
+                    size: 'xs',
+                    weight: 'bold',
+                    color: '#1f2937',
+                  },
+                  {
+                    type: 'text',
+                    text: '3️⃣ ที่อยู่จัดส่ง (พร้อมรหัสไปรษณีย์)',
+                    size: 'xs',
+                    weight: 'bold',
+                    color: '#1f2937',
+                  },
+                ],
               },
               {
-                type: 'text',
-                text: '(เช่น: สมชาย ใจดี 0812345678 123/4 ม.5 ต.สุเทพ อ.เมือง จ.เชียงใหม่ 50200)',
-                wrap: true,
-                size: 'xxs',
-                color: '#777777',
+                type: 'box',
+                layout: 'vertical',
+                backgroundColor: '#ffffff',
+                borderColor: '#fde68a',
+                borderWidth: '1px',
+                cornerRadius: 'md',
+                paddingAll: 'sm',
+                spacing: 'xxs',
+                margin: 'xs',
+                contents: [
+                  {
+                    type: 'text',
+                    text: '💡 ตัวอย่างการพิมพ์:',
+                    size: 'xxs',
+                    color: '#b45309',
+                    weight: 'bold',
+                  },
+                  {
+                    type: 'text',
+                    text: 'สมชาย ใจดี 0812345678 123/4 ม.5 ต.สุเทพ อ.เมือง จ.เชียงใหม่ 50200',
+                    size: 'xs',
+                    color: '#1e3a8a',
+                    weight: 'bold',
+                    wrap: true,
+                  },
+                ],
               },
             ],
           },
@@ -553,6 +682,7 @@ async function replyInvoiceAndPayment(replyToken, orderCode, totalAmount, items,
     '• พร้อมเพย์: 081-234-5678',
   ];
   let qrImageElement = null;
+  let finalQrUrl = null;
 
   try {
     const [owners] = await pool.query(
@@ -570,16 +700,30 @@ async function replyInvoiceAndPayment(replyToken, orderCode, totalAmount, items,
         bankInfoLines = customLines;
       }
 
-      // Check if farm owner provided a valid HTTPS QR code URL
-      if (o.promptpay_qr_url && o.promptpay_qr_url.startsWith('https://')) {
+      // Generate dynamic PromptPay QR code with locked amount
+      const cleanPromptPay = (o.promptpay_number || '').replace(/[^0-9]/g, '');
+      if (cleanPromptPay && totalAmount > 0) {
+        finalQrUrl = `https://promptpay.io/${cleanPromptPay}/${totalAmount}.png`;
+      } else if (cleanPromptPay) {
+        finalQrUrl = `https://promptpay.io/${cleanPromptPay}.png`;
+      } else if (o.promptpay_qr_url && o.promptpay_qr_url.startsWith('https://')) {
+        finalQrUrl = o.promptpay_qr_url;
+      }
+
+      if (finalQrUrl) {
         qrImageElement = {
           type: 'image',
-          url: o.promptpay_qr_url,
+          url: finalQrUrl,
           size: 'md',
           aspectRatio: '1:1',
           aspectMode: 'cover',
           margin: 'sm',
           align: 'center',
+          action: {
+            type: 'uri',
+            label: 'บันทึกรูป QR Code',
+            uri: finalQrUrl,
+          },
         };
       }
     }
@@ -728,14 +872,46 @@ async function replyInvoiceAndPayment(replyToken, orderCode, totalAmount, items,
                 size: 'xs',
                 color: '#333333',
               },
-              ...(qrImageElement ? [qrImageElement] : []),
+              ...(qrImageElement ? [
+                qrImageElement,
+                {
+                  type: 'text',
+                  text: `🔒 QR พร้อมเพย์ ล็อกยอดเงิน ฿${totalAmount.toLocaleString()} พอดีเป๊ะ`,
+                  weight: 'bold',
+                  size: 'xxs',
+                  color: '#2e7d32',
+                  align: 'center',
+                  margin: 'xs',
+                },
+                {
+                  type: 'button',
+                  action: {
+                    type: 'uri',
+                    label: `📥 บันทึกรูป QR Code (฿${totalAmount.toLocaleString()})`,
+                    uri: finalQrUrl,
+                  },
+                  style: 'primary',
+                  color: '#1b5e20',
+                  height: 'sm',
+                  margin: 'sm',
+                },
+                {
+                  type: 'text',
+                  text: '💡 แตะปุ่มด้านบนเพื่อบันทึกรูป แล้วเปิดสแกนจากแอปธนาคาร',
+                  size: 'xxs',
+                  color: '#888888',
+                  wrap: true,
+                  align: 'center',
+                  margin: 'xs',
+                },
+              ] : []),
               {
                 type: 'text',
                 text: '📸 โอนแล้วส่งรูปสลิปเข้ามาในแชทนี้ได้เลยครับ!',
                 weight: 'bold',
                 size: 'xs',
                 color: '#d32f2f',
-                margin: 'xs',
+                margin: 'sm',
               },
             ],
           },
@@ -744,8 +920,21 @@ async function replyInvoiceAndPayment(replyToken, orderCode, totalAmount, items,
       footer: {
         type: 'box',
         layout: 'vertical',
-        spacing: 'xs',
+        spacing: 'sm',
         contents: [
+          ...(finalQrUrl ? [
+            {
+              type: 'button',
+              action: {
+                type: 'uri',
+                label: `📥 บันทึกรูป QR Code (฿${totalAmount.toLocaleString()})`,
+                uri: finalQrUrl,
+              },
+              style: 'primary',
+              color: '#173f2a',
+              height: 'sm',
+            },
+          ] : []),
           {
             type: 'button',
             action: {
@@ -1179,93 +1368,500 @@ async function replyVegMenu(replyToken, userId) {
   }
 }
 
-// Reply order status
+// Reply single order status (Latest order only)
 async function replyOrderStatus(replyToken, userId) {
-  const [customers] = await pool.query('SELECT id FROM customers WHERE line_user_id = ?', [userId]);
-  
-  if (customers.length === 0) {
-    return client.replyMessage({
-      replyToken: replyToken,
-      messages: [{ type: 'text', text: 'ไม่พบประวัติการสั่งซื้อของคุณในระบบ สามารถเริ่มสั่งซื้อครั้งแรกผ่านแชทนี้ได้เลยครับ 🌱' }]
-    });
-  }
-
-  const [orders] = await pool.query(
-    'SELECT order_code, total_amount, status, created_at FROM orders WHERE customer_id = ? ORDER BY id DESC LIMIT 3',
-    [customers[0].id]
-  );
-
-  if (orders.length === 0) {
-    return client.replyMessage({
-      replyToken: replyToken,
-      messages: [{ type: 'text', text: 'คุณยังไม่มีรายการสั่งซื้อใดๆ ในระบบขณะนี้ครับ พิมพ์สั่งซื้อได้เลยนะครับ 🌱' }]
-    });
-  }
-
-  const orderText = orders.map(o => {
-    const statusMap = {
-      pending: 'รอตรวจสอบ/รอแนบสลิป',
-      paid: 'ชำระแล้ว (เตรียมเก็บเกี่ยว/จัดส่ง)',
-      shipping: 'กำลังจัดส่ง 🚚',
-      completed: 'จัดส่งสำเร็จ ✅',
-      cancelled: 'ยกเลิกออเดอร์',
-    };
-    const localDate = new Date(o.created_at).toLocaleDateString('th-TH');
-    return `📦 เลขที่: ${o.order_code}\nวันที่: ${localDate}\nยอดรวม: ฿${o.total_amount.toLocaleString()} บาท\nสถานะ: ${statusMap[o.status] || o.status}\n---`;
-  }).join('\n');
-
-  const flexStatus = {
-    type: 'flex',
-    altText: 'สถานะการสั่งซื้อล่าสุด',
-    contents: {
-      type: 'bubble',
-      body: {
-        type: 'box',
-        layout: 'vertical',
-        spacing: 'md',
-        contents: [
-          {
-            type: 'text',
-            text: '📋 สถานะออเดอร์ล่าสุดของคุณ',
-            weight: 'bold',
-            size: 'md',
-            color: '#173f2a',
-          },
-          {
-            type: 'text',
-            text: orderText,
-            wrap: true,
-            size: 'xs',
-            color: '#333333',
-          },
-        ],
-      },
-      footer: {
-        type: 'box',
-        layout: 'vertical',
-        contents: [
-          {
-            type: 'button',
-            action: {
-              type: 'uri',
-              label: '🔍 ดูประวัติทั้งหมดในเว็บ',
-              uri: process.env.LIFF_HISTORY_URL || 'https://liff.line.me/dummy-liff-history-id',
-            },
-            style: 'secondary',
-            height: 'sm',
-          },
-        ],
-      },
-    },
-  };
-
   try {
+    const [customers] = await pool.query('SELECT id FROM customers WHERE line_user_id = ?', [userId]);
+    
+    if (customers.length === 0) {
+      return client.replyMessage({
+        replyToken: replyToken,
+        messages: [{ type: 'text', text: 'ไม่พบประวัติการสั่งซื้อของคุณในระบบ สามารถเริ่มสั่งซื้อครั้งแรกผ่านแชทนี้ได้เลยครับ 🌱' }]
+      });
+    }
+
+    const [orders] = await pool.query(
+      'SELECT id, order_code, total_amount, status, delivery_type, payment_method, tracking_number, created_at FROM orders WHERE customer_id = ? ORDER BY id DESC LIMIT 1',
+      [customers[0].id]
+    );
+
+    if (orders.length === 0) {
+      return client.replyMessage({
+        replyToken: replyToken,
+        messages: [{ type: 'text', text: 'คุณยังไม่มีรายการสั่งซื้อใดๆ ในระบบขณะนี้ครับ พิมพ์สั่งซื้อได้เลยนะครับ 🌱' }]
+      });
+    }
+
+    const order = orders[0];
+    const isCod = order.payment_method === 'cod';
+    const statusMap = {
+      pending: isCod ? { label: 'เตรียมจัดส่ง (เก็บเงินปลายทาง 💵)', color: '#059669' } : { label: 'รอตรวจสอบ/รอแนบสลิป ⏳', color: '#d97706' },
+      paid: { label: 'ชำระแล้ว (เตรียมเก็บเกี่ยว/จัดส่ง) 💳', color: '#2563eb' },
+      shipping: { label: 'กำลังจัดส่ง 🚚', color: '#7c3aed' },
+      completed: { label: 'จัดส่งสำเร็จเรียบร้อย ✅', color: '#16a34a' },
+      cancelled: { label: 'ยกเลิกออเดอร์ ❌', color: '#dc2626' },
+    };
+    const currentStatus = statusMap[order.status] || { label: order.status, color: '#333333' };
+    const localDate = new Date(order.created_at).toLocaleString('th-TH', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    // ดึงรายการสินค้าของออเดอร์ล่าสุดนี้
+    const [items] = await pool.query(
+      `SELECT oi.quantity, oi.unit_price, oi.subtotal, p.name AS product_name, p.unit 
+       FROM order_items oi 
+       JOIN products p ON oi.product_id = p.id 
+       WHERE oi.order_id = ?`,
+      [order.id]
+    );
+
+    const itemRows = items.map(item => ({
+      type: 'box',
+      layout: 'horizontal',
+      contents: [
+        {
+          type: 'text',
+          text: `🌱 ${item.product_name} x ${item.quantity} ${item.unit || 'กก.'}`,
+          size: 'xs',
+          color: '#374151',
+          flex: 7,
+          wrap: true,
+        },
+        {
+          type: 'text',
+          text: `฿${item.subtotal.toLocaleString()}`,
+          size: 'xs',
+          color: '#111827',
+          align: 'end',
+          flex: 3,
+        },
+      ],
+    }));
+
+    const bodyContents = [
+      {
+        type: 'text',
+        text: '📋 สถานะออเดอร์ล่าสุดของคุณ',
+        weight: 'bold',
+        size: 'md',
+        color: '#173f2a',
+      },
+      {
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: '#f8fafc',
+        cornerRadius: 'md',
+        paddingAll: 'md',
+        spacing: 'xs',
+        contents: [
+          {
+            type: 'box',
+            layout: 'horizontal',
+            contents: [
+              {
+                type: 'text',
+                text: 'เลขที่คำสั่งซื้อ',
+                size: 'xs',
+                color: '#6b7280',
+                flex: 4,
+              },
+              {
+                type: 'text',
+                text: order.order_code,
+                size: 'xs',
+                weight: 'bold',
+                color: '#111827',
+                align: 'end',
+                flex: 6,
+              },
+            ],
+          },
+          {
+            type: 'box',
+            layout: 'horizontal',
+            contents: [
+              {
+                type: 'text',
+                text: 'วันที่สั่งซื้อ',
+                size: 'xs',
+                color: '#6b7280',
+                flex: 4,
+              },
+              {
+                type: 'text',
+                text: localDate,
+                size: 'xs',
+                color: '#4b5563',
+                align: 'end',
+                flex: 6,
+              },
+            ],
+          },
+          {
+            type: 'box',
+            layout: 'horizontal',
+            contents: [
+              {
+                type: 'text',
+                text: 'การชำระเงิน',
+                size: 'xs',
+                color: '#6b7280',
+                flex: 4,
+              },
+              {
+                type: 'text',
+                text: isCod ? 'เก็บเงินปลายทาง (COD) 💵' : 'โอนเงิน / สแกน QR 💳',
+                size: 'xs',
+                weight: 'bold',
+                color: isCod ? '#059669' : '#2563eb',
+                align: 'end',
+                flex: 6,
+              },
+            ],
+          },
+          {
+            type: 'box',
+            layout: 'horizontal',
+            contents: [
+              {
+                type: 'text',
+                text: 'สถานะปัจจุบัน',
+                size: 'xs',
+                color: '#6b7280',
+                flex: 4,
+              },
+              {
+                type: 'text',
+                text: currentStatus.label,
+                size: 'xs',
+                weight: 'bold',
+                color: currentStatus.color,
+                align: 'end',
+                flex: 6,
+                wrap: true,
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    if (itemRows.length > 0) {
+      bodyContents.push({
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'xs',
+        margin: 'md',
+        contents: [
+          {
+            type: 'text',
+            text: 'รายการสินค้า:',
+            size: 'xs',
+            weight: 'bold',
+            color: '#4b5563',
+          },
+          ...itemRows,
+        ],
+      });
+    }
+
+    bodyContents.push(
+      {
+        type: 'separator',
+        margin: 'md',
+      },
+      {
+        type: 'box',
+        layout: 'horizontal',
+        margin: 'md',
+        contents: [
+          {
+            type: 'text',
+            text: 'ยอดรวมทั้งสิ้น',
+            weight: 'bold',
+            size: 'sm',
+            color: '#111827',
+          },
+          {
+            type: 'text',
+            text: `฿${order.total_amount.toLocaleString()} บาท`,
+            weight: 'bold',
+            size: 'sm',
+            color: '#16a34a',
+            align: 'end',
+          },
+        ],
+      }
+    );
+
+    if (order.tracking_number) {
+      bodyContents.push({
+        type: 'text',
+        text: `🚚 ข้อมูลจัดส่ง: ${order.tracking_number} (${order.delivery_type || 'จัดส่งพัสดุ'})`,
+        size: 'xs',
+        color: '#2563eb',
+        margin: 'sm',
+      });
+    }
+
+    const flexStatus = {
+      type: 'flex',
+      altText: `สถานะออเดอร์ ${order.order_code}: ${currentStatus.label}`,
+      contents: {
+        type: 'bubble',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          spacing: 'md',
+          contents: bodyContents,
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          spacing: 'sm',
+          contents: [
+            {
+              type: 'button',
+              action: {
+                type: 'message',
+                label: '📜 ดูประวัติการสั่งซื้อ',
+                text: 'ดูประวัติ',
+              },
+              style: 'secondary',
+              height: 'sm',
+            },
+          ],
+        },
+      },
+    };
+
     await client.replyMessage({
       replyToken: replyToken,
       messages: [flexStatus],
     });
   } catch (err) {
     console.error('Failed to reply order status:', err.message);
+  }
+}
+
+// Reply order history (Multi-orders directly in LINE chat)
+async function replyOrderHistory(replyToken, userId) {
+  try {
+    const [customers] = await pool.query('SELECT id FROM customers WHERE line_user_id = ?', [userId]);
+    
+    if (customers.length === 0) {
+      return client.replyMessage({
+        replyToken: replyToken,
+        messages: [{ type: 'text', text: 'ไม่พบประวัติการสั่งซื้อของคุณในระบบ สามารถเริ่มสั่งซื้อครั้งแรกผ่านแชทนี้ได้เลยครับ 🌱' }]
+      });
+    }
+
+    const [orders] = await pool.query(
+      'SELECT id, order_code, total_amount, status, payment_method, created_at FROM orders WHERE customer_id = ? ORDER BY id DESC LIMIT 10',
+      [customers[0].id]
+    );
+
+    if (orders.length === 0) {
+      return client.replyMessage({
+        replyToken: replyToken,
+        messages: [{ type: 'text', text: 'คุณยังไม่มีประวัติรายการสั่งซื้อในระบบขณะนี้ครับ พิมพ์ "สั่งซื้อ" ได้เลยนะครับ 🌱' }]
+      });
+    }
+
+    // ดึง items ของทุก order เพื่อแสดงสรุปสินค้าสั้นๆ
+    const orderIds = orders.map(o => o.id);
+    const [items] = await pool.query(
+      `SELECT oi.order_id, oi.quantity, p.name AS product_name, p.unit 
+       FROM order_items oi 
+       JOIN products p ON oi.product_id = p.id 
+       WHERE oi.order_id IN (?)`,
+      [orderIds]
+    );
+
+    const itemsByOrder = {};
+    items.forEach(it => {
+      if (!itemsByOrder[it.order_id]) itemsByOrder[it.order_id] = [];
+      itemsByOrder[it.order_id].push(`${it.product_name} (${it.quantity}${it.unit || ''})`);
+    });
+
+    const statusMap = {
+      pending: { label: 'รอตรวจสอบ/รอสลิป', color: '#d97706' },
+      paid: { label: 'ชำระแล้ว', color: '#2563eb' },
+      shipping: { label: 'กำลังจัดส่ง 🚚', color: '#7c3aed' },
+      completed: { label: 'จัดส่งสำเร็จ ✅', color: '#16a34a' },
+      cancelled: { label: 'ยกเลิก', color: '#dc2626' },
+    };
+
+    const orderBoxes = [];
+    orders.forEach((o, index) => {
+      const isCodOrder = o.payment_method === 'cod';
+      const st = (isCodOrder && o.status === 'pending')
+        ? { label: 'เตรียมส่ง (COD 💵)', color: '#059669' }
+        : (statusMap[o.status] || { label: o.status, color: '#4b5563' });
+      const localDate = new Date(o.created_at).toLocaleDateString('th-TH', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+      const itemSummary = (itemsByOrder[o.id] && itemsByOrder[o.id].length > 0)
+        ? itemsByOrder[o.id].join(', ')
+        : null;
+
+      const orderBox = {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'xs',
+        contents: [
+          {
+            type: 'box',
+            layout: 'horizontal',
+            contents: [
+              {
+                type: 'text',
+                text: `📦 ${o.order_code}`,
+                weight: 'bold',
+                size: 'sm',
+                color: '#1e293b',
+                flex: 6,
+              },
+              {
+                type: 'text',
+                text: `฿${o.total_amount.toLocaleString()}`,
+                weight: 'bold',
+                size: 'sm',
+                color: '#16a34a',
+                align: 'end',
+                flex: 4,
+              },
+            ],
+          },
+          {
+            type: 'box',
+            layout: 'horizontal',
+            contents: [
+              {
+                type: 'text',
+                text: `📅 ${localDate}`,
+                size: 'xxs',
+                color: '#64748b',
+                flex: 5,
+              },
+              {
+                type: 'text',
+                text: st.label,
+                size: 'xs',
+                weight: 'bold',
+                color: st.color,
+                align: 'end',
+                flex: 5,
+              },
+            ],
+          },
+        ],
+      };
+
+      if (itemSummary) {
+        orderBox.contents.push({
+          type: 'text',
+          text: `🌱 ${itemSummary}`,
+          size: 'xxs',
+          color: '#475569',
+          wrap: true,
+        });
+      }
+
+      orderBoxes.push(orderBox);
+
+      if (index < orders.length - 1) {
+        orderBoxes.push({
+          type: 'separator',
+          margin: 'sm',
+        });
+      }
+    });
+
+    const flexHistory = {
+      type: 'flex',
+      altText: `ประวัติการสั่งซื้อของคุณ (${orders.length} รายการ)`,
+      contents: {
+        type: 'bubble',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          spacing: 'md',
+          contents: [
+            {
+              type: 'box',
+              layout: 'vertical',
+              spacing: 'none',
+              contents: [
+                {
+                  type: 'text',
+                  text: '📜 ประวัติการสั่งซื้อของคุณ',
+                  weight: 'bold',
+                  size: 'md',
+                  color: '#173f2a',
+                },
+                {
+                  type: 'text',
+                  text: `แสดงรายการล่าสุด ${orders.length} รายการ`,
+                  size: 'xxs',
+                  color: '#94a3b8',
+                },
+              ],
+            },
+            {
+              type: 'separator',
+            },
+            {
+              type: 'box',
+              layout: 'vertical',
+              spacing: 'sm',
+              contents: orderBoxes,
+            },
+          ],
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          spacing: 'sm',
+          contents: [
+            {
+              type: 'button',
+              action: {
+                type: 'message',
+                label: '🌱 สั่งซื้อผักสดเพิ่ม',
+                text: 'สั่งซื้อ',
+              },
+              style: 'primary',
+              color: '#2e7d32',
+              height: 'sm',
+            },
+            {
+              type: 'button',
+              action: {
+                type: 'message',
+                label: '🔍 เช็คสถานะออเดอร์ล่าสุด',
+                text: 'เช็คสถานะ',
+              },
+              style: 'secondary',
+              height: 'sm',
+            },
+          ],
+        },
+      },
+    };
+
+    await client.replyMessage({
+      replyToken: replyToken,
+      messages: [flexHistory],
+    });
+  } catch (err) {
+    console.error('Failed to reply order history:', err.message);
   }
 }
 
@@ -1293,11 +1889,11 @@ export async function notifyAdminNewOrder(orderData, eventType = 'NEW_ORDER') {
       return;
     }
 
-    const isSlip = eventType === 'SLIP_UPLOADED';
-    const title = isSlip ? '💸 ลูกค้าแนบสลิปชำระเงินแล้ว!' : '🔔 มีคำสั่งซื้อใหม่เข้ามา!';
-    const badgeText = isSlip ? 'สลิปรอตรวจ' : 'ออเดอร์ใหม่';
-    const badgeBg = isSlip ? '#d97706' : '#15803d';
-    const headerBg = isSlip ? '#78350f' : '#14532d';
+    const isCompleted = eventType === 'ORDER_COMPLETED' || eventType === 'SLIP_UPLOADED';
+    const title = isCompleted ? '🎉 ลูกค้าสั่งซื้อสำเร็จแล้ว!' : '🔔 มีคำสั่งซื้อใหม่เข้ามา!';
+    const badgeText = isCompleted ? 'สั่งซื้อสำเร็จ' : 'ออเดอร์ใหม่';
+    const badgeBg = isCompleted ? '#15803d' : '#0369a1';
+    const headerBg = isCompleted ? '#14532d' : '#0f172a';
 
     const orderCode = orderData.order_code || `ORD-${orderData.id || ''}`;
     const totalAmount = Number(orderData.total_amount || 0).toLocaleString();
@@ -1457,6 +2053,13 @@ export async function notifyAdminNewOrder(orderData, eventType = 'NEW_ORDER') {
                 color: '#64748b',
                 wrap: true,
               },
+              {
+                type: 'text',
+                text: `การชำระเงิน: ${orderData.payment_method === 'cod' ? 'เก็บเงินปลายทาง (COD) 💵' : 'โอนเงินผ่านธนาคาร 💳'}`,
+                size: 'xs',
+                color: orderData.payment_method === 'cod' ? '#059669' : '#2563eb',
+                weight: 'bold',
+              },
             ],
           },
           // รายการสินค้า
@@ -1483,7 +2086,7 @@ export async function notifyAdminNewOrder(orderData, eventType = 'NEW_ORDER') {
                 },
               ]
             : []),
-          ...(isSlip
+          ...(isCompleted
             ? [
                 {
                   type: 'separator',
@@ -1492,15 +2095,21 @@ export async function notifyAdminNewOrder(orderData, eventType = 'NEW_ORDER') {
                 {
                   type: 'box',
                   layout: 'vertical',
-                  backgroundColor: '#fef3c7',
+                  backgroundColor: '#f0fdf4',
+                  borderColor: '#bbf7d0',
+                  borderWidth: '1px',
                   cornerRadius: 'md',
                   paddingAll: 'sm',
                   contents: [
                     {
                       type: 'text',
-                      text: '📸 มีรูปสลิปแนบมาแล้ว กรุณาเข้าตรวจสอบความถูกต้องและอนุมัติสถานะบนระบบ FarmGAP ครับ',
+                      text: orderData.payment_method === 'cod'
+                        ? '💵 ลูกค้าเลือกชำระเงินปลายทาง (COD) จัดเตรียมสินค้าและเก็บเงินสดเมื่อส่งมอบครับ'
+                        : (orderData.slip_image_url
+                          ? '✅ ลูกค้าแนบสลิปชำระเงินเรียบร้อยแล้ว สามารถตรวจสอบและจัดส่งผักสดได้ทันทีครับ'
+                          : '✅ ลูกค้าสั่งซื้อสำเร็จเรียบร้อยแล้ว พร้อมให้ฟาร์มจัดเตรียมผักสดครับ'),
                       size: 'xs',
-                      color: '#92400e',
+                      color: '#166534',
                       wrap: true,
                     },
                   ],
@@ -1939,6 +2548,1134 @@ export async function notifyCustomerOrderStatus(orderId, newStatus, dispatchDeta
   }
 }
 
+// Helper: ตรวจสอบว่าข้อความมีลักษณะเป็นที่อยู่จัดส่งจริงหรือไม่
+function isLikelyAddress(str) {
+  if (!str || typeof str !== 'string') return false;
+  const s = str.trim();
+  if (s.length < 8) return false;
+  // ถ้าเป็นเบอร์โทรศัพท์ล้วน ไม่ใช่ที่อยู่
+  if (/^0[0-9]{8,9}$/.test(s.replace(/[- ]/g, ''))) return false;
+
+  const patterns = [
+    /\b[1-9][0-9]{4}\b/, // รหัสไปรษณีย์ 5 หลัก
+    /(?:ต\.|ตำบล|แขวง)/,
+    /(?:อ\.|อำเภอ|เขต)/,
+    /(?:จ\.|จังหวัด)/,
+    /(?:ม\.|หมู่|หมู่ที่|มบ\.|หมู่บ้าน)/,
+    /(?:ซ\.|ซอย)/,
+    /(?:ถ\.|ถนน)/,
+    /(?:บ้านเลขที่|ห้องเลขที่|ชั้น)/,
+    /\b[0-9]{1,4}\/[0-9]{1,4}\b/, // เช่น 122/16
+    /(?:ที่อยู่|ส่งที่|จัดส่งที่|ส่งมาที่)/,
+  ];
+
+  return patterns.some(p => p.test(s));
+}
+
+// Helper: สกัดชื่อผู้รับ เบอร์โทรศัพท์ และที่อยู่จัดส่ง จากข้อความที่ผู้ใช้พิมพ์ (Rule-based Regex)
+function parseCustomerContact(text) {
+  if (!text) return { name: null, phone: null, address: null };
+
+  let name = null;
+  let phone = null;
+  let address = null;
+
+  // 1. สกัดเบอร์โทรศัพท์ (รองรับ 08x, 09x, 06x, 02x 9-10 หลัก)
+  const phoneMatch = text.match(/(?:^|[^\d])(0[689][0-9]{8}|0[2-57][0-9]{7})(?:[^\d]|$)/);
+  if (phoneMatch && phoneMatch[1]) {
+    phone = phoneMatch[1].replace(/[- ]/g, '');
+  } else {
+    const formattedMatch = text.match(/(?:^|[^\d])(0[0-9]{1,2}[- ]?[0-9]{3,4}[- ]?[0-9]{3,4})(?:[^\d]|$)/);
+    if (formattedMatch && formattedMatch[1]) {
+      const cleaned = formattedMatch[1].replace(/[- ]/g, '');
+      if (cleaned.length >= 9 && cleaned.length <= 10 && cleaned.startsWith('0')) {
+        phone = cleaned;
+      }
+    }
+  }
+
+  // 2. สกัดชื่อผู้รับ (กรณีมีคำระบุชัดเจน เช่น ชื่อ: สมชาย หรือ ผู้รับ คุณสมใจ)
+  const explicitNameMatch = text.match(/(?:ชื่อ(?:ผู้รับ)?|คุณ|ผู้รับ)\s*[:\-]?\s*([ก-๙a-zA-Z\s]+?)(?=(?:เบอร์|โทร|tel|ที่อยู่|ส่งที่|บ้านเลขที่|\d{9,10}|$))/i);
+  if (explicitNameMatch && explicitNameMatch[1]) {
+    name = explicitNameMatch[1].trim();
+  }
+
+  // 3. สกัดชื่อหากยังไม่มี (เช่น พิมพ์ "สมใจ มีสุข 0812345678 ที่อยู่ 122/16...")
+  if (!name) {
+    const beforeMatch = text.match(/^([ก-๙a-zA-Z]{2,20}(?:\s+[ก-๙a-zA-Z]{2,20})?)\s+(?:0[689]|\d+\/\d+|ที่อยู่|บ้านเลขที่)/);
+    if (beforeMatch && beforeMatch[1]) {
+      const candidate = beforeMatch[1].trim();
+      const forbidden = ['ที่อยู่', 'ส่งที่', 'จัดส่ง', 'ขอสั่ง', 'สั่งซื้อ', 'โอนแล้ว', 'ยอดรวม', 'ลูกค้า'];
+      if (!forbidden.includes(candidate)) {
+        name = candidate;
+      }
+    }
+  }
+
+  // 4. สกัดที่อยู่จัดส่งแบบระบุคีย์เวิร์ดชัดเจน
+  const explicitAddrMatch = text.match(/(?:ที่อยู่|ส่งที่|จัดส่ง(?:ที่)?|บ้านเลขที่)\s*[:\-]?\s*([\s\S]+?)(?=(?:เบอร์|โทร|ชื่อ|$))/i);
+  if (explicitAddrMatch && explicitAddrMatch[1]) {
+    const rawAddr = explicitAddrMatch[1].trim();
+    if (isLikelyAddress(rawAddr)) {
+      address = rawAddr;
+    }
+  }
+
+  // 5. หากยังไม่ได้ที่อยู่ ให้ลบเบอร์โทร และชื่อ (ถ้ามี) ออกจากข้อความ แล้วเช็คว่าส่วนที่เหลือเป็นที่อยู่หรือไม่
+  if (!address) {
+    let remainder = text;
+    if (phone) {
+      remainder = remainder.replace(/(?:^|[^\d])(0[0-9]{1,2}[- ]?[0-9]{3,4}[- ]?[0-9]{3,4})(?:[^\d]|$)/, ' ');
+    }
+    if (name) {
+      remainder = remainder.replace(name, ' ');
+    }
+    remainder = remainder.replace(/(?:ชื่อผู้รับ|ชื่อ|เบอร์โทร|เบอร์|โทร|tel|ที่อยู่จัดส่ง|ที่อยู่|ส่งที่)\s*[:\-]?/gi, ' ');
+    remainder = remainder.replace(/\s+/g, ' ').trim();
+
+    if (isLikelyAddress(remainder)) {
+      address = remainder;
+    }
+  }
+
+  return {
+    name: name || null,
+    phone: phone || null,
+    address: address || null,
+  };
+}
+
+// AI Helper: ใช้ Gemini ช่วยสกัด ชื่อ เบอร์โทร และที่อยู่จัดส่งจากข้อความลูกค้า
+async function extractContactInfoWithGemini(userText) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === 'dummy_key') return null;
+
+  const prompt = `คุณคือผู้ช่วยสกัดข้อมูลติดต่อและที่อยู่จัดส่งสำหรับร้านค้าเกษตร FarmGAP
+ข้อความที่ลูกค้าพิมพ์ส่งมา:
+"${userText}"
+
+หน้าที่ของคุณ:
+สกัดข้อมูลติดต่อและที่อยู่ออกมา หากข้อมูลใดไม่มีในข้อความ ให้ใส่เป็น null
+ตอบเฉพาะ JSON โครงสร้างนี้เท่านั้น ห้ามใส่ markdown code block หรือคำอธิบายอื่น:
+{
+  "name": "ชื่อ-นามสกุล หรือชื่อเล่นของผู้รับ หรือ null หากไม่มี",
+  "phone": "เบอร์โทรศัพท์ 9-10 หลัก (เฉพาะตัวเลข เช่น 0812345678) หรือ null หากไม่มี",
+  "address": "ที่อยู่จัดส่ง เลขที่ หมู่บ้าน ซอย ถนน ตำบล อำเภอ จังหวัด รหัสไปรษณีย์ หรือ null หากไม่มี"
+}`;
+
+  try {
+    const raw = await askGemini(prompt, "ตอบเฉพาะ JSON ตามโครงสร้างที่กำหนดเท่านั้น");
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return {
+        name: parsed.name && parsed.name !== 'null' && !String(parsed.name).includes('null') ? String(parsed.name).trim() : null,
+        phone: parsed.phone && parsed.phone !== 'null' ? String(parsed.phone).replace(/[^0-9]/g, '') : null,
+        address: parsed.address && parsed.address !== 'null' && !String(parsed.address).includes('null') ? String(parsed.address).trim() : null,
+      };
+    }
+  } catch (err) {
+    console.warn('Gemini contact extraction error:', err.message);
+  }
+  return null;
+}
+
+// Smart extractor: ใช้ Regex + Gemini AI
+async function parseSmartCustomerContact(text) {
+  const regexResult = parseCustomerContact(text);
+
+  // หากได้ทั้ง phone และ address ครบแล้ว ไม่ต้องเสียเวลาเรียก AI
+  if (regexResult.phone && regexResult.address) {
+    return regexResult;
+  }
+
+  // หากขาด ให้ Gemini AI ช่วยวิเคราะห์ข้อความธรรมชาติ
+  try {
+    const aiResult = await extractContactInfoWithGemini(text);
+    if (aiResult) {
+      return {
+        name: regexResult.name || aiResult.name || null,
+        phone: regexResult.phone || aiResult.phone || null,
+        address: regexResult.address || (isLikelyAddress(aiResult.address) ? aiResult.address : null),
+      };
+    }
+  } catch (err) {
+    console.warn('Smart contact extraction error:', err.message);
+  }
+
+  return regexResult;
+}
+
+// AI Helper: ใช้ Gemini ช่วยวิเคราะห์เจตนาเลือกช่องทางชำระเงินจากภาษาพูด
+async function detectPaymentMethodWithGemini(userText) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === 'dummy_key') return null;
+
+  const prompt = `ผู้ใช้กำลังอยู่ในขั้นตอนเลือกวิธีชำระเงินของร้านค้าฟาร์มผัก FarmGAP
+ข้อความที่ผู้ใช้พิมพ์: "${userText}"
+
+คำถาม: ผู้ใช้ต้องการเลือกวิธีชำระเงินแบบใด?
+- หากเลือกเก็บเงินปลายทาง (จ่ายเงินสดเมื่อของถึง, จ่ายกับคนขับ, จ่ายตอนรับ): ตอบ COD
+- หากเลือกโอนเงิน (สแกนจ่าย, คิวอาร์โค้ด, โอนผ่านบัญชี): ตอบ TRANSFER
+- หากเป็นการสอบถามคำถาม หรือพูดเรื่องอื่นที่ไม่ได้เลือกวิธีชำระเงิน: ตอบ OTHER
+
+ตอบเฉพาะคำว่า COD, TRANSFER หรือ OTHER เพียงคำเดียวเท่านั้น:`;
+
+  try {
+    const raw = await askGemini(prompt, "ตอบเฉพาะ COD, TRANSFER หรือ OTHER เท่านั้น");
+    const clean = raw.trim().toUpperCase();
+    if (clean.includes('COD')) return 'cod';
+    if (clean.includes('TRANSFER')) return 'transfer';
+    return null;
+  } catch (err) {
+    console.warn('Gemini payment method detection error:', err.message);
+    return null;
+  }
+}
+
+// Flex Message: แจ้งเตือนเมื่อข้อมูลจัดส่งยังไม่ครบถ้วน พร้อมระบุสิ่งที่ขาดอย่างชัดเจน
+async function replyMissingContactInfo(replyToken, currentData, missingList) {
+  const receivedBoxes = [];
+
+  if (currentData.address) {
+    receivedBoxes.push({
+      type: 'box',
+      layout: 'horizontal',
+      spacing: 'sm',
+      contents: [
+        { type: 'text', text: '🏠 ที่อยู่:', size: 'xs', color: '#166534', weight: 'bold', flex: 3 },
+        { type: 'text', text: currentData.address, size: 'xs', color: '#1f2937', wrap: true, flex: 7 },
+      ],
+    });
+  }
+
+  if (currentData.phone) {
+    receivedBoxes.push({
+      type: 'box',
+      layout: 'horizontal',
+      spacing: 'sm',
+      contents: [
+        { type: 'text', text: '📱 เบอร์โทร:', size: 'xs', color: '#166534', weight: 'bold', flex: 3 },
+        { type: 'text', text: currentData.phone, size: 'xs', color: '#1f2937', flex: 7 },
+      ],
+    });
+  }
+
+  if (currentData.name) {
+    receivedBoxes.push({
+      type: 'box',
+      layout: 'horizontal',
+      spacing: 'sm',
+      contents: [
+        { type: 'text', text: '👤 ชื่อผู้รับ:', size: 'xs', color: '#166534', weight: 'bold', flex: 3 },
+        { type: 'text', text: currentData.name, size: 'xs', color: '#1f2937', flex: 7 },
+      ],
+    });
+  }
+
+  const missingBoxes = missingList.map(item => ({
+    type: 'text',
+    text: `• ${item}`,
+    size: 'xs',
+    weight: 'bold',
+    color: '#b91c1c',
+    wrap: true,
+  }));
+
+  const bodyContents = [];
+
+  // หัวข้อแจ้งเตือน
+  bodyContents.push({
+    type: 'box',
+    layout: 'vertical',
+    spacing: 'xs',
+    contents: [
+      {
+        type: 'text',
+        text: '⚠️ ข้อมูลจัดส่งยังไม่ครบถ้วนครับ',
+        weight: 'bold',
+        size: 'md',
+        color: '#b45309',
+      },
+      {
+        type: 'text',
+        text: 'ระบบบันทึกข้อมูลเบื้องต้นไว้แล้ว รบกวนพิมพ์ข้อมูลที่ยังขาดเพื่อเปิดออเดอร์ครับ',
+        size: 'xs',
+        color: '#6b7280',
+        wrap: true,
+      },
+    ],
+  });
+
+  // แสดงกล่องสิ่งที่ได้รับแล้ว (ถ้ามี)
+  if (receivedBoxes.length > 0) {
+    bodyContents.push({
+      type: 'box',
+      layout: 'vertical',
+      backgroundColor: '#f0fdf4',
+      borderWidth: '1px',
+      borderColor: '#bbf7d0',
+      cornerRadius: 'md',
+      paddingAll: 'md',
+      spacing: 'xs',
+      margin: 'md',
+      contents: [
+        {
+          type: 'text',
+          text: '✅ ข้อมูลที่ได้รับแล้ว:',
+          weight: 'bold',
+          size: 'xs',
+          color: '#15803d',
+        },
+        ...receivedBoxes,
+      ],
+    });
+  }
+
+  // แสดงกล่องสิ่งที่ยังขาด
+  bodyContents.push({
+    type: 'box',
+    layout: 'vertical',
+    backgroundColor: '#fef2f2',
+    borderWidth: '1px',
+    borderColor: '#fecaca',
+    cornerRadius: 'md',
+    paddingAll: 'md',
+    spacing: 'xs',
+    margin: 'md',
+    contents: [
+      {
+        type: 'text',
+        text: '❗ ข้อมูลที่ต้องการเพิ่มเติม:',
+        weight: 'bold',
+        size: 'xs',
+        color: '#b91c1c',
+      },
+      ...missingBoxes,
+    ],
+  });
+
+  // คำแนะนำวิธีพิมพ์
+  bodyContents.push({
+    type: 'box',
+    layout: 'vertical',
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a',
+    borderWidth: '1px',
+    cornerRadius: 'md',
+    paddingAll: 'md',
+    margin: 'md',
+    contents: [
+      {
+        type: 'text',
+        text: '👉 พิมพ์ส่งเข้ามาในแชทนี้ได้เลยครับ เช่น:',
+        size: 'xs',
+        color: '#92400e',
+        weight: 'bold',
+      },
+      {
+        type: 'text',
+        text: '0812345678 คุณสมชาย',
+        size: 'xs',
+        color: '#1e3a8a',
+        weight: 'bold',
+        margin: 'xs',
+      },
+    ],
+  });
+
+  const flexCard = {
+    type: 'flex',
+    altText: 'กรุณาแจ้งข้อมูลจัดส่งเพิ่มเติม',
+    contents: {
+      type: 'bubble',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'sm',
+        contents: bodyContents,
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'button',
+            action: {
+              type: 'message',
+              label: '❌ ยกเลิกการสั่งซื้อนี้',
+              text: 'ยกเลิก',
+            },
+            style: 'secondary',
+            height: 'sm',
+          },
+        ],
+      },
+    },
+  };
+
+  await client.replyMessage({
+    replyToken: replyToken,
+    messages: [flexCard],
+  });
+}
+
+// Flex Message: ถามลูกค้าเพื่อเลือกช่องทางการชำระเงิน (โอนเงิน หรือ เก็บเงินปลายทาง COD)
+async function replyPaymentMethodSelection(replyToken, draftData) {
+  const itemsText = (draftData.items || [])
+    .map(it => `• ${it.name} x${it.quantity} ${it.unit || 'กก.'} (฿${(it.subtotal || 0).toLocaleString()})`)
+    .join('\n');
+  const totalAmount = (draftData.totalAmount || draftData.total_amount || 0).toLocaleString();
+  const customerName = draftData.contact_name || draftData.customer_name || 'คุณลูกค้า';
+  const customerPhone = draftData.contact_phone || draftData.phone || '-';
+  const customerAddress = draftData.contact_address || draftData.address || '-';
+
+  const flexCard = {
+    type: 'flex',
+    altText: 'เลือกช่องทางการชำระเงิน FarmGAP',
+    contents: {
+      type: 'bubble',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: '#173f2a',
+        paddingAll: 'lg',
+        contents: [
+          {
+            type: 'text',
+            text: '💰 เลือกช่องทางการชำระเงิน',
+            weight: 'bold',
+            color: '#f4d27a',
+            size: 'md',
+          },
+          {
+            type: 'text',
+            text: 'กรุณาเลือกรูปแบบที่สะดวกชำระเงินครับ',
+            size: 'xs',
+            color: '#d1fae5',
+            margin: 'xs',
+          },
+        ],
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'md',
+        contents: [
+          // กล่องสรุปรายการสินค้าและยอดเงิน
+          {
+            type: 'box',
+            layout: 'vertical',
+            backgroundColor: '#f8fafc',
+            borderColor: '#e2e8f0',
+            borderWidth: '1px',
+            cornerRadius: 'md',
+            paddingAll: 'md',
+            spacing: 'xs',
+            contents: [
+              {
+                type: 'text',
+                text: '🥬 สรุปรายการสั่งซื้อ:',
+                size: 'xs',
+                weight: 'bold',
+                color: '#334155',
+              },
+              {
+                type: 'text',
+                text: itemsText,
+                size: 'xs',
+                color: '#475569',
+                wrap: true,
+              },
+              {
+                type: 'separator',
+                margin: 'sm',
+              },
+              {
+                type: 'box',
+                layout: 'horizontal',
+                contents: [
+                  {
+                    type: 'text',
+                    text: 'ยอดรวมทั้งสิ้น:',
+                    size: 'sm',
+                    weight: 'bold',
+                    color: '#1e293b',
+                    flex: 5,
+                  },
+                  {
+                    type: 'text',
+                    text: `฿${totalAmount} บาท`,
+                    size: 'md',
+                    weight: 'bold',
+                    color: '#16a34a',
+                    align: 'end',
+                    flex: 7,
+                  },
+                ],
+              },
+            ],
+          },
+          // กล่องข้อมูลจัดส่ง
+          {
+            type: 'box',
+            layout: 'vertical',
+            backgroundColor: '#f1f8f3',
+            cornerRadius: 'md',
+            paddingAll: 'sm',
+            spacing: 'xxs',
+            contents: [
+              {
+                type: 'text',
+                text: `📦 ส่งถึง: ${customerName} (${customerPhone})`,
+                size: 'xs',
+                color: '#166534',
+                weight: 'bold',
+              },
+              {
+                type: 'text',
+                text: `📍 ที่อยู่: ${customerAddress}`,
+                size: 'xxs',
+                color: '#4b5563',
+                wrap: true,
+              },
+            ],
+          },
+          // ข้อความถาม
+          {
+            type: 'text',
+            text: '👇 กรุณากดเลือกช่องทางการชำระเงินด้านล่าง:',
+            size: 'xs',
+            weight: 'bold',
+            color: '#1f2937',
+            margin: 'xs',
+          },
+        ],
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'sm',
+        contents: [
+          {
+            type: 'button',
+            action: {
+              type: 'message',
+              label: '💳 โอนเงิน / สแกน QR Code',
+              text: 'โอนเงิน',
+            },
+            style: 'primary',
+            color: '#2563eb',
+            height: 'sm',
+          },
+          {
+            type: 'button',
+            action: {
+              type: 'message',
+              label: '💵 เก็บเงินปลายทาง (COD)',
+              text: 'เก็บเงินปลายทาง',
+            },
+            style: 'primary',
+            color: '#059669',
+            height: 'sm',
+          },
+          {
+            type: 'button',
+            action: {
+              type: 'message',
+              label: '❌ ยกเลิกการสั่งซื้อ',
+              text: 'ยกเลิก',
+            },
+            style: 'secondary',
+            height: 'sm',
+          },
+        ],
+      },
+    },
+    quickReply: {
+      items: [
+        {
+          type: 'action',
+          action: {
+            type: 'message',
+            label: '💳 โอนเงิน / QR',
+            text: 'โอนเงิน',
+          },
+        },
+        {
+          type: 'action',
+          action: {
+            type: 'message',
+            label: '💵 เก็บเงินปลายทาง',
+            text: 'เก็บเงินปลายทาง',
+          },
+        },
+        {
+          type: 'action',
+          action: {
+            type: 'message',
+            label: '❌ ยกเลิก',
+            text: 'ยกเลิก',
+          },
+        },
+      ],
+    },
+  };
+
+  try {
+    await client.replyMessage({
+      replyToken: replyToken,
+      messages: [flexCard],
+    });
+  } catch (err) {
+    console.error('Failed to reply payment method selection:', err.message);
+  }
+}
+
+// Flex Message: แจ้งยืนยันการสั่งซื้อแบบเก็บเงินปลายทาง (COD) สำเร็จ
+async function replyCodOrderConfirmation(replyToken, orderCode, totalAmount, items, addressText) {
+  const itemsText = (items || [])
+    .map(it => `• ${it.name} จำนวน ${it.quantity} ${it.unit || 'กก.'} (฿${(it.subtotal || 0).toLocaleString()})`)
+    .join('\n');
+
+  const flexCard = {
+    type: 'flex',
+    altText: `ยืนยันคำสั่งซื้อเก็บเงินปลายทาง ${orderCode}`,
+    contents: {
+      type: 'bubble',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: '#059669',
+        paddingAll: 'lg',
+        contents: [
+          {
+            type: 'text',
+            text: '🎉 สั่งซื้อสำเร็จ (เก็บเงินปลายทาง)',
+            weight: 'bold',
+            color: '#ffffff',
+            size: 'md',
+          },
+          {
+            type: 'text',
+            text: `รหัสคำสั่งซื้อ: ${orderCode}`,
+            size: 'xs',
+            color: '#d1fae5',
+            margin: 'xs',
+          },
+        ],
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'md',
+        contents: [
+          // กล่องยอดเงินที่ต้องชำระเมื่อได้รับของ
+          {
+            type: 'box',
+            layout: 'horizontal',
+            backgroundColor: '#f0fdf4',
+            borderColor: '#86efac',
+            borderWidth: '1px',
+            cornerRadius: 'md',
+            paddingAll: 'md',
+            alignItems: 'center',
+            contents: [
+              {
+                type: 'text',
+                text: 'ยอดชำระเมื่อได้รับสินค้า',
+                size: 'xs',
+                color: '#166534',
+                weight: 'bold',
+                flex: 6,
+              },
+              {
+                type: 'text',
+                text: `฿${Number(totalAmount).toLocaleString()} บาท`,
+                size: 'lg',
+                weight: 'bold',
+                color: '#059669',
+                align: 'end',
+                flex: 6,
+              },
+            ],
+          },
+          // รายการผักที่สั่ง
+          {
+            type: 'box',
+            layout: 'vertical',
+            spacing: 'xs',
+            contents: [
+              {
+                type: 'text',
+                text: '🥬 รายการผักสดที่สั่ง:',
+                weight: 'bold',
+                size: 'xs',
+                color: '#334155',
+              },
+              {
+                type: 'text',
+                text: itemsText,
+                wrap: true,
+                size: 'xs',
+                color: '#475569',
+              },
+            ],
+          },
+          {
+            type: 'separator',
+          },
+          // ข้อมูลจัดส่ง
+          {
+            type: 'box',
+            layout: 'vertical',
+            spacing: 'xs',
+            contents: [
+              {
+                type: 'text',
+                text: '📍 ข้อมูลจัดส่ง:',
+                weight: 'bold',
+                size: 'xs',
+                color: '#334155',
+              },
+              {
+                type: 'text',
+                text: addressText,
+                wrap: true,
+                size: 'xs',
+                color: '#64748b',
+              },
+            ],
+          },
+          // กล่องคำแนะนำ COD
+          {
+            type: 'box',
+            layout: 'vertical',
+            backgroundColor: '#fffbeb',
+            borderColor: '#fde68a',
+            borderWidth: '1px',
+            cornerRadius: 'md',
+            paddingAll: 'md',
+            spacing: 'xs',
+            contents: [
+              {
+                type: 'text',
+                text: '🚚 ขั้นตอนถัดไป:',
+                weight: 'bold',
+                size: 'xs',
+                color: '#92400e',
+              },
+              {
+                type: 'text',
+                text: 'ฟาร์มได้รับคำสั่งซื้อเรียบร้อยแล้วครับ กำลังเตรียมเก็บเกี่ยวผักสดจากแปลง GAP และจัดส่งถึงหน้าบ้าน รบกวนเตรียมเงินสดชำระกับเจ้าหน้าที่ส่งพัสดุเมื่อได้รับสินค้านะครับ 🌱',
+                wrap: true,
+                size: 'xs',
+                color: '#78350f',
+              },
+            ],
+          },
+        ],
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'sm',
+        contents: [
+          {
+            type: 'button',
+            action: {
+              type: 'message',
+              label: '🔍 เช็คสถานะออเดอร์',
+              text: 'เช็คสถานะ',
+            },
+            style: 'secondary',
+            height: 'sm',
+          },
+          {
+            type: 'button',
+            action: {
+              type: 'message',
+              label: '🌱 สั่งซื้อผักสดเพิ่ม',
+              text: 'สั่งซื้อ',
+            },
+            style: 'link',
+            height: 'sm',
+          },
+        ],
+      },
+    },
+  };
+
+  try {
+    await client.replyMessage({
+      replyToken: replyToken,
+      messages: [flexCard],
+    });
+  } catch (err) {
+    console.error('Failed to reply COD order confirmation:', err.message);
+  }
+}
+
+// Flex Message: แสดงข้อมูลและเบอร์โทรติดต่อเจ้าของฟาร์มโดยตรง
+async function replyOwnerContact(replyToken) {
+  const owner = await getOwnerContactInfo();
+  const flexCard = {
+    type: 'flex',
+    altText: `📞 ติดต่อเจ้าของฟาร์ม: ${owner.phone}`,
+    contents: {
+      type: 'bubble',
+      size: 'mega',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: '#15803d',
+        paddingAll: 'lg',
+        contents: [
+          {
+            type: 'text',
+            text: '📞 ช่องทางติดต่อเจ้าของฟาร์ม',
+            weight: 'bold',
+            size: 'md',
+            color: '#ffffff',
+          },
+          {
+            type: 'text',
+            text: owner.farmName,
+            size: 'xs',
+            color: '#bbf7d0',
+            margin: 'xs',
+          },
+        ],
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'md',
+        contents: [
+          {
+            type: 'box',
+            layout: 'vertical',
+            backgroundColor: '#f0fdf4',
+            cornerRadius: 'md',
+            paddingAll: 'md',
+            borderWidth: '1px',
+            borderColor: '#bbf7d0',
+            contents: [
+              {
+                type: 'text',
+                text: '👤 ผู้ดูแล / เจ้าของฟาร์ม:',
+                size: 'xs',
+                color: '#166534',
+                weight: 'bold',
+              },
+              {
+                type: 'text',
+                text: `คุณ ${owner.displayName}`,
+                size: 'sm',
+                weight: 'bold',
+                color: '#1f2937',
+                margin: 'xs',
+              },
+              {
+                type: 'separator',
+                margin: 'md',
+              },
+              {
+                type: 'text',
+                text: '📱 เบอร์โทรศัพท์ติดต่อโดยตรง:',
+                size: 'xs',
+                color: '#166534',
+                weight: 'bold',
+                margin: 'md',
+              },
+              {
+                type: 'text',
+                text: owner.phone,
+                size: 'xl',
+                weight: 'bold',
+                color: '#15803d',
+                margin: 'xs',
+              },
+            ],
+          },
+          {
+            type: 'text',
+            text: '💡 คุณลูกค้าสามารถแตะปุ่มโทรออกด้านล่างเพื่อคุยกับเจ้าของฟาร์มได้ทันที หรือพิมพ์ข้อความฝากเรื่องไว้ในแชทนี้ แอดมินจะรีบเข้ามาดูแลให้ครับ 🌱',
+            size: 'xs',
+            color: '#64748b',
+            wrap: true,
+          },
+        ],
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'sm',
+        contents: [
+          {
+            type: 'button',
+            style: 'primary',
+            color: '#15803d',
+            height: 'sm',
+            action: {
+              type: 'uri',
+              label: `📞 โทร ${owner.phone}`,
+              uri: `tel:${owner.rawPhone}`,
+            },
+          },
+          {
+            type: 'button',
+            style: 'secondary',
+            height: 'sm',
+            action: {
+              type: 'message',
+              label: '🥬 ดูเมนูผักสด',
+              text: 'เมนูผัก',
+            },
+          },
+        ],
+      },
+    },
+  };
+
+  try {
+    await client.replyMessage({
+      replyToken: replyToken,
+      messages: [flexCard],
+    });
+  } catch (err) {
+    console.error('Failed to reply owner contact:', err.message);
+  }
+}
+
+// Flex Message: แนะนำขั้นตอนการขอเงินคืนสำหรับลูกค้าที่โอนเงินแล้วต้องการยกเลิก
+async function replyRefundInstructions(replyToken) {
+  const owner = await getOwnerContactInfo();
+  const flexCard = {
+    type: 'flex',
+    altText: '💸 ขั้นตอนการขอรับเงินคืนจากฟาร์ม',
+    contents: {
+      type: 'bubble',
+      size: 'mega',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: '#0284c7',
+        paddingAll: 'lg',
+        contents: [
+          {
+            type: 'text',
+            text: '💸 ขั้นตอนการขอรับเงินคืน (Refund)',
+            weight: 'bold',
+            size: 'md',
+            color: '#ffffff',
+          },
+          {
+            type: 'text',
+            text: `ฟาร์ม ${owner.farmName}`,
+            size: 'xs',
+            color: '#e0f2fe',
+            margin: 'xs',
+          },
+        ],
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'md',
+        contents: [
+          {
+            type: 'text',
+            text: 'สำหรับออเดอร์ที่โอนเงินเรียบร้อยแล้วและต้องการขอยกเลิก ทางฟาร์มยินดีโอนเงินคืนให้ตามยอดจริงครับ โดยมีขั้นตอนง่ายๆ ดังนี้:',
+            size: 'xs',
+            color: '#334155',
+            wrap: true,
+          },
+          {
+            type: 'box',
+            layout: 'vertical',
+            backgroundColor: '#f8fafc',
+            cornerRadius: 'md',
+            paddingAll: 'md',
+            spacing: 'sm',
+            borderWidth: '1px',
+            borderColor: '#e2e8f0',
+            contents: [
+              {
+                type: 'box',
+                layout: 'horizontal',
+                spacing: 'sm',
+                contents: [
+                  { type: 'text', text: '1️⃣', size: 'xs', flex: 1 },
+                  { type: 'text', text: 'ส่งรูปภาพสลิปที่โอนเงินเข้ามาในแชทนี้', size: 'xs', color: '#1e293b', wrap: true, flex: 9 },
+                ],
+              },
+              {
+                type: 'box',
+                layout: 'horizontal',
+                spacing: 'sm',
+                contents: [
+                  { type: 'text', text: '2️⃣', size: 'xs', flex: 1 },
+                  { type: 'text', text: 'พิมพ์แจ้งเลขบัญชีธนาคาร หรือเบอร์พร้อมเพย์ และชื่อบัญชีสำหรับรับเงินคืน', size: 'xs', color: '#1e293b', wrap: true, flex: 9 },
+                ],
+              },
+              {
+                type: 'box',
+                layout: 'horizontal',
+                spacing: 'sm',
+                contents: [
+                  { type: 'text', text: '3️⃣', size: 'xs', flex: 1 },
+                  { type: 'text', text: 'เจ้าของฟาร์มจะตรวจสอบและทำการโอนเงินคืนให้โดยเร็วที่สุดครับ', size: 'xs', color: '#1e293b', wrap: true, flex: 9 },
+                ],
+              },
+            ],
+          },
+          {
+            type: 'box',
+            layout: 'vertical',
+            backgroundColor: '#f0fdf4',
+            cornerRadius: 'md',
+            paddingAll: 'sm',
+            contents: [
+              {
+                type: 'text',
+                text: `📞 ติดต่อเจ้าของฟาร์มโดยตรง: ${owner.phone} (คุณ${owner.displayName})`,
+                size: 'xs',
+                color: '#166534',
+                weight: 'bold',
+                wrap: true,
+              },
+            ],
+          },
+        ],
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'sm',
+        contents: [
+          {
+            type: 'button',
+            style: 'primary',
+            color: '#0284c7',
+            height: 'sm',
+            action: {
+              type: 'uri',
+              label: `📞 โทรแจ้งเจ้าของฟาร์ม (${owner.phone})`,
+              uri: `tel:${owner.rawPhone}`,
+            },
+          },
+        ],
+      },
+    },
+  };
+
+  try {
+    await client.replyMessage({
+      replyToken: replyToken,
+      messages: [flexCard],
+    });
+  } catch (err) {
+    console.error('Failed to reply refund instructions:', err.message);
+  }
+}
+
+// Helper: สร้างออเดอร์ในฐานข้อมูล ตัดสต็อก และบันทึกข้อมูลลูกค้า
+async function createChatOrder(userId, draftData, paymentMethod = 'transfer') {
+  const items = draftData.items || [];
+  const totalAmount = draftData.totalAmount || draftData.total_amount || 0;
+  const finalName = draftData.contact_name || draftData.customer_name || 'คุณลูกค้า';
+  const finalPhone = draftData.contact_phone || draftData.phone || '-';
+  const finalAddress = draftData.contact_address || draftData.address || '-';
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Get customer
+    const [customers] = await connection.query('SELECT * FROM customers WHERE line_user_id = ?', [userId]);
+    const customer = customers[0] || {};
+
+    // 2. Update customer phone, address, and display_name
+    await connection.query(
+      'UPDATE customers SET address = ?, phone = ?, display_name = COALESCE(?, display_name) WHERE id = ?',
+      [finalAddress, finalPhone, draftData.contact_name || null, customer.id]
+    );
+
+    // 3. Check stock again and deduct
+    for (const item of items) {
+      const [prod] = await connection.query('SELECT stock_quantity, status FROM products WHERE id = ? FOR UPDATE', [item.product_id]);
+      if (prod.length === 0 || prod[0].stock_quantity < item.quantity) {
+        await connection.rollback();
+        throw new Error(`ขออภัยครับ สินค้า "${item.name}" สต็อกไม่เพียงพอในขณะนี้`);
+      }
+
+      const newStock = prod[0].stock_quantity - item.quantity;
+      const newStatus = newStock <= 0 ? 'out_of_stock' : prod[0].status;
+      await connection.query('UPDATE products SET stock_quantity = ?, status = ? WHERE id = ?', [
+        newStock,
+        newStatus,
+        item.product_id,
+      ]);
+    }
+
+    // 4. Create Order
+    const orderCode = generateOrderCode();
+    const noteDetail = `ผู้รับ: ${finalName} | โทร: ${finalPhone} | ที่อยู่: ${finalAddress}${paymentMethod === 'cod' ? ' | ชำระเงินปลายทาง (COD)' : ''}`;
+    const [orderResult] = await connection.query(
+      `INSERT INTO orders (order_code, customer_id, total_amount, status, delivery_type, payment_method, notes)
+       VALUES (?, ?, ?, 'pending', 'delivery', ?, ?)`,
+      [orderCode, customer.id, totalAmount, paymentMethod, noteDetail]
+    );
+    const orderId = orderResult.insertId;
+
+    // 5. Insert order items
+    for (const item of items) {
+      await connection.query(
+        'INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal) VALUES (?, ?, ?, ?, ?)',
+        [orderId, item.product_id, item.quantity, item.price, item.subtotal]
+      );
+    }
+
+    await connection.commit();
+
+    const formattedAddressDisplay = `ชื่อผู้รับ: ${finalName}\nเบอร์โทร: ${finalPhone}\nที่อยู่: ${finalAddress}`;
+    const fullOrder = {
+      id: orderId,
+      order_code: orderCode,
+      customer_id: customer.id,
+      total_amount: totalAmount,
+      status: 'pending',
+      payment_method: paymentMethod,
+      customer_name: finalName,
+      customer_phone: finalPhone,
+      customer_address: finalAddress,
+      items: items.map(i => ({
+        ...i,
+        product_name: i.name,
+      })),
+      notes: noteDetail,
+    };
+
+    return {
+      orderId,
+      orderCode,
+      totalAmount,
+      items,
+      finalName,
+      finalPhone,
+      finalAddress,
+      formattedAddressDisplay,
+      fullOrder,
+    };
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
+}
+
 // Event parser and router
 async function handleEvent(event) {
   const userId = event.source?.userId;
@@ -1994,7 +3731,10 @@ async function handleEvent(event) {
           if (contentRes.ok) {
             const arrayBuffer = await contentRes.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
-            slipDataUrl = `data:image/jpeg;base64,${buffer.toString('base64')}`;
+            const filename = `slip-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}.jpg`;
+            const targetPath = path.join(uploadsDir, filename);
+            fs.writeFileSync(targetPath, buffer);
+            slipDataUrl = `/uploads/${filename}`;
           }
         }
       } catch (imgErr) {
@@ -2016,7 +3756,7 @@ async function handleEvent(event) {
       await clearChatSession(userId);
       await replySlipConfirmed(event.replyToken, orderCode);
 
-      // แจ้งเตือนเจ้าของฟาร์มเมื่อมีลูกค้าแนบสลิปผ่าน LINE Chat
+      // แจ้งเตือนเจ้าของฟาร์มเมื่อลูกค้าสั่งซื้อและแนบสลิปชำระเงินสำเร็จ
       try {
         const [oRows] = await pool.query(
           `SELECT o.*, c.display_name AS customer_name, c.phone AS customer_phone, c.address AS customer_address 
@@ -2026,7 +3766,15 @@ async function handleEvent(event) {
           [orderIdForNotify]
         );
         if (oRows.length > 0) {
-          notifyAdminNewOrder(oRows[0], 'SLIP_UPLOADED').catch(e => console.error('notifyAdminNewOrder slip error:', e.message));
+          const [itemsRows] = await pool.query(
+            `SELECT oi.*, p.name AS product_name, p.unit 
+             FROM order_items oi 
+             JOIN products p ON oi.product_id = p.id 
+             WHERE oi.order_id = ?`,
+            [orderIdForNotify]
+          );
+          oRows[0].items = itemsRows;
+          notifyAdminNewOrder(oRows[0], 'ORDER_COMPLETED').catch(e => console.error('notifyAdminNewOrder slip error:', e.message));
         }
       } catch (err) {
         console.error('Error in notifyAdminNewOrder for chat slip:', err.message);
@@ -2094,23 +3842,67 @@ async function handleEvent(event) {
     // Fetch active session state
     const session = await getChatSession(userId);
 
-    // Global cancellation handler
-    if (text === 'ยกเลิก' || text === 'cancel' || text === 'ไม่เอาแล้ว') {
+    // Helper: ดักจับเจตนายกเลิกออเดอร์ในทุกรูปแบบภาษาคน (รวมถึงคำลงท้าย ครับ/ค่ะ, ข้อความยาว, หรือพิมพ์ผิด เช่น ยกเลิกช)
+    function isCancelIntent(rawText) {
+      if (!rawText || typeof rawText !== 'string') return false;
+      const t = rawText.trim().toLowerCase();
+      const cleaned = t.replace(/[\s.,!?~_\-]/g, '');
+
+      if (cleaned.includes('ไม่ยกเลิก') || cleaned.includes('อย่ายกเลิก') || cleaned.includes('อย่าเพิ่งยกเลิก')) {
+        return false;
+      }
+
+      const cancelRegex = /(?:ขอ|ช่วย)?ยกเลิก|ไม่เอา|ไม่ซื้อ|ไม่อยากได้|ลบออเดอร์|ลบรายการ|cancel|cancle/;
+      return cancelRegex.test(cleaned);
+    }
+
+    // Helper: ใช้ Gemini AI ตรวจสอบเจตนายกเลิกในกรณีภาษาพูดซับซ้อน หรือพิมพ์นอกเหนือจากคำใน Regex
+    async function isCancelWithGemini(rawText) {
+      if (!rawText || typeof rawText !== 'string') return false;
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey || apiKey === 'dummy_key') return false;
+
+      const prompt = `ผู้ใช้กำลังอยู่ในขั้นตอนสั่งซื้อสินค้าในแชทของร้านฟาร์มผัก FarmGAP
+ข้อความที่ผู้ใช้พิมพ์ส่งมา: "${rawText}"
+
+คำถาม: ข้อความนี้มีเจตนาต้องการ "ยกเลิกคำสั่งซื้อ / ไม่ซื้อแล้ว / ไม่เอาแล้ว / เปลี่ยนใจไม่ซื้อ / ขอยุติรายการ / ปฏิเสธการรับสินค้า" หรือไม่?
+(เช่น "เปลี่ยนใจแล้ว", "ไม่สะดวกรับแล้ว", "ขอบายก่อนนะ", "แคนเซิลนะ", "ยังไม่พร้อมจ่าย", "ขอผ่านก่อนครับ", "ยกเลิกช")
+แต่ถ้าเป็นการถามคำถามทั่วไป, บอกที่อยู่, หรือพูดว่า "ไม่ยกเลิก", "สั่งเพิ่ม" ให้ตอบ NO
+
+ตอบเฉพาะคำว่า YES หรือ NO สั้นๆ เพียงคำเดียวเท่านั้น:`;
+
+      try {
+        const reply = await askGemini(prompt, "ตอบเฉพาะ YES หรือ NO เท่านั้น");
+        return reply.toUpperCase().includes('YES');
+      } catch (_) {
+        return false;
+      }
+    }
+
+    // วิเคราะห์เจตนายกเลิก: ตรวจสอบทั้ง Regex แบบ Fast-path และใช้ Gemini AI ช่วยวิเคราะห์ข้อความภาษาธรรมชาติ
+    let shouldCancel = isCancelIntent(text);
+    if (!shouldCancel && session.state !== 'IDLE') {
+      shouldCancel = await isCancelWithGemini(text);
+    }
+
+    // Global cancellation handler (เข้าใจภาษาธรรมชาติ เช่น ยกเลิกช, ยกเลิก ครับ, ขอยกเลิก, ไม่เอาแล้ว, ภาษาพูดนอกบท)
+    if (shouldCancel) {
       if (session.state === 'AWAITING_PAYMENT' && session.order_id) {
         const cancelledCode = await cancelChatOrder(session.order_id);
+        const owner = await getOwnerContactInfo();
         await clearChatSession(userId);
         return client.replyMessage({
           replyToken: replyToken,
           messages: [
             {
               type: 'text',
-              text: `ยกเลิกออเดอร์ ${cancelledCode} และคืนสต็อกผักสดเรียบร้อยแล้วครับ หากต้องการสั่งซื้อใหม่สามารถพิมพ์บอกได้ตลอดเวลานะครับ 🌱`,
+              text: `ยกเลิกออเดอร์ ${cancelledCode} และคืนสต็อกผักสดเรียบร้อยแล้วครับ 🌱\n\n💸 หากคุณลูกค้าได้ทำการโอนเงินเข้ามาก่อนหน้านี้ สามารถส่งรูปสลิปพร้อมเลขบัญชีสำหรับรับเงินคืนในแชทนี้ หรือโทรแจ้งเจ้าของฟาร์มได้ที่เบอร์ ${owner.phone} (คุณ${owner.displayName}) ได้เลยครับ`,
             },
           ],
         });
       }
 
-      if (session.state === 'AWAITING_ADDRESS') {
+      if (session.state === 'AWAITING_ADDRESS' || session.state === 'AWAITING_PAYMENT_METHOD') {
         await clearChatSession(userId);
         return client.replyMessage({
           replyToken: replyToken,
@@ -2134,165 +3926,199 @@ async function handleEvent(event) {
       });
     }
 
-// Helper: สกัดชื่อผู้รับ เบอร์โทรศัพท์ และที่อยู่จัดส่ง จากข้อความที่ผู้ใช้พิมพ์
-function parseCustomerContact(text) {
-  let name = null;
-  let phone = null;
-  let address = null;
-
-  // 1. สกัดเบอร์โทรศัพท์ (รองรับทั้ง 08x, 09x, 06x มีหรือไม่มีขีด/วรรค)
-  const phoneMatch = text.match(/0[0-9]{1,2}[- ]?[0-9]{3,4}[- ]?[0-9]{3,4}/);
-  if (phoneMatch) {
-    phone = phoneMatch[0].replace(/[- ]/g, '');
-  }
-
-  // 2. สกัดชื่อผู้รับ
-  const nameMatch = text.match(/(?:ชื่อ|ผู้รับ|คุณ)\s*[:\-]?\s*([^\n,]+)/i);
-  if (nameMatch && nameMatch[1]) {
-    name = nameMatch[1].trim();
-  }
-
-  // 3. สกัดที่อยู่จัดส่ง
-  const addrMatch = text.match(/(?:ที่อยู่|ส่งที่|จัดส่ง|บ้านเลขที่)\s*[:\-]?\s*([\s\S]+?)(?=(?:เบอร์|โทร|ชื่อ|$))/i);
-  if (addrMatch && addrMatch[1]) {
-    address = addrMatch[1].trim();
-  } else {
-    // กรณีพิมพ์แบบแยกบรรทัด ไม่มีคำว่าที่อยู่ ให้นำบรรทัดที่ไม่ใช่ชื่อและเบอร์มาเป็นที่อยู่
-    address = text
-      .split('\n')
-      .map(l => l.trim())
-      .filter(l => l && !l.match(/^(?:ชื่อ|เบอร์|โทร|tel)/i) && !l.match(/0[0-9]{8,9}/))
-      .join(' ')
-      .trim();
-  }
-
-  return {
-    name: name || null,
-    phone: phone || null,
-    address: address || text.trim(),
-  };
-}
-
     // STATE: AWAITING_ADDRESS (Customer is providing shipping address & phone)
     if (session.state === 'AWAITING_ADDRESS' && session.draft_data?.items) {
       const items = session.draft_data.items;
       const totalAmount = session.draft_data.totalAmount || session.draft_data.total_amount;
+      const draft = session.draft_data;
 
-      // Extract clean name, phone, address
-      const contact = parseCustomerContact(text);
-      const phone = contact.phone;
-      const customerName = contact.name;
-      const cleanAddress = contact.address;
+      // Extract clean name, phone, address with hybrid AI & Regex
+      const parsedContact = await parseSmartCustomerContact(text);
 
-      const connection = await pool.getConnection();
-      try {
-        await connection.beginTransaction();
+      // Merge with previously collected info in session draft
+      const mergedName = parsedContact.name || draft.contact_name || null;
+      const mergedPhone = parsedContact.phone || draft.contact_phone || null;
+      const mergedAddress = parsedContact.address || draft.contact_address || null;
 
-        // 1. Get customer
-        const [customers] = await connection.query('SELECT * FROM customers WHERE line_user_id = ?', [userId]);
-        const customer = customers[0];
+      // Fetch customer profile from DB
+      const [customers] = await pool.query('SELECT * FROM customers WHERE line_user_id = ?', [userId]);
+      const customer = customers[0] || {};
 
-        // 2. Update customer phone, address, and display_name
-        await connection.query(
-          'UPDATE customers SET address = ?, phone = COALESCE(?, phone), display_name = COALESCE(?, display_name) WHERE id = ?',
-          [cleanAddress, phone, customerName, customer.id]
-        );
+      // Determine missing fields
+      const missingList = [];
+      if (!mergedAddress) {
+        missingList.push('🏠 ที่อยู่จัดส่ง (เช่น บ้านเลขที่, ซอย/ถนน, ตำบล, อำเภอ, จังหวัด, รหัสไปรษณีย์)');
+      }
+      if (!mergedPhone) {
+        missingList.push('📱 เบอร์โทรศัพท์ติดต่อ (10 หลัก สำหรับขนส่งโทรติดต่อ)');
+      }
+      if (!mergedName && (!customer.display_name || customer.display_name === 'ลูกค้า LINE')) {
+        missingList.push('👤 ชื่อ-นามสกุล หรือชื่อเล่นของผู้รับ');
+      }
 
-        // 3. Check stock again and deduct
-        for (const item of items) {
-          const [prod] = await connection.query('SELECT stock_quantity, status FROM products WHERE id = ? FOR UPDATE', [item.product_id]);
-          if (prod.length === 0 || prod[0].stock_quantity < item.quantity) {
-            await connection.rollback();
-            await clearChatSession(userId);
-            return client.replyMessage({
-              replyToken: replyToken,
-              messages: [
-                {
-                  type: 'text',
-                  text: `ขออภัยครับ สินค้า "${item.name}" สต็อกไม่เพียงพอในขณะนี้ ระบบขออนุญาตยกเลิกรายการเดิม รบกวนพิมพ์สั่งซื้อใหม่อีกครั้งครับ`,
-                },
-              ],
-            });
-          }
+      // ตรวจสอบว่าในข้อความนี้ มีข้อมูลติดต่อใหม่ (เบอร์ หรือ ที่อยู่) ที่ตรวจจับได้หรือไม่
+      const providedContactInThisMsg = parsedContact.phone || (parsedContact.address && isLikelyAddress(parsedContact.address));
 
-          const newStock = prod[0].stock_quantity - item.quantity;
-          const newStatus = newStock <= 0 ? 'out_of_stock' : prod[0].status;
-          await connection.query('UPDATE products SET stock_quantity = ?, status = ? WHERE id = ?', [
-            newStock,
-            newStatus,
-            item.product_id,
-          ]);
+      // ถ้าในข้อความนี้ไม่มีข้อมูลที่อยู่หรือเบอร์โทรเลย และยังมีข้อมูลที่ขาดอยู่
+      // แสดงว่าผู้ใช้กำลังพิมพ์สอบถามคำถาม หรือพูดคุยทั่วไป -> ให้ Gemini AI ตอบคำถามตามจริงทันที ไม่ตอบตัดบทซ้ำเดิม
+      if (!providedContactInThisMsg && missingList.length > 0) {
+        try {
+          const farmContext = await getFarmContext();
+          const itemsSummary = items.map(i => `${i.name} ${i.quantity} ${i.unit || 'แพ็ค'}`).join(', ');
+          const addressInstruction = `${farmContext}
+[สถานะปัจจุบันของลูกค้า]: ลูกค้ากำลังทำรายการสั่งซื้อผักสด (${itemsSummary} ยอดรวม ฿${Number(totalAmount).toLocaleString()} บาท) และอยู่ในขั้นตอนพิมพ์แจ้งข้อมูลจัดส่ง (ชื่อ, เบอร์โทร, ที่อยู่)
+[คำสั่งสำหรับ AI]:
+1. ตอบคำถามหรือข้อความของลูกค้าอย่างสุภาพ เป็นมิตร และชาญฉลาดตามคำถามจริง
+2. ต่อท้ายคำตอบด้วยข้อความแนะนำสั้นๆ: "📝 (สำหรับรายการสั่งซื้อ ${itemsSummary} เมื่อสะดวกแล้ว สามารถพิมพ์แจ้งชื่อ เบอร์โทร และที่อยู่จัดส่งในแชทนี้ได้เลยครับ หรือพิมพ์ 'ยกเลิก' หากต้องการยกเลิกครับ 🌱)"`;
+
+          const aiReply = await askGemini(text, addressInstruction);
+          return client.replyMessage({
+            replyToken: replyToken,
+            messages: [{ type: 'text', text: aiReply }],
+          });
+        } catch (err) {
+          console.error('Error answering AWAITING_ADDRESS with Gemini:', err.message);
         }
+      }
 
-        // 4. Create Order
-        const orderCode = generateOrderCode();
-        const noteDetail = `ผู้รับ: ${customerName || customer.display_name} | โทร: ${phone || customer.phone || '-'} | ที่อยู่: ${cleanAddress}`;
-        const [orderResult] = await connection.query(
-          `INSERT INTO orders (order_code, customer_id, total_amount, status, delivery_type, notes)
-           VALUES (?, ?, ?, 'pending', 'delivery', ?)`,
-          [orderCode, customer.id, totalAmount, noteDetail]
-        );
-        const orderId = orderResult.insertId;
-
-        // 5. Insert order items
-        for (const item of items) {
-          await connection.query(
-            'INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal) VALUES (?, ?, ?, ?, ?)',
-            [orderId, item.product_id, item.quantity, item.price, item.subtotal]
-          );
-        }
-
-        await connection.commit();
-
-        // 6. Update session to AWAITING_PAYMENT
-        await setChatSession(userId, 'AWAITING_PAYMENT', orderId, {
-          order_code: orderCode,
-          total_amount: totalAmount,
-          items,
-          address: cleanAddress,
-          customer_name: customerName,
-          phone,
+      // If any required field is missing, save current draft progress and prompt the customer
+      if (missingList.length > 0) {
+        await setChatSession(userId, 'AWAITING_ADDRESS', null, {
+          ...draft,
+          contact_name: mergedName,
+          contact_phone: mergedPhone,
+          contact_address: mergedAddress,
         });
 
-        // 7. Send invoice & bank details
-        const formattedAddressDisplay = `ชื่อผู้รับ: ${customerName || customer.display_name || 'คุณลูกค้า'}\nเบอร์โทร: ${phone || customer.phone || '-'}\nที่อยู่: ${cleanAddress}`;
-        await replyInvoiceAndPayment(replyToken, orderCode, totalAmount, items, formattedAddressDisplay);
+        return replyMissingContactInfo(
+          replyToken,
+          {
+            name: mergedName || (customer.display_name !== 'ลูกค้า LINE' ? customer.display_name : null),
+            phone: mergedPhone,
+            address: mergedAddress,
+          },
+          missingList
+        );
+      }
 
-        // แจ้งเตือนเจ้าของฟาร์มเมื่อมีออเดอร์ใหม่ผ่าน LINE Chat
+      // All required contact info is complete!
+      const contactDraft = {
+        ...draft,
+        items,
+        totalAmount,
+        contact_name: mergedName,
+        contact_phone: mergedPhone,
+        contact_address: mergedAddress,
+      };
+
+      // Check if user explicitly stated payment method in this message
+      const lowerText = text.toLowerCase();
+      const isCodExplicit = lowerText.includes('ปลายทาง') || lowerText.includes('cod') || lowerText.includes('เก็บปลายทาง') || lowerText.includes('เงินสด');
+      const isTransferExplicit = lowerText.includes('โอนเงิน') || lowerText.includes('โอน') || lowerText.includes('พร้อมเพย์') || lowerText.includes('qr');
+
+      if (isCodExplicit) {
         try {
-          const newOrderData = {
-            id: orderId,
-            order_code: orderCode,
-            total_amount: totalAmount,
-            customer_name: customerName || customer.display_name || 'คุณลูกค้า',
-            customer_phone: phone || customer.phone || '-',
-            customer_address: cleanAddress,
-            items: items.map(it => ({
-              product_name: it.product?.name || it.name || 'ผักสด',
-              quantity: it.quantity,
-              unit: it.product?.unit || it.unit || 'กก.',
-              subtotal: it.subtotal || (it.quantity * (it.product?.price || it.price || 0)),
-            })),
-          };
-          notifyAdminNewOrder(newOrderData, 'NEW_ORDER').catch(e => console.error('notifyAdminNewOrder chat order error:', e.message));
+          const created = await createChatOrder(userId, contactDraft, 'cod');
+          await clearChatSession(userId);
+          notifyAdminNewOrder(created.fullOrder, 'ORDER_COMPLETED').catch(e => console.error('notifyAdminNewOrder error:', e.message));
+          return replyCodOrderConfirmation(replyToken, created.orderCode, created.totalAmount, created.items, created.formattedAddressDisplay);
         } catch (err) {
-          console.error('Error triggering admin notification for chat order:', err.message);
+          console.error('Failed to create COD order:', err.message);
+          return client.replyMessage({
+            replyToken: replyToken,
+            messages: [{ type: 'text', text: err.message || 'เกิดข้อผิดพลาดในการบันทึกคำสั่งซื้อ กรุณาลองใหม่อีกครั้งครับ' }],
+          });
         }
-        return;
-      } catch (orderErr) {
-        await connection.rollback();
-        console.error('Failed to create order from chat:', orderErr.message);
+      }
+
+      if (isTransferExplicit) {
+        try {
+          const created = await createChatOrder(userId, contactDraft, 'transfer');
+          await setChatSession(userId, 'AWAITING_PAYMENT', created.orderId, {
+            order_code: created.orderCode,
+            total_amount: created.totalAmount,
+            items: created.items,
+            address: created.finalAddress,
+            customer_name: created.finalName,
+            phone: created.finalPhone,
+          });
+          return replyInvoiceAndPayment(replyToken, created.orderCode, created.totalAmount, created.items, created.formattedAddressDisplay);
+        } catch (err) {
+          console.error('Failed to create transfer order:', err.message);
+          return client.replyMessage({
+            replyToken: replyToken,
+            messages: [{ type: 'text', text: err.message || 'เกิดข้อผิดพลาดในการบันทึกคำสั่งซื้อ กรุณาลองใหม่อีกครั้งครับ' }],
+          });
+        }
+      }
+
+      // Transition to AWAITING_PAYMENT_METHOD and ask customer to choose
+      await setChatSession(userId, 'AWAITING_PAYMENT_METHOD', null, contactDraft);
+      return replyPaymentMethodSelection(replyToken, contactDraft);
+    }
+
+    // STATE: AWAITING_PAYMENT_METHOD (Customer is choosing between Bank Transfer and COD)
+    if (session.state === 'AWAITING_PAYMENT_METHOD' && session.draft_data?.items) {
+      const lowerText = text.toLowerCase().trim();
+      let isCod = lowerText === 'เก็บเงินปลายทาง' || lowerText === 'ปลายทาง' || lowerText === 'cod' || lowerText.includes('ปลายทาง') || lowerText.includes('cod') || lowerText === '2' || lowerText.includes('เงินสด');
+      let isTransfer = lowerText === 'โอนเงิน' || lowerText === 'โอน' || lowerText.includes('โอน') || lowerText.includes('พร้อมเพย์') || lowerText.includes('qr') || lowerText === '1' || lowerText === 'transfer';
+
+      // ชั้นที่ 2: หาก Fast-path ยังไม่ตรง ให้ Gemini AI ช่วยวิเคราะห์เจตนาเลือกช่องทางชำระเงินจากภาษาพูด
+      if (!isCod && !isTransfer) {
+        const aiMethod = await detectPaymentMethodWithGemini(text);
+        if (aiMethod === 'cod') isCod = true;
+        if (aiMethod === 'transfer') isTransfer = true;
+      }
+
+      if (isCod) {
+        try {
+          const created = await createChatOrder(userId, session.draft_data, 'cod');
+          await clearChatSession(userId);
+          notifyAdminNewOrder(created.fullOrder, 'ORDER_COMPLETED').catch(e => console.error('notifyAdminNewOrder error:', e.message));
+          return replyCodOrderConfirmation(replyToken, created.orderCode, created.totalAmount, created.items, created.formattedAddressDisplay);
+        } catch (err) {
+          console.error('Failed to create COD order:', err.message);
+          return client.replyMessage({
+            replyToken: replyToken,
+            messages: [{ type: 'text', text: err.message || 'เกิดข้อผิดพลาดในการบันทึกคำสั่งซื้อ กรุณาลองใหม่อีกครั้งครับ' }],
+          });
+        }
+      }
+
+      if (isTransfer) {
+        try {
+          const created = await createChatOrder(userId, session.draft_data, 'transfer');
+          await setChatSession(userId, 'AWAITING_PAYMENT', created.orderId, {
+            order_code: created.orderCode,
+            total_amount: created.totalAmount,
+            items: created.items,
+            address: created.finalAddress,
+            customer_name: created.finalName,
+            phone: created.finalPhone,
+          });
+          return replyInvoiceAndPayment(replyToken, created.orderCode, created.totalAmount, created.items, created.formattedAddressDisplay);
+        } catch (err) {
+          console.error('Failed to create transfer order:', err.message);
+          return client.replyMessage({
+            replyToken: replyToken,
+            messages: [{ type: 'text', text: err.message || 'เกิดข้อผิดพลาดในการบันทึกคำสั่งซื้อ กรุณาลองใหม่อีกครั้งครับ' }],
+          });
+        }
+      }
+
+      // If user typed something else, respond with Gemini AI or payment selection
+      try {
+        const farmContext = await getFarmContext();
+        const methodInstruction = `${farmContext}
+[สถานะปัจจุบันของลูกค้า]: ลูกค้ากำลังอยู่ในขั้นตอนเลือกช่องทางชำระเงิน (มี 2 ตัวเลือก: 1. โอนเงินผ่าน QR Code หรือ 2. เก็บเงินปลายทาง COD)
+[คำสั่งสำหรับ AI]: ตอบคำถามหรือข้อความของลูกค้าอย่างสุภาพและเป็นมิตร และต่อท้ายด้วยคำถามว่าลูกค้าสะดวกชำระแบบ "โอนเงิน" หรือ "เก็บเงินปลายทาง" เพื่อดำเนินรายการต่อ`;
+        const aiReply = await askGemini(text, methodInstruction);
         return client.replyMessage({
           replyToken: replyToken,
-          messages: [
-            {
-              type: 'text',
-              text: 'ขออภัยครับ เกิดข้อผิดพลาดในการบันทึกคำสั่งซื้อ กรุณาลองใหม่อีกครั้ง หรือสั่งผ่านหน้าร้านเว็บได้ครับ',
-            },
-          ],
+          messages: [{ type: 'text', text: aiReply }],
         });
-      } finally {
-        connection.release();
+      } catch (_) {
+        return replyPaymentMethodSelection(replyToken, session.draft_data);
       }
     }
 
@@ -2300,23 +4126,87 @@ function parseCustomerContact(text) {
     if (session.state === 'AWAITING_PAYMENT' && session.order_id) {
       const orderCode = session.draft_data?.order_code || 'ORD';
       const totalAmount = session.draft_data?.total_amount || 0;
-      return client.replyMessage({
-        replyToken: replyToken,
-        messages: [
-          {
-            type: 'text',
-            text: `ขณะนี้คุณมีออเดอร์ ${orderCode} (ยอดชำระ ฿${totalAmount.toLocaleString()} บาท) รอยืนยันการชำระเงินครับ\n\n📸 เมื่อโอนแล้ว ส่งรูปสลิปเข้ามาในแชทนี้ได้เลยครับ\n❌ หรือพิมพ์ 'ยกเลิก' หากต้องการยกเลิกออเดอร์`,
-          },
-        ],
-      });
+
+      // ใช้ Gemini AI ช่วยตอบคำถามหรือข้อความของลูกค้า พร้อมแนบคำแนะนำการชำระเงิน/ยกเลิกท้ายข้อความอย่างเป็นมิตร
+      try {
+        const farmContext = await getFarmContext();
+        const paymentInstruction = `${farmContext}
+[สถานะปัจจุบันของลูกค้า]: ลูกค้าเพิ่งทำรายการสั่งซื้อออเดอร์หมายเลข ${orderCode} (ยอดชำระ ฿${Number(totalAmount).toLocaleString()} บาท) และอยู่ในขั้นตอนรอยืนยันการชำระเงิน (รอส่งรูปสลิปโอนเงิน)
+[คำสั่งสำหรับ AI]:
+1. ตอบคำถามหรือพูดคุยกับลูกค้าอย่างสุภาพ เป็นมิตร และชาญฉลาดตามสิ่งที่ลูกค้าพิมพ์มา
+2. ต่อท้ายคำตอบด้วยข้อความสั้นๆ: "📌 (สำหรับออเดอร์ ${orderCode} ยอด ฿${Number(totalAmount).toLocaleString()} บาท สามารถแนบรูปสลิปเพื่อยืนยัน หรือพิมพ์ 'ยกเลิก' หากต้องการยกเลิกครับ)"`;
+
+        const aiReply = await askGemini(text, paymentInstruction);
+        return client.replyMessage({
+          replyToken: replyToken,
+          messages: [
+            {
+              type: 'text',
+              text: aiReply,
+            },
+          ],
+        });
+      } catch (err) {
+        console.error('Error answering AWAITING_PAYMENT with Gemini:', err.message);
+        return client.replyMessage({
+          replyToken: replyToken,
+          messages: [
+            {
+              type: 'text',
+              text: `ขณะนี้คุณมีออเดอร์ ${orderCode} (ยอดชำระ ฿${Number(totalAmount).toLocaleString()} บาท) รอยืนยันการชำระเงินครับ\n\n📸 เมื่อโอนแล้ว ส่งรูปสลิปเข้ามาในแชทนี้ได้เลยครับ\n❌ หรือพิมพ์ 'ยกเลิก' หากต้องการยกเลิกออเดอร์ครับ 🌱`,
+            },
+          ],
+        });
+      }
     }
 
     // STATE: IDLE (Standard conversation or new order intent)
     if (text === 'เมนูผัก' || text === 'สั่งซื้อ') {
       return replyVegMenu(replyToken, userId);
     }
-    if (text === 'เช็คสถานะ' || text === 'ออเดอร์') {
+    const lowerTrimText = text.toLowerCase().trim();
+    if (
+      ['เช็คสถานะ', 'ออเดอร์', 'สถานะ', 'สถานะออเดอร์', 'เช็คสถานะออเดอร์', 'ติดตามพัสดุ', 'เช็คพัสดุ'].includes(text) ||
+      text.startsWith('เช็คสถานะ') ||
+      text === 'status' ||
+      lowerTrimText.includes('ตามของ') ||
+      lowerTrimText.includes('ส่งถึงไหน') ||
+      lowerTrimText.includes('ของส่งยัง') ||
+      lowerTrimText.includes('พัสดุถึงไหน')
+    ) {
       return replyOrderStatus(replyToken, userId);
+    }
+
+    if (
+      ['ดูประวัติ', 'ประวัติ', 'ประวัติการสั่งซื้อ', 'ประวัติออเดอร์', 'ดูประวัติการสั่งซื้อ', 'ประวัติการซื้อ'].includes(text) ||
+      text.includes('ดูประวัติ') ||
+      text.includes('ประวัติการสั่งซื้อ') ||
+      text.includes('เคยสั่ง') ||
+      text.includes('ออเดอร์เก่า') ||
+      text === 'history'
+    ) {
+      return replyOrderHistory(replyToken, userId);
+    }
+
+    // ตรวจสอบคำถามขอเงินคืน (Refund)
+    const isRefundInquiry = [
+      'ขอเงินคืน', 'คืนเงิน', 'ขอเงินคืนยังไง', 'เงินคืน', 'ขอเงินคืนครับ',
+      'ขอเงินคืนค่ะ', 'refund', 'ได้เงินคืนยังไง', 'ขอคืนเงิน', 'โอนแล้วขอยกเลิก', 'โอนเงินแล้วขอยกเลิก'
+    ].some(k => lowerTrimText.includes(k));
+
+    if (isRefundInquiry) {
+      return replyRefundInstructions(replyToken);
+    }
+
+    // ตรวจสอบคำถามขอเบอร์โทร / ช่องทางติดต่อเจ้าของฟาร์มโดยตรง
+    const isContactInquiry = (
+      ['ขอเบอร์', 'เบอร์โทร', 'ขอเบอร์ติดต่อ', 'เบอร์ติดต่อ', 'ติดต่อเจ้าของ', 'ติดต่อคน', 'ติดต่อแอดมิน', 'เบอร์ฟาร์ม', 'ขอเบอร์โทร', 'โทรหาใคร', 'เบอร์โทรศัพท์'].some(k => lowerTrimText.includes(k)) ||
+      (lowerTrimText.includes('เบอร์') && (lowerTrimText.includes('ติดต่อ') || lowerTrimText.includes('โทร') || lowerTrimText.includes('ขอ'))) ||
+      (lowerTrimText.includes('ติดต่อ') && (lowerTrimText.includes('คน') || lowerTrimText.includes('แอดมิน') || lowerTrimText.includes('เจ้าของ') || lowerTrimText.includes('ฟาร์ม')))
+    ) && !lowerTrimText.includes('สั่ง') && !lowerTrimText.includes('ที่อยู่');
+
+    if (isContactInquiry) {
+      return replyOwnerContact(replyToken);
     }
 
     // Check if user is trying to order directly in chat
@@ -2342,8 +4232,8 @@ function parseCustomerContact(text) {
     }
 
     // Safety Net: หากผู้ใช้พิมพ์ข้อมูลติดต่อ/ที่อยู่ แต่ไม่ได้อยู่ในสถานะ AWAITING_ADDRESS
-    const contactInfo = parseCustomerContact(text);
-    if (contactInfo.phone || (contactInfo.name && contactInfo.address && (text.includes('ที่อยู่') || text.includes('เบอร์')))) {
+    const contactInfo = await parseSmartCustomerContact(text);
+    if (contactInfo.phone || (contactInfo.address && isLikelyAddress(contactInfo.address) && (text.includes('ที่อยู่') || text.includes('เบอร์') || contactInfo.name))) {
       try {
         await pool.query(
           'UPDATE customers SET address = COALESCE(?, address), phone = COALESCE(?, phone), display_name = COALESCE(?, display_name) WHERE line_user_id = ?',

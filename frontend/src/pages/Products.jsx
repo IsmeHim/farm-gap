@@ -8,7 +8,7 @@ const emptyForm = {
   name: '',
   category: 'ผักสลัด',
   price: '',
-  unit: 'กก.',
+  unit: 'ถุง',
   stock_quantity: '',
   image_url: '',
   status: 'available',
@@ -89,7 +89,7 @@ export default function Products() {
       name: product.name || '',
       category: product.category || 'ผักสลัด',
       price: product.price ?? '',
-      unit: product.unit || 'กก.',
+      unit: product.unit || 'ถุง',
       stock_quantity: product.stock_quantity ?? '',
       image_url: product.image_url || '',
       status: product.status || 'available',
@@ -327,9 +327,13 @@ function ProductDialog({ form, setForm, plots, editing, onClose, onSave }) {
           </Field>
           <Field label="หน่วย">
             <select className="input" value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })}>
-              <option>กก.</option>
-              <option>ห่อ</option>
-              <option>แพ็ก</option>
+              <option value="ถุง">ถุง</option>
+              <option value="กก.">กก.</option>
+              <option value="ห่อ">ห่อ</option>
+              <option value="แพ็ก">แพ็ก</option>
+              <option value="ต้น">ต้น</option>
+              <option value="กล่อง">กล่อง</option>
+              <option value="ถาด">ถาด</option>
             </select>
           </Field>
           <Field label="จำนวนคงเหลือ">

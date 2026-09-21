@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { api } from '../lib/api';
+import { useAuth } from '../lib/auth.jsx';
 import { toast } from 'sonner';
 import { Plus, Trash2, Pencil, X, Search, Calendar, MapPin, CheckCircle2, AlertCircle, RefreshCw, Filter } from 'lucide-react';
 import { format } from 'date-fns';
@@ -18,6 +19,7 @@ export default function LogManager({
   reloadTrigger,
   onDataLoaded,
 }) {
+  const { user } = useAuth();
   const [rows, setRows] = useState([]);
   const [plots, setPlots] = useState([]);
   const [open, setOpen] = useState(false);
@@ -51,6 +53,7 @@ export default function LogManager({
     fields.forEach(f => {
       if (f.type === 'date') init[f.key] = format(new Date(), 'yyyy-MM-dd');
       else if (f.default !== undefined) init[f.key] = f.default;
+      else if (f.key === 'worker_name' || f.key === 'operator_name') init[f.key] = user?.display_name || 'เจ้าของฟาร์ม';
       if (f.allowCustom) init[`custom_${f.key}`] = '';
     });
     setForm(init);
@@ -117,10 +120,38 @@ export default function LogManager({
   const plotName = (id) => {
     const p = plots.find(plot => plot.id === id);
     if (!p) return '—';
-    const cleanName = (p.name || '').replace(/แปลง|\s|\(.*?\)/g, '').trim() || `P${p.id}`;
+    const cleanName = (p.name || '').replace(/แปลง|\/|\s|\(.*?\)/g, '').trim() || `P${p.id}`;
     const cycle = p.cycle_number || 1;
     return `${p.name} [#BATCH-${cleanName}-R${cycle}]`;
   };
+
+  const renderPlotCell = (id) => {
+    const p = plots.find(plot => plot.id === id);
+    if (!p) return <span className="text-slate-400 font-medium">—</span>;
+    const cleanName = (p.name || '').replace(/แปลง|\/|\s|\(.*?\)/g, '').trim() || `P${p.id}`;
+    const cycle = p.cycle_number || 1;
+    const batchCode = `#BATCH-${cleanName}-R${cycle}`;
+
+    return (
+      <div className="min-w-[170px] space-y-1">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 text-xs font-black text-emerald-950 bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200/90 whitespace-nowrap shadow-2xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0"></span>
+            <span>{p.name}</span>
+          </span>
+          {p.crop_name && p.crop_name !== '-' && (
+            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/80 px-1.5 py-0.2 rounded whitespace-nowrap">
+              {p.crop_name}
+            </span>
+          )}
+        </div>
+        <div className="text-[10px] font-mono text-slate-400 font-semibold truncate" title={batchCode}>
+          {batchCode}
+        </div>
+      </div>
+    );
+  };
+
   const visible = fields.filter(f => !f.hideInTable);
 
   const filteredRows = useMemo(() => {
@@ -141,25 +172,25 @@ export default function LogManager({
   const renderBadge = (f, val) => {
     if (f.type === 'bool') {
       return val ? (
-        <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md font-bold text-[11px]">
-          <CheckCircle2 className="w-3 h-3 text-emerald-600" /> ผ่าน/สะอาด
+        <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-lg font-bold text-[11px] whitespace-nowrap shadow-2xs">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> ผ่าน/สะอาด
         </span>
       ) : (
-        <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md text-[11px]">
+        <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md text-[11px] whitespace-nowrap">
           —
         </span>
       );
     }
     if (f.key === 'cycle_number') {
       return (
-        <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-md font-mono font-bold text-[11px]">
+        <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-900 border border-amber-300 px-2.5 py-0.5 rounded-lg font-mono font-bold text-[11px] whitespace-nowrap shadow-2xs">
           รอบที่ {val || 1}
         </span>
       );
     }
     if (f.key === 'session') {
       return (
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold text-[11px] border ${
+        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg font-bold text-[11px] border whitespace-nowrap shadow-2xs ${
           val === 'เย็น'
             ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
             : 'bg-amber-50 text-amber-800 border-amber-200'
@@ -169,23 +200,27 @@ export default function LogManager({
       );
     }
     if (f.key === 'quality_grade') {
+      const cleanGrade = String(val || '-').replace(/^เกรด\s*/, '');
       return (
-        <span className="inline-block bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-md font-black text-[11px]">
-          เกรด {val || '-'}
+        <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-900 border border-amber-300/80 px-2.5 py-0.5 rounded-lg font-black text-xs whitespace-nowrap shadow-2xs">
+          เกรด {cleanGrade}
         </span>
       );
     }
     if (f.key === 'field_safety_status' || f.key === 'harvest_hygiene' || f.key === 'water_quality') {
       const isGood = String(val).includes('สะอาด') || String(val).includes('ปลอดภัย') || String(val).includes('ผ่าน');
       return (
-        <span className={`inline-block px-2 py-0.5 rounded-md font-bold text-[11px] border ${isGood ? 'bg-green-50 text-green-800 border-green-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
-          {val || '-'}
+        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg font-bold text-xs border whitespace-nowrap shadow-2xs ${
+          isGood ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-amber-50 text-amber-900 border-amber-300'
+        }`}>
+          {isGood && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+          <span>{val || '-'}</span>
         </span>
       );
     }
     if (f.key === 'status') {
       return (
-        <span className="inline-block bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md font-bold text-[10px] uppercase">
+        <span className="inline-block bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-lg font-bold text-[10px] uppercase whitespace-nowrap">
           {val || 'active'}
         </span>
       );
@@ -353,16 +388,16 @@ export default function LogManager({
 
       {/* DESKTOP VIEW: Sleek Table (hidden on mobile/tablet portrait, block on lg:) */}
       <div className="hidden lg:block surface rounded-2xl bg-white border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="table-responsive">
+        <div className="overflow-x-auto">
           <table className="min-w-full text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-50/90 border-b border-slate-200/90">
               <tr>
                 {visible.map(f => (
-                  <th key={f.key} className="text-left px-4 py-3.5 font-bold text-slate-600 whitespace-nowrap">
+                  <th key={f.key} className="text-left px-4 py-3.5 font-black text-slate-700 whitespace-nowrap tracking-tight text-xs">
                     {f.label}
                   </th>
                 ))}
-                <th className="text-right px-4 py-3.5 font-bold text-slate-600 whitespace-nowrap">การจัดการ</th>
+                <th className="text-right px-4 py-3.5 font-black text-slate-700 whitespace-nowrap tracking-tight text-xs">การจัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -382,17 +417,27 @@ export default function LogManager({
                 </tr>
               ) : (
                 filteredRows.map(r => (
-                  <tr key={r.id} className="hover:bg-slate-50/80 transition">
+                  <tr key={r.id} className="hover:bg-emerald-50/40 transition-colors">
                     {visible.map(f => (
-                      <td key={f.key} className="px-4 py-3 text-slate-700 font-medium align-middle">
+                      <td key={f.key} className="px-4 py-3.5 text-slate-700 font-medium align-middle">
                         {f.render ? f.render(r[f.key], r) : (
                           renderBadge(f, r[f.key]) || (
                             f.type === 'date' && r[f.key] ? (
-                              <span className="font-mono text-slate-600">{format(new Date(r[f.key]), 'dd/MM/yyyy')}</span>
+                              <span className="font-mono text-slate-700 font-bold whitespace-nowrap">
+                                {format(new Date(r[f.key]), 'dd/MM/yyyy')}
+                              </span>
                             ) : f.key === 'plot_id' ? (
-                              <span className="font-bold text-emerald-900">{plotName(r[f.key])}</span>
+                              renderPlotCell(r[f.key])
                             ) : f.key === 'image_url' && r[f.key] ? (
-                              <img src={r[f.key]} alt="รูป" className="w-16 h-12 rounded-xl object-cover border border-slate-200" />
+                              <img src={r[f.key]} alt="รูป" className="w-16 h-12 rounded-xl object-cover border border-slate-200 shadow-2xs" />
+                            ) : f.key === 'lot_code' ? (
+                              <span className="font-mono font-bold text-xs text-slate-800 bg-slate-100/90 border border-slate-200 px-2 py-0.5 rounded-md whitespace-nowrap inline-block shadow-2xs">
+                                {r[f.key] || '—'}
+                              </span>
+                            ) : f.key === 'worker_name' ? (
+                              <span className="font-semibold text-slate-800 whitespace-nowrap">
+                                {r[f.key] || '—'}
+                              </span>
                             ) : (
                               r[f.key] ?? '—'
                             )
