@@ -55,7 +55,10 @@ export default function Harvest() {
     sync_to_stock: true,
     price: 20,
     image_url: '',
-    is_available: true,
+    is_available: false,
+    is_partial: false,
+    harvested_plants_count: '',
+    destination: 'cold_storage',
   });
 
   const [submitting, setSubmitting] = useState(false);
@@ -79,6 +82,110 @@ export default function Harvest() {
   const [audienceList, setAudienceList] = useState([]);
   const [loadingAudience, setLoadingAudience] = useState(false);
   const [sendingPush, setSendingPush] = useState(false);
+
+  // Stock Allocation Modal state
+  const [stockModalItem, setStockModalItem] = useState(null);
+  const [stockForm, setStockForm] = useState({
+    quantity_to_stock: 1,
+    product_id: '',
+    product_name: '',
+    price: 20,
+    is_available: true,
+  });
+  const [submittingStock, setSubmittingStock] = useState(false);
+
+  const openStockModal = async (item) => {
+    try {
+      const data = await loadPrerequisites();
+      const currentPlots = data.plots || plots;
+      const currentProducts = data.products || products;
+      
+      const plot = currentPlots.find(p => p.id === Number(item.plot_id));
+      const batch = (data.batches || []).find(b => b.id === Number(item.batch_id));
+      const crop = (data.crops || []).find(c => c.id === Number(batch?.crop_id));
+      const cropName = crop?.name || batch?.crop_name || plot?.crop_name || 'ผักสด';
+
+      const totalPacks = item.total_packs > 0 
+        ? Number(item.total_packs) 
+        : Math.max(1, Math.floor(Number(item.quantity || 0) / 0.4));
+      const stocked = Number(item.stocked_quantity || 0);
+      const remaining = Math.max(1, totalPacks - stocked);
+
+      // ค้นหาสินค้าที่ชื่อตรงกับชนิดผักโดยตรง (ไม่ใช้ plot_id เพราะแปลงหมุนเวียนชนิดผักได้)
+      let matchedProd = null;
+      if (item.product_id) {
+        matchedProd = currentProducts.find(p => p.id === Number(item.product_id));
+      }
+      if (!matchedProd && cropName) {
+        matchedProd = currentProducts.find(p => 
+          p.name?.toLowerCase().includes(cropName.toLowerCase()) || 
+          cropName.toLowerCase().includes(p.name?.toLowerCase())
+        );
+      }
+
+      const defaultProdName = matchedProd ? matchedProd.name : `${cropName} สด GAP (4 ขีด)`;
+      const defaultPrice = matchedProd ? Number(matchedProd.price) : (crop?.default_price ? Number(crop.default_price) : 20);
+
+      setStockForm({
+        quantity_to_stock: remaining,
+        product_id: matchedProd ? String(matchedProd.id) : '',
+        product_name: defaultProdName,
+        price: defaultPrice,
+        is_available: true,
+      });
+
+      setStockModalItem({
+        ...item,
+        plot_name: plot?.name || `แปลงที่ ${item.plot_id}`,
+        crop_name: cropName,
+        matched_product: matchedProd,
+        calculated_total_packs: totalPacks,
+        calculated_stocked: stocked,
+        calculated_remaining: remaining,
+      });
+    } catch (e) {
+      console.error('Failed to open stock modal:', e);
+      toast.error('ไม่สามารถเปิดหน้าต่างลงสต็อกได้');
+    }
+  };
+
+  const handleSubmitStock = async (e) => {
+    e.preventDefault();
+    if (!stockModalItem) return;
+    
+    const qty = parseInt(stockForm.quantity_to_stock, 10);
+    const maxQty = stockModalItem.calculated_remaining || 1;
+    if (isNaN(qty) || qty <= 0) {
+      toast.error('กรุณาระบุจำนวนที่ต้องการลงสต็อกให้มากกว่า 0');
+      return;
+    }
+    if (qty > maxQty) {
+      toast.error(`จำนวนที่ลงสต็อก (${qty}) เกินกว่าคงเหลือที่รอลงสต็อก (${maxQty} ถุง)`);
+      return;
+    }
+
+    try {
+      setSubmittingStock(true);
+      const res = await api.post(`/api/harvest/${stockModalItem.id}/stock`, {
+        quantity_to_stock: qty,
+        product_id: stockForm.product_id || null,
+        product_name: stockForm.product_name,
+        price: stockForm.price,
+        is_available: stockForm.is_available,
+      });
+
+      toast.success(res.data.message || 'นำผักลงสต็อกสินค้าเรียบร้อย!');
+      setStockModalItem(null);
+      setReloadKey(prev => prev + 1);
+      // Reload products
+      api.get('/api/products').then(r => setProducts(r.data || [])).catch(() => {});
+    } catch (err) {
+      console.error('Submit stock error:', err);
+      toast.error(err.response?.data?.error || 'เกิดข้อผิดพลาดในการลงสต็อก');
+    } finally {
+      setSubmittingStock(false);
+    }
+  };
 
   // Load active plots and products for Smart Harvest
   const loadPrerequisites = async () => {
@@ -125,6 +232,9 @@ export default function Harvest() {
       }
     }
 
+    const activeBatch = (data.batches || []).find(b => b.plot_id === Number(defaultPlotId) && (b.status === 'growing' || b.status === 'harvest_ready'));
+    const currentRemaining = activeBatch?.remaining_count ?? activeBatch?.initial_count ?? targetPlot?.remaining_count ?? '';
+
     setForm({
       plot_id: defaultPlotId ? String(defaultPlotId) : '',
       harvest_date: format(new Date(), 'yyyy-MM-dd'),
@@ -138,7 +248,10 @@ export default function Harvest() {
       sync_to_stock: true,
       price: initialPrice,
       image_url: '',
-      is_available: true,
+      is_available: false,
+      is_partial: false,
+      harvested_plants_count: currentRemaining !== '' ? String(currentRemaining) : '',
+      destination: 'cold_storage',
     });
     setSuccessResult(null);
     setSmartModalOpen(true);
@@ -223,6 +336,9 @@ export default function Harvest() {
         image_url: form.image_url || undefined,
         is_available: form.is_available,
         product_id: matchedProduct ? matchedProduct.id : undefined,
+        is_partial: Boolean(form.is_partial),
+        harvested_plants_count: Number(form.harvested_plants_count) || 0,
+        destination: form.destination || 'cold_storage',
       };
 
       const res = await api.post('/api/harvest/smart-record', payload);
@@ -517,16 +633,97 @@ export default function Harvest() {
                       <span className="line-clamp-2">{r.notes}</span>
                     </div>
                   )}
+
+                  {/* Stock Status Badge for Mobile Card */}
+                  <div className="col-span-2 pt-1">
+                    {(() => {
+                      const total = r.total_packs > 0 ? Number(r.total_packs) : Math.max(1, Math.floor(Number(r.quantity || 0) / 0.4));
+                      const stocked = Number(r.stocked_quantity || 0);
+                      const remaining = Math.max(0, total - stocked);
+                      const isFully = r.stock_status === 'fully_stocked' || stocked >= total;
+
+                      if (isFully) {
+                        return (
+                          <div className="flex items-center justify-between p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-xs">
+                            <span className="font-bold text-emerald-800 flex items-center gap-1.5">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span>ลงสต็อกหน้าร้านครบแล้ว</span>
+                            </span>
+                            <span className="font-mono font-black text-emerald-700 bg-white px-2 py-0.5 rounded-lg border border-emerald-200">
+                              {stocked}/{total} ถุง
+                            </span>
+                          </div>
+                        );
+                      }
+                      if (stocked > 0) {
+                        return (
+                          <div className="flex items-center justify-between p-2 rounded-xl bg-blue-50 border border-blue-200 text-xs">
+                            <span className="font-bold text-blue-800 flex items-center gap-1.5">
+                              <PackageCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                              <span>ลงสต็อกแล้ว {stocked}/{total} ถุง</span>
+                            </span>
+                            <span className="font-mono font-bold text-blue-700 bg-white px-2 py-0.5 rounded-lg border border-blue-200">
+                              เหลือรอลง {remaining}
+                            </span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="flex items-center justify-between p-2 rounded-xl bg-amber-50 border border-amber-200 text-xs">
+                          <span className="font-bold text-amber-900 flex items-center gap-1.5">
+                            <span>❄️</span>
+                            <span>ยังไม่ลงสต็อก (ในห้องเย็น)</span>
+                          </span>
+                          <span className="font-mono font-bold text-amber-800 bg-white px-2 py-0.5 rounded-lg border border-amber-200">
+                            {total} ถุง
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </div>
                 </div>
               </div>
 
-              {/* Action Buttons: 2x2 Grid (Guaranteed NO Overflow on ANY screen size!) */}
+              {/* Action Buttons: 2x2 Grid + Stock Button */}
               <div className="pt-3 border-t border-slate-100 space-y-2 mt-auto">
+                {/* Primary Stock Button */}
+                {(() => {
+                  const total = r.total_packs > 0 ? Number(r.total_packs) : Math.max(1, Math.floor(Number(r.quantity || 0) / 0.4));
+                  const stocked = Number(r.stocked_quantity || 0);
+                  const remaining = Math.max(0, total - stocked);
+                  const isFully = r.stock_status === 'fully_stocked' || stocked >= total;
+
+                  if (isFully) {
+                    return (
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full inline-flex items-center justify-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200/90 font-bold py-2 rounded-xl text-xs opacity-75 cursor-not-allowed"
+                        title="ผลผลิตล็อตนี้ลงสต็อกขายครบทั้งหมดแล้ว (ป้องกันสต็อกเกิน)"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>✓ ลงสต็อกครบทั้งหมดแล้ว</span>
+                      </button>
+                    );
+                  }
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => openStockModal(r)}
+                      className="w-full inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 active:scale-98 text-white font-black py-2.5 rounded-xl text-xs shadow-md shadow-emerald-600/20 transition cursor-pointer"
+                      title={`นำผักล็อตนี้ลงสต็อกขายหน้าร้าน (เหลือรอลง ${remaining} ถุง)`}
+                    >
+                      <PackageCheck className="w-4 h-4 shrink-0" />
+                      <span>📦 ลงสต็อกสินค้าหน้าร้าน (เหลือ {remaining} ถุง)</span>
+                    </button>
+                  );
+                })()}
+
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => openPushModal(r)}
-                    className="inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold py-2.5 px-2 rounded-xl text-xs shadow-xs transition cursor-pointer"
+                    className="inline-flex items-center justify-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 active:scale-98 text-emerald-800 font-bold py-2 px-2 rounded-xl text-xs border border-emerald-200 transition cursor-pointer"
                     title="ตั้งค่าและยิง LINE Push แจ้งเตือนลูกค้า"
                   >
                     <Send className="w-3.5 h-3.5 shrink-0" />
@@ -537,14 +734,14 @@ export default function Harvest() {
                     <button
                       type="button"
                       onClick={() => setQrModalItem(r)}
-                      className="inline-flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 active:scale-98 text-slate-700 font-bold py-2.5 px-2 rounded-xl text-xs border border-slate-200 transition cursor-pointer"
+                      className="inline-flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 active:scale-98 text-slate-700 font-bold py-2 px-2 rounded-xl text-xs border border-slate-200 transition cursor-pointer"
                       title="ดู QR Code สำหรับตรวจสอบย้อนกลับมาตรฐาน GAP"
                     >
                       <QrCode className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
                       <span className="truncate">QR ย้อนกลับ</span>
                     </button>
                   ) : (
-                    <div className="rounded-xl bg-slate-50 border border-dashed border-slate-200 flex items-center justify-center text-[10px] text-slate-400 font-medium py-2.5">
+                    <div className="rounded-xl bg-slate-50 border border-dashed border-slate-200 flex items-center justify-center text-[10px] text-slate-400 font-medium py-2">
                       ไม่มี Lot QR
                     </div>
                   )}
@@ -554,7 +751,7 @@ export default function Harvest() {
                   <button
                     type="button"
                     onClick={() => openEdit(r)}
-                    className="inline-flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 active:scale-98 text-blue-700 font-bold py-2.5 px-2 rounded-xl text-xs border border-blue-200 transition cursor-pointer"
+                    className="inline-flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 active:scale-98 text-blue-700 font-bold py-2 px-2 rounded-xl text-xs border border-blue-200 transition cursor-pointer"
                   >
                     <Pencil className="w-3.5 h-3.5 shrink-0" />
                     <span>แก้ไข</span>
@@ -563,7 +760,7 @@ export default function Harvest() {
                   <button
                     type="button"
                     onClick={() => del(r.id)}
-                    className="inline-flex items-center justify-center gap-1.5 bg-rose-50 hover:bg-rose-100 active:scale-98 text-rose-700 font-bold py-2.5 px-2 rounded-xl text-xs border border-rose-200 transition cursor-pointer"
+                    className="inline-flex items-center justify-center gap-1.5 bg-rose-50 hover:bg-rose-100 active:scale-98 text-rose-700 font-bold py-2 px-2 rounded-xl text-xs border border-rose-200 transition cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5 shrink-0" />
                     <span>ลบ</span>
@@ -573,31 +770,60 @@ export default function Harvest() {
             </div>
           );
         }}
-        renderRowAction={(item) => (
-          <div className="inline-flex items-center gap-1.5 flex-nowrap">
-            <button
-              type="button"
-              onClick={() => openPushModal(item)}
-              className="inline-flex items-center justify-center gap-1 bg-emerald-50 hover:bg-emerald-100 active:scale-98 text-emerald-800 font-bold py-1.5 px-2.5 rounded-xl text-xs border border-emerald-200 transition cursor-pointer whitespace-nowrap"
-              title="ตั้งค่าและยิง LINE Push แจ้งเตือนลูกค้า"
-            >
-              <Send className="w-3.5 h-3.5 shrink-0" />
-              <span>📢 ยิง LINE Push</span>
-            </button>
+        renderRowAction={(item) => {
+          const total = item.total_packs > 0 ? Number(item.total_packs) : Math.max(1, Math.floor(Number(item.quantity || 0) / 0.4));
+          const stocked = Number(item.stocked_quantity || 0);
+          const remaining = Math.max(0, total - stocked);
+          const isFully = item.stock_status === 'fully_stocked' || stocked >= total;
 
-            {item.lot_code && (
+          return (
+            <div className="inline-flex items-center gap-1.5 flex-nowrap">
+              {isFully ? (
+                <button
+                  type="button"
+                  disabled
+                  className="inline-flex items-center justify-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200/90 font-bold py-1.5 px-2.5 rounded-xl text-xs cursor-not-allowed whitespace-nowrap opacity-75"
+                  title="ผลผลิตล็อตนี้ลงสต็อกขายครบทั้งหมดแล้ว (ป้องกันสต็อกเกิน)"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>✓ ลงสต็อกครบแล้ว</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => openStockModal(item)}
+                  className="inline-flex items-center justify-center gap-1 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold py-1.5 px-3 rounded-xl text-xs shadow-xs transition cursor-pointer whitespace-nowrap"
+                  title={`กดเพื่อนำผักล็อตนี้ลงสต็อกขายหน้าร้าน (เหลือรอลง ${remaining} ถุง)`}
+                >
+                  <PackageCheck className="w-3.5 h-3.5 shrink-0" />
+                  <span>📦 ลงสต็อกสินค้า</span>
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={() => setQrModalItem(item)}
-                className="inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 active:scale-98 text-slate-700 font-bold py-1.5 px-2.5 rounded-xl text-xs border border-slate-200 transition cursor-pointer whitespace-nowrap"
-                title="ดู QR Code สำหรับตรวจสอบย้อนกลับมาตรฐาน GAP"
+                onClick={() => openPushModal(item)}
+                className="inline-flex items-center justify-center gap-1 bg-emerald-50 hover:bg-emerald-100 active:scale-98 text-emerald-800 font-bold py-1.5 px-2.5 rounded-xl text-xs border border-emerald-200 transition cursor-pointer whitespace-nowrap"
+                title="ตั้งค่าและยิง LINE Push แจ้งเตือนลูกค้า"
               >
-                <QrCode className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                <span>QR ย้อนกลับ</span>
+                <Send className="w-3.5 h-3.5 shrink-0" />
+                <span>📢 ยิง LINE Push</span>
               </button>
-            )}
-          </div>
-        )}
+
+              {item.lot_code && (
+                <button
+                  type="button"
+                  onClick={() => setQrModalItem(item)}
+                  className="inline-flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 active:scale-98 text-slate-700 font-bold py-1.5 px-2.5 rounded-xl text-xs border border-slate-200 transition cursor-pointer whitespace-nowrap"
+                  title="ดู QR Code สำหรับตรวจสอบย้อนกลับมาตรฐาน GAP"
+                >
+                  <QrCode className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                  <span>QR ย้อนกลับ</span>
+                </button>
+              )}
+            </div>
+          );
+        }}
         fields={[
           {
             key: 'harvest_date',
@@ -639,6 +865,39 @@ export default function Harvest() {
                 {val || 'กก.'}
               </span>
             ),
+          },
+          {
+            key: 'stock_status',
+            label: 'สต็อกสินค้า (LINE Shop)',
+            render: (val, r) => {
+              const total = r.total_packs > 0 ? Number(r.total_packs) : Math.max(1, Math.floor(Number(r.quantity || 0) / 0.4));
+              const stocked = Number(r.stocked_quantity || 0);
+              const remaining = Math.max(0, total - stocked);
+              const isFully = r.stock_status === 'fully_stocked' || stocked >= total;
+
+              if (isFully) {
+                return (
+                  <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-1 rounded-xl font-bold text-xs whitespace-nowrap shadow-2xs">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>✓ ลงสต็อกครบ ({stocked}/{total} ถุง)</span>
+                  </span>
+                );
+              }
+              if (stocked > 0) {
+                return (
+                  <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-800 border border-blue-300 px-2.5 py-1 rounded-xl font-bold text-xs whitespace-nowrap shadow-2xs">
+                    <PackageCheck className="w-3.5 h-3.5 text-blue-600" />
+                    <span>📦 ลงแล้ว {stocked}/{total} (รออีก {remaining})</span>
+                  </span>
+                );
+              }
+              return (
+                <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-900 border border-amber-300 px-2.5 py-1 rounded-xl font-bold text-xs whitespace-nowrap shadow-2xs">
+                  <span>❄️</span>
+                  <span>รอลงสต็อก ({total} ถุง)</span>
+                </span>
+              );
+            },
           },
           {
             key: 'quality_grade',
@@ -777,14 +1036,40 @@ export default function Harvest() {
                     </div>
                   </div>
 
+                  {/* Destination & Mode Summary */}
+                  {successResult.destination === 'cold_storage' ? (
+                    <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3.5 text-xs text-blue-900 flex items-center gap-2">
+                      <PackageCheck className="w-4 h-4 text-blue-700 shrink-0" />
+                      <span>
+                        ❄️ ผลผลิตถูกนำเข้าพักใน <strong>ตู้เย็น / ห้องเย็นพักผักฟาร์ม</strong> เรียบร้อย (บันทึกเข้าระบบ GAP คลังเก็บรักษาผลผลิต)
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 text-xs text-emerald-900 flex items-center gap-2">
+                      <Store className="w-4 h-4 text-emerald-700 shrink-0" />
+                      <span>
+                        🛒 ผลผลิตพร้อมจำหน่ายหน้าร้าน LINE Shop ทันที
+                      </span>
+                    </div>
+                  )}
+
+                  {successResult.is_partial && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 text-xs text-amber-900 flex items-center gap-2">
+                      <span className="text-base">🌱</span>
+                      <span>
+                        <strong>ทยอยเก็บเกี่ยวบางส่วน:</strong> แปลงและรอบปลูกยังคงสถานะ <strong>กำลังปลูก</strong> ต่อ เพื่อรอตัดต้นที่เหลือ
+                      </span>
+                    </div>
+                  )}
+
                   {/* Synced Product Summary */}
                   {successResult.product && (
-                    <div className="bg-blue-50/70 border border-blue-200/80 rounded-2xl p-3.5 text-xs text-blue-900 flex items-center justify-between">
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs text-slate-800 flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Store className="w-4 h-4 text-blue-700" />
+                        <Store className="w-4 h-4 text-emerald-600" />
                         <span>
-                          สต็อกหน้าร้าน <strong>{successResult.product.name}</strong>: ปัจจุบันมี{' '}
-                          <strong>{successResult.product.stock_quantity} กก.</strong> (เพิ่มขึ้น +{successResult.product.added_stock} กก.)
+                          สต็อกสินค้า <strong>{successResult.product.name}</strong>: ปัจจุบันมี{' '}
+                          <strong>{successResult.product.stock_quantity} ถุง</strong> (เพิ่มขึ้น +{successResult.product.added_stock} ถุง)
                         </span>
                       </div>
                     </div>
@@ -831,33 +1116,152 @@ export default function Harvest() {
                 </div>
 
                 {/* Plot Quick Info */}
-                {selectedPlot && (
-                  <div className="p-3.5 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl text-xs text-emerald-900 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div>พืช: <strong>{selectedPlot.crop_name}</strong></div>
-                        <div className="text-[11px] text-emerald-700">
-                          วันปลูก: {selectedPlot.planting_date ? format(new Date(selectedPlot.planting_date), 'dd/MM/yyyy') : '-'}
-                        </div>
-                      </div>
-                      <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300">
-                        #{getCropCycleId(selectedPlot)} (รอบที่ {selectedPlot.cycle_number || 1})
-                      </span>
-                    </div>
+                {selectedPlot && (() => {
+                  const currentBatch = batches.find(b => b.plot_id === selectedPlot.id && (b.status === 'growing' || b.status === 'harvest_ready'));
+                  const remaining = currentBatch?.remaining_count ?? currentBatch?.initial_count ?? selectedPlot.remaining_count;
+                  const initial = currentBatch?.initial_count ?? selectedPlot.initial_count;
+                  const unit = currentBatch?.planting_unit || selectedPlot.planting_unit || 'ต้น';
 
-                    {/* Progress Indicator */}
-                    <div className="pt-2 border-t border-emerald-200/60 flex items-center justify-between text-[11px]">
-                      <span className="font-bold text-slate-700 flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>ความคืบหน้ารอบปลูก:</span>
-                      </span>
-                      <span className="font-black text-amber-900 bg-amber-100/90 px-2.5 py-0.5 rounded-full border border-amber-300 flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
-                        100% ครบกำหนดพร้อมเก็บเกี่ยวเข้าสต็อก
+                  return (
+                    <div className="p-3.5 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl text-xs text-emerald-900 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div>พืช: <strong>{selectedPlot.crop_name}</strong></div>
+                          <div className="text-[11px] text-emerald-700">
+                            วันปลูก: {selectedPlot.planting_date ? format(new Date(selectedPlot.planting_date), 'dd/MM/yyyy') : '-'}
+                            {initial && (
+                              <span className="ml-2 font-bold text-slate-800">
+                                (คงเหลือ {Number(remaining).toLocaleString()}/{Number(initial).toLocaleString()} {unit})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300">
+                          #{getCropCycleId(selectedPlot)} (รอบที่ {selectedPlot.cycle_number || 1})
+                        </span>
+                      </div>
+
+                      {/* Progress Indicator */}
+                      <div className="pt-2 border-t border-emerald-200/60 flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-slate-700 flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>ความคืบหน้ารอบปลูก:</span>
+                        </span>
+                        <span className="font-black text-amber-900 bg-amber-100/90 px-2.5 py-0.5 rounded-full border border-amber-300 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                          100% ครบกำหนดพร้อมเก็บเกี่ยว
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* โหมดการเก็บเกี่ยว: ทยอยเก็บเกี่ยว VS ปิดรอบแปลง */}
+                <div className="space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <label className="text-xs font-bold text-slate-800 block">รูปแบบการเก็บเกี่ยว</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, is_partial: false }))}
+                      className={`p-3 rounded-xl border text-left cursor-pointer transition ${
+                        !form.is_partial
+                          ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-300/40 text-amber-950 font-bold'
+                          : 'bg-white border-slate-200 hover:border-slate-300 text-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 text-xs font-black">
+                        <span>🧹 เก็บเกี่ยวหมดแปลง (ปิดรอบ)</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1 font-normal">
+                        ตัดหมดแปลง ปิดรอบการปลูก และรีเซ็ตแปลงเป็น "ว่าง"
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const currentBatch = batches.find(b => b.plot_id === Number(form.plot_id) && (b.status === 'growing' || b.status === 'harvest_ready'));
+                        const currentRemaining = currentBatch?.remaining_count ?? currentBatch?.initial_count ?? selectedPlot?.remaining_count ?? '';
+                        setForm(prev => ({
+                          ...prev,
+                          is_partial: true,
+                          harvested_plants_count: prev.harvested_plants_count || (currentRemaining ? String(currentRemaining) : '')
+                        }));
+                      }}
+                      className={`p-3 rounded-xl border text-left cursor-pointer transition ${
+                        form.is_partial
+                          ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-400/40 text-emerald-950 font-bold'
+                          : 'bg-white border-slate-200 hover:border-slate-300 text-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 text-xs font-black">
+                        <span>🌱 ทยอยเก็บเกี่ยวบางส่วน</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1 font-normal">
+                        ตัดเฉพาะต้นที่พร้อม แปลงยังคงสถานะ "กำลังปลูก" ต่อ
+                      </p>
+                    </button>
+                  </div>
+
+                  {form.is_partial && (
+                    <div className="pt-2 border-t border-slate-200/80">
+                      <label className="text-[11px] font-bold text-emerald-900 block mb-1">
+                        จำนวนต้นที่ตัดในรอบนี้ (ต้น)
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="เช่น 50"
+                        value={form.harvested_plants_count}
+                        onChange={e => setForm(prev => ({ ...prev, harvested_plants_count: e.target.value }))}
+                        className="input text-xs w-full py-2 px-3 rounded-xl border border-emerald-300 bg-white font-bold text-emerald-900 focus:border-emerald-600"
+                      />
+                      <span className="text-[10px] text-emerald-700 block mt-1">
+                        * ระบบจะตัดยอดออกจากแปลงให้อัตโนมัติ แปลงจะยังคงเหลือต้นที่เหลือไว้ให้ดูแลต่อ
                       </span>
                     </div>
+                  )}
+                </div>
+
+                {/* ปลายทางผลผลิตหลังเก็บเกี่ยว (Storage vs Direct LINE Shop) */}
+                <div className="space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <label className="text-xs font-bold text-slate-800 block">ปลายทางของผลผลิตหลังตัด (GAP ข้อ 5-6)</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, destination: 'cold_storage', is_available: false }))}
+                      className={`p-3 rounded-xl border text-left cursor-pointer transition ${
+                        form.destination === 'cold_storage'
+                          ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-300/40 text-blue-950 font-bold'
+                          : 'bg-white border-slate-200 hover:border-slate-300 text-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 text-xs font-black">
+                        <span>❄️ เข้าห้องเย็น / ตู้เย็นพักผัก</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1 font-normal">
+                        บันทึกเข้าคลังพักผัก (storage_logs) 4-8°C รอคัดเกรด/แพ็กถุง
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, destination: 'direct_stock', is_available: true }))}
+                      className={`p-3 rounded-xl border text-left cursor-pointer transition ${
+                        form.destination === 'direct_stock'
+                          ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-400/40 text-emerald-950 font-bold'
+                          : 'bg-white border-slate-200 hover:border-slate-300 text-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 text-xs font-black">
+                        <span>🛒 วางขายหน้าร้าน (LINE Shop) ทันที</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1 font-normal">
+                        เพิ่มสต็อกและเปิดขายใน LINE ให้ลูกค้าสั่งซื้อได้ทันที
+                      </p>
+                    </button>
                   </div>
-                )}
+                </div>
 
                 {/* Harvest Details: Total Weight & Packaging */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -1526,6 +1930,247 @@ export default function Harvest() {
                 <span>พิมพ์</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: ลงสต็อกสินค้าหน้าร้าน LINE Shop (Stock Allocation Modal) */}
+      {stockModalItem && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-hidden">
+          <div className="bg-white rounded-3xl max-w-xl md:max-w-2xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 text-slate-900 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 shrink-0 bg-white">
+              <div className="flex items-center gap-3">
+                <span className="p-2.5 rounded-2xl bg-emerald-100 text-emerald-800 shrink-0">
+                  <PackageCheck className="w-5 h-5 text-emerald-700" />
+                </span>
+                <div>
+                  <h3 className="text-lg sm:text-xl font-black text-slate-900">
+                    นำผลผลิตลงสต็อกสินค้า (LINE Shop)
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    {stockModalItem.plot_name} • {stockModalItem.crop_name} • ล็อต <span className="font-mono font-bold text-emerald-700">{stockModalItem.lot_code || '—'}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStockModalItem(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-sm cursor-pointer transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Scrollable Form Body */}
+            <form onSubmit={handleSubmitStock} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 text-xs">
+                
+                {/* 3 Metric Cards: Total, Stocked, Remaining */}
+                <div className="grid grid-cols-3 gap-2.5">
+                  <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 text-center">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">ผลผลิตทั้งหมด</span>
+                    <span className="text-lg font-black text-slate-800 font-mono">
+                      {stockModalItem.calculated_total_packs}
+                    </span>
+                    <span className="text-[10px] text-slate-400 block">ถุง (4 ขีด)</span>
+                  </div>
+
+                  <div className="bg-blue-50/60 border border-blue-200/80 rounded-2xl p-3 text-center">
+                    <span className="text-[10px] font-bold text-blue-600 uppercase block">ลงสต็อกไปแล้ว</span>
+                    <span className="text-lg font-black text-blue-700 font-mono">
+                      {stockModalItem.calculated_stocked}
+                    </span>
+                    <span className="text-[10px] text-blue-500 block">ถุง</span>
+                  </div>
+
+                  <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-3 text-center shadow-xs">
+                    <span className="text-[10px] font-bold text-emerald-700 uppercase block">รอลงสต็อกได้อีก</span>
+                    <span className="text-xl font-black text-emerald-800 font-mono">
+                      {stockModalItem.calculated_remaining}
+                    </span>
+                    <span className="text-[10px] text-emerald-600 font-bold block">ถุง</span>
+                  </div>
+                </div>
+
+                {/* จำนวนที่ต้องการลงสต็อก */}
+                <div className="bg-slate-50/90 rounded-2xl p-4 border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black text-slate-800">
+                      จำนวนที่ต้องการลงสต็อกในรอบนี้ (ถุง) <span className="text-rose-600">*</span>
+                    </label>
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      สูงสุดไม่เกิน <span className="font-bold font-mono text-emerald-700">{stockModalItem.calculated_remaining}</span> ถุง
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      max={stockModalItem.calculated_remaining}
+                      value={stockForm.quantity_to_stock}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        if (isNaN(val)) {
+                          setStockForm({ ...stockForm, quantity_to_stock: '' });
+                        } else {
+                          const clamped = Math.max(1, Math.min(val, stockModalItem.calculated_remaining));
+                          setStockForm({ ...stockForm, quantity_to_stock: clamped });
+                        }
+                      }}
+                      className="w-32 px-3.5 py-2.5 rounded-xl border-2 border-emerald-500 bg-white text-slate-900 font-black text-lg focus:ring-2 focus:ring-emerald-500 outline-none text-center"
+                    />
+                    <div className="text-xs text-slate-600 font-medium">
+                      ถุง (คิดเป็นผักสดประมาณ {(Number(stockForm.quantity_to_stock || 0) * 0.4).toFixed(1)} กก.)
+                    </div>
+                  </div>
+
+                  {/* Quick Select Buttons */}
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setStockForm({ ...stockForm, quantity_to_stock: stockModalItem.calculated_remaining })}
+                      className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-2xs transition active:scale-95 cursor-pointer"
+                    >
+                      ✓ ลงทั้งหมด ({stockModalItem.calculated_remaining} ถุง)
+                    </button>
+                    {stockModalItem.calculated_remaining > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setStockForm({ ...stockForm, quantity_to_stock: Math.ceil(stockModalItem.calculated_remaining / 2) })}
+                        className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold text-[11px] transition active:scale-95 cursor-pointer"
+                      >
+                        ครึ่งหนึ่ง ({Math.ceil(stockModalItem.calculated_remaining / 2)} ถุง)
+                      </button>
+                    )}
+                    {stockModalItem.calculated_remaining >= 10 && (
+                      <button
+                        type="button"
+                        onClick={() => setStockForm({ ...stockForm, quantity_to_stock: 10 })}
+                        className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold text-[11px] transition active:scale-95 cursor-pointer"
+                      >
+                        10 ถุง
+                      </button>
+                    )}
+                    {stockModalItem.calculated_remaining >= 20 && (
+                      <button
+                        type="button"
+                        onClick={() => setStockForm({ ...stockForm, quantity_to_stock: 20 })}
+                        className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold text-[11px] transition active:scale-95 cursor-pointer"
+                      >
+                        20 ถุง
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* ข้อมูลสินค้าหน้าร้าน (ระบบจับคู่ให้อัตโนมัติ 100% ตามชนิดผัก ไม่ต้องเลือกเอง) */}
+                <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <Store className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>สินค้าหน้าร้านที่จะลงสต็อก (จับคู่ตรงชนิดผักให้อัตโนมัติ)</span>
+                    </span>
+                    <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full">
+                      {stockModalItem.matched_product ? '✓ ผูกกับสินค้าเดิมในร้าน' : '✨ เตรียมสร้างสินค้าใหม่อัตโนมัติ'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3.5 bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs">
+                    {stockModalItem.matched_product?.image_url ? (
+                      <img
+                        src={stockModalItem.matched_product.image_url}
+                        alt={stockForm.product_name}
+                        className="w-14 h-14 rounded-xl object-cover border border-slate-200 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-14 h-14 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-2xl shrink-0">
+                        🥬
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <h4 className="font-black text-slate-900 text-sm truncate">
+                        {stockForm.product_name}
+                      </h4>
+                      <div className="text-[11px] text-slate-500 flex items-center gap-2 flex-wrap">
+                        <span>สต็อกปัจจุบันในร้าน: <strong className="font-mono text-slate-800">{Number(stockModalItem.matched_product?.stock_quantity || 0)} ถุง</strong></span>
+                        <span>→</span>
+                        <span className="text-emerald-700 font-bold">
+                          หลังลงสต็อก: <strong className="font-mono text-emerald-800">{Number(stockModalItem.matched_product?.stock_quantity || 0) + Number(stockForm.quantity_to_stock || 0)} ถุง</strong>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ราคาขาย & สวิตช์สถานะพร้อมจำหน่าย */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1.5">ราคาขาย (บาท / ถุง)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      value={stockForm.price}
+                      onChange={(e) => setStockForm({ ...stockForm, price: e.target.value })}
+                      placeholder="เช่น 20"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-black focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"
+                    />
+                  </div>
+
+                  <div className="flex items-end">
+                    <div className="h-[44px] w-full px-3.5 flex items-center rounded-xl bg-slate-50 border border-slate-200">
+                      <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
+                        <input
+                          type="checkbox"
+                          checked={stockForm.is_available}
+                          onChange={(e) => setStockForm({ ...stockForm, is_available: e.target.checked })}
+                          className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                        />
+                        <span>เปิดสถานะ "พร้อมจำหน่ายทันที" บน LINE Shop</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ข้อความสรุป */}
+                <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3 text-[11px] text-emerald-900 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>สรุปการลงสต็อก:</span>
+                  </div>
+                  <div>
+                    เมื่อกดยืนยัน ระบบจะบวกสต็อก <span className="font-bold text-emerald-800">{stockForm.quantity_to_stock || 0} ถุง</span> เข้าสินค้าหน้าร้าน และปรับสถานะของล็อตนี้เป็น{' '}
+                    <span className="font-bold text-emerald-800">
+                      {Number(stockForm.quantity_to_stock || 0) >= stockModalItem.calculated_remaining ? '✓ ลงสต็อกครบแล้ว (100%)' : `ลงสต็อกบางส่วน (คงเหลืออีก ${stockModalItem.calculated_remaining - Number(stockForm.quantity_to_stock || 0)} ถุง)`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Fixed Footer Buttons */}
+              <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50 flex gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setStockModalItem(null)}
+                  className="flex-1 py-2.5 sm:py-3 rounded-xl border border-slate-300 font-bold text-xs sm:text-sm text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingStock}
+                  className="flex-1 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-black text-xs sm:text-sm shadow-md shadow-emerald-600/20 disabled:opacity-50 cursor-pointer transition-colors flex items-center justify-center gap-2"
+                >
+                  <PackageCheck className="w-4 h-4" />
+                  <span>
+                    {submittingStock ? 'กำลังบันทึกสต็อก...' : `✓ ยืนยันการลงสต็อก (${stockForm.quantity_to_stock || 0} ถุง)`}
+                  </span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

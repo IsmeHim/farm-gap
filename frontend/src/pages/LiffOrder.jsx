@@ -362,7 +362,7 @@ export default function LiffOrder() {
                       <p className="text-sm font-semibold text-green-600 mt-1">
                         ฿{product.price} <span className="text-xs text-slate-400 font-normal">/ {product.unit}</span>
                       </p>
-                      <p className="text-[10px] text-amber-600 font-medium">เหลือสต็อก {product.stock_quantity} {product.unit}</p>
+                      <p className="text-[10px] text-amber-600 font-medium">เหลือสต็อก {Number(product.stock_quantity || 0).toLocaleString()} {product.unit}</p>
                     </div>
                   </div>
 

@@ -766,7 +766,9 @@ export default function Orders() {
               <div className="text-slate-600 flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-slate-400" /> {selectedOrder.customer_phone || '-'}</div>
               <div className="text-slate-600 flex items-start gap-1"><MapPin className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" /> {selectedOrder.customer_address || 'รับเองที่ฟาร์ม'}</div>
               <div className="text-slate-600 flex items-center gap-1"><Calendar className="w-3.5 h-3.5 text-slate-400" /> วันที่นัดหมาย: {formatDeliveryDate(selectedOrder.delivery_date)}</div>
-              {selectedOrder.notes && <div className="text-slate-500 italic mt-1">หมายเหตุจากลูกค้า: "{selectedOrder.notes}"</div>}
+              {selectedOrder.notes && !selectedOrder.notes.startsWith('ผู้รับ:') && (
+                <div className="text-slate-500 italic mt-1">หมายเหตุจากลูกค้า: "{selectedOrder.notes}"</div>
+              )}
             </div>
 
             {/* Items list */}

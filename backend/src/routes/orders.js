@@ -14,7 +14,7 @@ function generateOrderCode() {
 
 // สร้างรายการสั่งซื้อใหม่ (พร้อมตัดสต็อกผักอัตโนมัติ)
 ordersRouter.post('/', async (req, res) => {
-  const { customer_id, items, delivery_type, delivery_date, notes } = req.body;
+  const { customer_id, items, delivery_type, delivery_date, notes, recipient_name, recipient_phone, recipient_address } = req.body;
 
   if (!customer_id || !items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Customer ID and at least one item are required' });
@@ -73,12 +73,16 @@ ordersRouter.post('/', async (req, res) => {
       ]);
     }
 
-    // 3. บันทึกออเดอร์ลงในตาราง orders
+    // 3. บันทึกออเดอร์ลงในตาราง orders พร้อม Snapshot ข้อมูลผู้รับ
     const orderCode = generateOrderCode();
+    const finalRecipientName = recipient_name || customerRows[0].display_name;
+    const finalRecipientPhone = recipient_phone || customerRows[0].phone;
+    const finalRecipientAddress = recipient_address || customerRows[0].address;
+
     const [orderResult] = await connection.query(
-      `INSERT INTO orders (order_code, customer_id, total_amount, status, delivery_type, delivery_date, notes)
-       VALUES (?, ?, ?, 'pending', ?, ?, ?)`,
-      [orderCode, customer_id, totalAmount, delivery_type || 'delivery', delivery_date || null, notes || null]
+      `INSERT INTO orders (order_code, customer_id, total_amount, status, delivery_type, delivery_date, notes, recipient_name, recipient_phone, recipient_address)
+       VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
+      [orderCode, customer_id, totalAmount, delivery_type || 'delivery', delivery_date || null, notes || null, finalRecipientName, finalRecipientPhone, finalRecipientAddress]
     );
 
     const orderId = orderResult.insertId;
@@ -148,7 +152,11 @@ ordersRouter.get('/', async (req, res) => {
     }
 
     let query = `
-      SELECT o.*, c.display_name AS customer_name, c.phone AS customer_phone, c.address AS customer_address, c.line_user_id
+      SELECT o.*, 
+             COALESCE(o.recipient_name, c.display_name) AS customer_name, 
+             COALESCE(o.recipient_phone, c.phone) AS customer_phone, 
+             COALESCE(o.recipient_address, c.address) AS customer_address, 
+             c.line_user_id
       FROM orders o
       JOIN customers c ON o.customer_id = c.id
       WHERE 1=1
@@ -184,7 +192,11 @@ ordersRouter.get('/', async (req, res) => {
 ordersRouter.get('/:id', async (req, res) => {
   try {
     const [orderRows] = await pool.query(
-      `SELECT o.*, c.display_name AS customer_name, c.phone AS customer_phone, c.address AS customer_address, c.line_user_id
+      `SELECT o.*, 
+              COALESCE(o.recipient_name, c.display_name) AS customer_name, 
+              COALESCE(o.recipient_phone, c.phone) AS customer_phone, 
+              COALESCE(o.recipient_address, c.address) AS customer_address, 
+              c.line_user_id
        FROM orders o
        JOIN customers c ON o.customer_id = c.id
        WHERE o.id = ?`,

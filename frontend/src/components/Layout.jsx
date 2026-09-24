@@ -29,12 +29,12 @@ import {
 
 const items = [
   { to: '/', icon: LayoutDashboard, label: 'แดชบอร์ด', end: true },
-  { to: '/plots', icon: Map, label: 'แปลงปลูก 6 แคร่' },
+  { to: '/plots', icon: Map, label: 'แปลงปลูก' },
   { to: '/crops', icon: Sprout, label: 'คลังชนิดผัก' },
   { to: '/diary', icon: BookOpen, label: 'ไดอารี่รอบปลูก' },
   { to: '/water', icon: Droplets, label: 'น้ำ' },
   { to: '/chemicals', icon: FlaskConical, label: 'ปุ๋ย/สารเคมี' },
-  { to: '/pests', icon: Bug, label: 'ศัตรูพืช' },
+  { to: '/pests', icon: Bug, label: 'ศัตรูพืช/ความเสียหาย' },
   { to: '/harvest', icon: Leaf, label: 'เก็บผลผลิต' },
   { to: '/products', icon: ShoppingBag, label: 'สินค้า' },
   { to: '/orders', icon: ReceiptText, label: 'คำสั่งซื้อ (LINE)' },

@@ -2,9 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { addDays, format, isAfter } from 'date-fns';
+import { format } from 'date-fns';
 import {
-  AlertTriangle,
   ArrowUpRight,
   BadgeCheck,
   Bot,
@@ -18,7 +17,6 @@ import {
   Map,
   PackageCheck,
   PlusCircle,
-  ShieldCheck,
   ShoppingBag,
   Sparkles,
   Sprout,
@@ -83,8 +81,6 @@ export default function Dashboard() {
   const [batchesList, setBatchesList] = useState([]);
   const [chart, setChart] = useState([]);
   const [revenueChart, setRevenueChart] = useState([]);
-  const [phiAlerts, setPhiAlerts] = useState([]);
-  const [waterAlerts, setWaterAlerts] = useState([]);
   const [clusters, setClusters] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [runningAi, setRunningAi] = useState(false);
@@ -147,15 +143,6 @@ export default function Dashboard() {
       setChart(Object.entries(harvestByMonth).map(([month, qty]) => ({ month, qty })).reverse());
       setRevenueChart(Object.entries(revenueByMonth).map(([month, revenue]) => ({ month, revenue })).reverse());
 
-      const today = new Date();
-      const phiList = chems.data
-        .filter(c => isAfter(addDays(new Date(c.log_date), Number(c.phi_days || 0)), today))
-        .map(c => ({ ...c, safe_date: format(addDays(new Date(c.log_date), Number(c.phi_days || 0)), 'dd/MM/yyyy'), plot_name: plots.data.find(p => p.id === c.plot_id)?.name }));
-      setPhiAlerts(phiList);
-
-      const waterList = water.data.filter(w => w.contamination_check || w.water_quality === 'ไม่ผ่าน');
-      setWaterAlerts(waterList.map(w => ({ ...w, plot_name: plots.data.find(p => p.id === w.plot_id)?.name })));
-
       fetchAiData();
       fetchWaterStatus();
     })();
@@ -178,7 +165,17 @@ export default function Dashboard() {
     }
   };
 
-  const totalAlerts = phiAlerts.length + waterAlerts.length;
+  const handleTogglePlotAuto = async (plotId) => {
+    try {
+      const res = await api.post('/api/water/plot-auto-toggle', { plot_id: plotId });
+      toast.success(res.data.message);
+      setPlotsList(prev => prev.map(p => p.id === plotId ? { ...p, auto_water_enabled: res.data.auto_water_enabled } : p));
+      await fetchWaterStatus();
+    } catch (e) {
+      toast.error('ไม่สามารถเปลี่ยนสถานะรดน้ำอัตโนมัติของแปลงนี้ได้');
+    }
+  };
+
   const profit = stats.revenue - stats.cost;
 
   const readyPlotsCount = useMemo(() => {
@@ -236,11 +233,11 @@ export default function Dashboard() {
     },
     {
       label: 'สถานะ GAP',
-      value: totalAlerts === 0 ? 'ปลอดภัย' : `${totalAlerts} จุดเสี่ยง`,
-      detail: totalAlerts === 0 ? 'เกณฑ์ปลอดภัย 100%' : `PHI: ${phiAlerts.length} | น้ำ: ${waterAlerts.length}`,
-      icon: totalAlerts === 0 ? ShieldCheck : AlertTriangle,
-      accent: totalAlerts === 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800',
-      badgeClass: totalAlerts === 0 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/60' : 'bg-rose-50 text-rose-800 border border-rose-200/60',
+      value: 'ปลอดภัย',
+      detail: 'มาตรฐาน GAP 100%',
+      icon: BadgeCheck,
+      accent: 'bg-emerald-100 text-emerald-800',
+      badgeClass: 'bg-emerald-50 text-emerald-800 border border-emerald-200/60',
     },
   ];
 
@@ -527,11 +524,20 @@ export default function Dashboard() {
                 </div>
 
                 {/* Bottom Actions */}
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <span className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                    <Droplets className="w-3.5 h-3.5 text-blue-500" />
-                    {autoWater ? 'รดน้ำอัตโนมัติ' : 'รดน้ำปกติ'}
-                  </span>
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleTogglePlotAuto(plot.id)}
+                    title={plot.auto_water_enabled !== 0 ? 'คลิกเพื่องดรดน้ำอัตโนมัติ (เช่น เตรียมตัด/เว้นน้ำ)' : 'คลิกเพื่อเปิดโหมดรดน้ำอัตโนมัติ'}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition active:scale-95 cursor-pointer border ${
+                      plot.auto_water_enabled !== 0
+                        ? 'bg-blue-50/90 hover:bg-blue-100 text-blue-700 border-blue-200 shadow-2xs'
+                        : 'bg-amber-100/90 hover:bg-amber-200 text-amber-950 border-amber-300 shadow-2xs'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${plot.auto_water_enabled !== 0 ? 'bg-blue-500 animate-pulse' : 'bg-amber-500'}`} />
+                    <span>{plot.auto_water_enabled !== 0 ? 'รดน้ำออโต้' : 'เว้นน้ำ'}</span>
+                  </button>
 
                   {isGrowing || isReady ? (
                     <button
@@ -614,11 +620,6 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* GAP Risk Center Section (Full Width) */}
-      <section>
-        <AlertHub phiAlerts={phiAlerts} waterAlerts={waterAlerts} />
-      </section>
-
       {/* Customer Intelligence Section (Full Width) */}
       <section>
         <AiPanel
@@ -628,86 +629,6 @@ export default function Dashboard() {
           onRun={handleRunAi}
         />
       </section>
-    </div>
-  );
-}
-
-function AlertHub({ phiAlerts, waterAlerts }) {
-  const groups = [
-    {
-      title: 'PHI ห้ามเก็บผลผลิต',
-      icon: AlertTriangle,
-      items: phiAlerts.map(a => `แปลง ${a.plot_name || '-'} พ่น ${a.product_name} ปลอดภัยหลัง ${a.safe_date}`),
-      color: 'border-amber-200 bg-amber-50/80 text-amber-900',
-      badgeColor: 'bg-amber-100 text-amber-800',
-      iconColor: 'text-amber-600',
-    },
-    {
-      title: 'น้ำไม่ปลอดภัย',
-      icon: Droplets,
-      items: waterAlerts.map(w => `แปลง ${w.plot_name || '-'} แหล่งน้ำ ${w.water_source_type || w.water_source || '-'} สถานะ ${w.water_quality || 'สงสัย'}`),
-      color: 'border-rose-200 bg-rose-50/80 text-rose-900',
-      badgeColor: 'bg-rose-100 text-rose-800',
-      iconColor: 'text-rose-600',
-    },
-  ];
-
-  const totalWarnings = phiAlerts.length + waterAlerts.length;
-
-  return (
-    <div className="premium-panel rounded-3xl p-6 shadow-xs border border-emerald-900/10">
-      <div className="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 border border-emerald-200/80 px-3 py-1 text-xs font-black uppercase tracking-[.16em] text-emerald-800">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            gap risk center
-          </div>
-          <h2 className="mt-2 text-xl font-black text-[#173f2a]">ศูนย์เตือนความเสี่ยง GAP</h2>
-          <p className="text-sm text-slate-500">จุดที่ต้องจัดการและเฝ้าระวังก่อนกระทบมาตรฐานการรับรอง GAP</p>
-        </div>
-        {totalWarnings > 0 ? (
-          <div className="inline-flex items-center gap-2 rounded-2xl bg-amber-100 border border-amber-200 px-4 py-2 text-xs font-bold text-amber-800 self-start sm:self-auto">
-            <AlertTriangle className="h-4 w-4" />
-            มีจุดเฝ้าระวัง {totalWarnings} รายการ
-          </div>
-        ) : (
-          <div className="inline-flex items-center gap-2 rounded-2xl bg-emerald-100 border border-emerald-200 px-4 py-2 text-xs font-bold text-emerald-800 self-start sm:self-auto">
-            <CheckCircle2 className="h-4 w-4" />
-            ความเสี่ยงอยู่ในเกณฑ์ปลอดภัย
-          </div>
-        )}
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        {groups.map(group => (
-          <div key={group.title} className={`rounded-2xl border p-4 shadow-2xs ${group.color}`}>
-            <div className="flex items-center justify-between font-black pb-2 border-b border-current/10">
-              <div className="flex items-center gap-2 text-sm">
-                <group.icon className={`h-4 w-4 ${group.iconColor}`} />
-                <span>{group.title}</span>
-              </div>
-              <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${group.badgeColor}`}>
-                {group.items.length} รายการ
-              </span>
-            </div>
-            <div className="mt-3 space-y-1.5 text-xs min-h-[50px]">
-              {group.items.length === 0 ? (
-                <div className="flex items-center gap-1.5 text-emerald-700 font-medium py-2">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span>ปลอดภัย ไม่มีรายการค้าง</span>
-                </div>
-              ) : (
-                group.items.slice(0, 3).map((item, idx) => (
-                  <div key={idx} className="flex items-start gap-1.5 py-0.5">
-                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-60" />
-                    <span className="line-clamp-2">{item}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

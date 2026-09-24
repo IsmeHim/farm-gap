@@ -42,6 +42,90 @@ diaryRouter.get('/', async (req, res) => {
   }
 });
 
+// ดึงรายการรอบการปลูกของแปลง (Crop Cycles for Diary Filter)
+diaryRouter.get('/cycles', async (req, res) => {
+  try {
+    const { plot_id } = req.query;
+    if (!plot_id) return res.json([]);
+
+    const [plots] = await pool.query('SELECT * FROM plots WHERE id = ? AND user_id = ?', [plot_id, req.user.id]);
+    if (plots.length === 0) return res.json([]);
+    const plot = plots[0];
+
+    // Check crop_cycles
+    let [cycles] = await pool.query(
+      `SELECT c.*, p.name as plot_name 
+       FROM crop_cycles c 
+       JOIN plots p ON p.id = c.plot_id 
+       WHERE c.plot_id = ? AND c.user_id = ? 
+       ORDER BY c.cycle_number DESC, c.id DESC`,
+      [plot_id, req.user.id]
+    );
+
+    // If no crop_cycles exist yet for this plot, auto-sync from planting_batches or plot info
+    if (cycles.length === 0) {
+      const [batches] = await pool.query(
+        `SELECT b.*, c.name as crop_name
+         FROM planting_batches b
+         LEFT JOIN crops c ON c.id = b.crop_id
+         WHERE b.plot_id = ? AND b.user_id = ?
+         ORDER BY b.id ASC`,
+        [plot_id, req.user.id]
+      );
+
+      if (batches.length > 0) {
+        for (let i = 0; i < batches.length; i++) {
+          const b = batches[i];
+          const cycleNum = i + 1;
+          const status = b.status === 'completed' || b.status === 'cancelled' ? 'harvested' : 'active';
+          await pool.query(
+            `INSERT INTO crop_cycles (user_id, plot_id, cycle_number, cycle_code, crop_name, planting_date, expected_harvest_date, status, notes)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [req.user.id, plot_id, cycleNum, b.batch_code, b.crop_name || plot.crop_name || 'ผักสลัด', b.start_date, b.expected_harvest_date, status, b.notes]
+          );
+        }
+      } else {
+        const cycleNum = plot.cycle_number || 1;
+        const cleanName = (plot.name || '').replace(/แปลง|\s|\(.*?\)/g, '').trim() || (`P${plot.id}`);
+        const cycleCode = `BATCH-${cleanName}-R${cycleNum}`;
+        const cropName = (plot.crop_name && plot.crop_name !== '-') ? plot.crop_name : 'ผักสลัด/ผักสวนครัว';
+        const status = plot.status === 'empty' ? 'harvested' : 'active';
+
+        await pool.query(
+          `INSERT INTO crop_cycles (user_id, plot_id, cycle_number, cycle_code, crop_name, planting_date, expected_harvest_date, status, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [req.user.id, plot_id, cycleNum, cycleCode, cropName, plot.planting_date || null, plot.expected_harvest_date || null, status, 'รอบปลูกเริ่มต้นของแปลง']
+        );
+      }
+
+      [cycles] = await pool.query(
+        `SELECT c.*, p.name as plot_name 
+         FROM crop_cycles c 
+         JOIN plots p ON p.id = c.plot_id 
+         WHERE c.plot_id = ? AND c.user_id = ? 
+         ORDER BY c.cycle_number DESC, c.id DESC`,
+        [plot_id, req.user.id]
+      );
+    }
+
+    // Link any orphan crop_activities that have cycle_id IS NULL
+    if (cycles.length > 0) {
+      const targetCycle = cycles.find(c => c.status === 'active') || cycles[0];
+      await pool.query(
+        `UPDATE crop_activities 
+         SET cycle_id = ? 
+         WHERE plot_id = ? AND user_id = ? AND cycle_id IS NULL`,
+        [targetCycle.id, plot_id, req.user.id]
+      );
+    }
+
+    res.json(cycles);
+  } catch (err) {
+    console.error('Failed to get diary cycles:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 2. ดึงภาพรวมแปลงและรอบการปลูกปัจจุบันสำหรับหน้าไดอารี่
 diaryRouter.get('/plots-summary', async (req, res) => {
   try {

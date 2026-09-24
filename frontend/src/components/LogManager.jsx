@@ -225,6 +225,27 @@ export default function LogManager({
         </span>
       );
     }
+    if (f.key === 'damaged_count') {
+      const count = Number(val) || 0;
+      return count > 0 ? (
+        <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-700 font-bold px-2.5 py-0.5 rounded-lg border border-rose-200 text-xs whitespace-nowrap shadow-2xs">
+          ⚠️ เสียหาย {count.toLocaleString()} ต้น
+        </span>
+      ) : (
+        <span className="text-slate-400 text-xs">—</span>
+      );
+    }
+    if (f.key === 'severity') {
+      return (
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-lg font-bold text-xs border whitespace-nowrap shadow-2xs ${
+          val === 'รุนแรง' ? 'bg-rose-50 text-rose-800 border-rose-300' :
+          val === 'ปานกลาง' ? 'bg-amber-50 text-amber-900 border-amber-300' :
+          'bg-slate-100 text-slate-700 border-slate-200'
+        }`}>
+          {val || '-'}
+        </span>
+      );
+    }
     return null;
   };
 

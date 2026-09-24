@@ -80,9 +80,12 @@ export async function processAutoWaterRoutineForUser(userId) {
     }
   }
 
-  // ดึงแปลงที่กำลังปลูก (active, growing, harvest_ready)
+  // ดึงแปลงที่กำลังปลูก (active, growing, harvest_ready) และเปิดโหมดรดน้ำอัตโนมัติ
   const [activePlots] = await pool.query(
-    `SELECT * FROM plots WHERE user_id = ? AND status IN ('active', 'growing', 'harvest_ready')`,
+    `SELECT * FROM plots 
+     WHERE user_id = ? 
+       AND status IN ('active', 'growing', 'harvest_ready')
+       AND (auto_water_enabled IS NULL OR auto_water_enabled = 1)`,
     [userId]
   );
 
@@ -245,6 +248,40 @@ waterRouter.post('/toggle-auto', async (req, res) => {
 
     const updated = await getUserSettings(req.user.id);
     res.json({ success: true, settings: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2.2 สลับเปิด/ปิดการรดน้ำอัตโนมัติเฉพาะแปลง (Per-Plot Auto Toggle)
+waterRouter.post('/plot-auto-toggle', async (req, res) => {
+  try {
+    const { plot_id, enabled } = req.body;
+    if (!plot_id) return res.status(400).json({ error: 'plot_id required' });
+
+    const [plots] = await pool.query(
+      'SELECT id, name, auto_water_enabled FROM plots WHERE id = ? AND user_id = ?',
+      [plot_id, req.user.id]
+    );
+    if (!plots[0]) return res.status(404).json({ error: 'ไม่พบแปลงปลูกนี้' });
+
+    const currentVal = plots[0].auto_water_enabled !== 0 ? 1 : 0;
+    const newEnabled = enabled !== undefined ? (enabled ? 1 : 0) : (currentVal === 1 ? 0 : 1);
+
+    await pool.query(
+      'UPDATE plots SET auto_water_enabled = ? WHERE id = ? AND user_id = ?',
+      [newEnabled, plot_id, req.user.id]
+    );
+
+    res.json({
+      success: true,
+      plot_id,
+      plot_name: plots[0].name,
+      auto_water_enabled: newEnabled,
+      message: newEnabled === 1
+        ? `🟢 เปิดโหมดรดน้ำอัตโนมัติให้ "${plots[0].name}" เรียบร้อยแล้ว`
+        : `⏸️ งดรดน้ำอัตโนมัติสำหรับ "${plots[0].name}" (เว้นน้ำ/พักแปลง) เรียบร้อยแล้ว`
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -431,6 +468,196 @@ waterRouter.get('/calendar-logs', async (req, res) => {
   }
 });
 
+// 6.1 ข้อมูลตารางสรุปการให้น้ำรายวัน (1 วัน = 1 แถว รวมทุกแปลงมาตรฐาน GAP)
+waterRouter.get('/daily-table', async (req, res) => {
+  try {
+    const { start_date, end_date } = req.query;
+
+    let query = `
+      SELECT w.*, p.name AS plot_name, p.plot_number, p.crop_name
+      FROM water_logs w
+      JOIN plots p ON p.id = w.plot_id
+      WHERE w.user_id = ?
+    `;
+    const params = [req.user.id];
+
+    if (start_date && end_date) {
+      query += ` AND DATE(w.log_date) BETWEEN ? AND ?`;
+      params.push(start_date, end_date);
+    }
+
+    query += ` ORDER BY w.log_date DESC, w.id DESC`;
+    const [rawLogs] = await pool.query(query, params);
+
+    const [activePlots] = await pool.query(
+      `SELECT id, name, plot_number, crop_name, auto_water_enabled FROM plots WHERE user_id = ? AND status IN ('active', 'growing', 'harvest_ready') ORDER BY plot_number ASC, id ASC`,
+      [req.user.id]
+    );
+    const totalActiveCount = activePlots.length;
+    const pausedPlots = activePlots.filter(p => p.auto_water_enabled === 0);
+    const enabledActiveCount = activePlots.filter(p => p.auto_water_enabled !== 0).length;
+
+    const map = new Map();
+    for (const log of rawLogs) {
+      const dStr = typeof log.log_date === 'string'
+        ? log.log_date.split('T')[0]
+        : new Date(log.log_date).toISOString().split('T')[0];
+
+      if (!map.has(dStr)) {
+        map.set(dStr, {
+          date: dStr,
+          total_logs: 0,
+          morning_plots: [],
+          evening_plots: [],
+          climate_condition: log.climate_condition || 'normal',
+          water_source: log.water_source || 'น้ำสะอาดมาตรฐาน GAP',
+          water_quality: log.water_quality || 'ผ่าน',
+          worker_names: new Set(),
+          is_auto: false,
+          logs: [],
+        });
+      }
+
+      const dayGroup = map.get(dStr);
+      dayGroup.total_logs++;
+      dayGroup.logs.push(log);
+      if (log.worker_name) dayGroup.worker_names.add(log.worker_name);
+      if (log.is_auto_routine) dayGroup.is_auto = true;
+      if (log.climate_condition === 'rainy_humidity') dayGroup.climate_condition = 'rainy_humidity';
+      if (log.water_source) dayGroup.water_source = log.water_source;
+
+      const isMorning = log.session === 'เช้า' || !log.session;
+      const isEvening = log.session === 'เย็น';
+
+      const plotInfo = {
+        plot_id: log.plot_id,
+        plot_name: log.plot_name,
+        plot_number: log.plot_number,
+        crop_name: log.crop_name,
+        amount_liters: log.amount_liters,
+        notes: log.notes,
+        created_at: log.created_at,
+      };
+
+      if (isMorning) {
+        if (!dayGroup.morning_plots.some(p => p.plot_id === log.plot_id)) {
+          dayGroup.morning_plots.push(plotInfo);
+        }
+      } else if (isEvening) {
+        if (!dayGroup.evening_plots.some(p => p.plot_id === log.plot_id)) {
+          dayGroup.evening_plots.push(plotInfo);
+        }
+      }
+    }
+
+    const rows = Array.from(map.values()).map(g => {
+      const distinctPlotIds = new Set([
+        ...g.morning_plots.map(p => p.plot_id),
+        ...g.evening_plots.map(p => p.plot_id)
+      ]);
+
+      const isMorningCompleted = (enabledActiveCount > 0 && g.morning_plots.length >= enabledActiveCount) || (totalActiveCount > 0 && g.morning_plots.length >= totalActiveCount);
+      const isEveningCompleted = (enabledActiveCount > 0 && g.evening_plots.length >= enabledActiveCount) || (totalActiveCount > 0 && g.evening_plots.length >= totalActiveCount);
+
+      return {
+        date: g.date,
+        total_logs: g.total_logs,
+        plots_watered_count: distinctPlotIds.size,
+        total_active_count: totalActiveCount,
+        enabled_active_count: enabledActiveCount,
+        paused_plots: pausedPlots.map(p => ({ id: p.id, name: p.name, crop_name: p.crop_name })),
+        morning_count: g.morning_plots.length,
+        evening_count: g.evening_plots.length,
+        is_morning_completed: isMorningCompleted,
+        is_evening_completed: isEveningCompleted,
+        morning_plots: g.morning_plots,
+        evening_plots: g.evening_plots,
+        climate_condition: g.climate_condition,
+        water_source: g.water_source,
+        water_quality: g.water_quality,
+        workers: Array.from(g.worker_names).join(', ') || 'เจ้าของฟาร์ม',
+        is_auto: g.is_auto,
+        logs: g.logs,
+      };
+    });
+
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6.2 ลบบันทึกการให้น้ำทั้งหมดของวันที่ระบุ
+waterRouter.delete('/by-date/:date', async (req, res) => {
+  try {
+    const { date } = req.params;
+    if (!date) return res.status(400).json({ error: 'date required' });
+    const [result] = await pool.query(
+      `DELETE FROM water_logs WHERE user_id = ? AND DATE(log_date) = ?`,
+      [req.user.id, date]
+    );
+    res.json({
+      success: true,
+      deleted: result.affectedRows,
+      message: `ลบบันทึกการให้น้ำของวันที่ ${date} สำเร็จ (${result.affectedRows} รายการ)`
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6.3 บันทึกการให้น้ำรายวันแบบ Manual (1 วัน บันทึกครบทุกแปลงหรือเลือกแปลง)
+waterRouter.post('/daily-record', async (req, res) => {
+  try {
+    const { log_date, sessions = ['เช้า', 'เย็น'], plot_ids, water_source, climate_condition, notes, worker_name } = req.body;
+    if (!log_date) return res.status(400).json({ error: 'log_date required' });
+
+    let targetPlots = [];
+    if (plot_ids && plot_ids.length > 0) {
+      const [p] = await pool.query('SELECT * FROM plots WHERE user_id = ? AND id IN (?)', [req.user.id, plot_ids]);
+      targetPlots = p;
+    } else {
+      const [p] = await pool.query(`SELECT * FROM plots WHERE user_id = ? AND status IN ('active', 'growing', 'harvest_ready')`, [req.user.id]);
+      targetPlots = p;
+    }
+
+    if (targetPlots.length === 0) {
+      return res.status(400).json({ error: 'ไม่มีแปลงปลูกที่เลือกหรือกำลังปลูก' });
+    }
+
+    const settings = await getUserSettings(req.user.id);
+    const src = water_source || settings.water_source || 'น้ำสะอาดมาตรฐาน GAP';
+    const climate = climate_condition || settings.climate_condition || 'normal';
+    const worker = worker_name || req.user.display_name || 'เจ้าของฟาร์ม';
+
+    let count = 0;
+    for (const sess of sessions) {
+      for (const plot of targetPlots) {
+        const [existing] = await pool.query(
+          `SELECT id FROM water_logs WHERE user_id = ? AND plot_id = ? AND DATE(log_date) = ? AND session = ?`,
+          [req.user.id, plot.id, log_date, sess]
+        );
+        if (existing.length === 0) {
+          const defaultNote = notes || (climate === 'rainy_humidity' 
+            ? `🌧️ บันทึกการให้น้ำรอบ${sess} - สภาพอากาศฝนตก/ความชื้นสูง รดควบคุมความชื้น [โรงเรือนหลังคาใส GAP]`
+            : `💧 บันทึกการให้น้ำรอบ${sess} - น้ำสะอาดมาตรฐาน GAP [โรงเรือนหลังคาใส]`);
+
+          await pool.query(
+            `INSERT INTO water_logs (user_id, plot_id, log_date, session, water_source, water_source_type, water_quality, contamination_check, amount_liters, worker_name, notes, climate_condition, is_auto_routine, created_by, updated_by)
+             VALUES (?, ?, ?, ?, ?, ?, 'ผ่าน', 1, NULL, ?, ?, ?, 0, ?, ?)`,
+            [req.user.id, plot.id, log_date, sess, src, src, worker, defaultNote, climate, req.user.email, req.user.email]
+          );
+          count++;
+        }
+      }
+    }
+
+    res.json({ success: true, count, message: `บันทึกการให้น้ำวันที่ ${log_date} สำเร็จ (${count} รายการ)` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 7. บันทึกรดน้ำด่วน 1 แปลง (1-Click Quick Watering)
 waterRouter.post('/quick-log', async (req, res) => {
   try {
@@ -482,7 +709,10 @@ waterRouter.post('/quick-all', async (req, res) => {
     const settings = await getUserSettings(req.user.id);
 
     const [activePlots] = await pool.query(
-      `SELECT * FROM plots WHERE user_id = ? AND status IN ('active', 'growing', 'harvest_ready')`,
+      `SELECT * FROM plots 
+       WHERE user_id = ? 
+         AND status IN ('active', 'growing', 'harvest_ready')
+         AND (auto_water_enabled IS NULL OR auto_water_enabled = 1)`,
       [req.user.id]
     );
 

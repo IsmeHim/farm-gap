@@ -76,11 +76,28 @@ async function getChatSession(lineUserId) {
   try {
     const [rows] = await pool.query('SELECT * FROM line_chat_sessions WHERE line_user_id = ?', [lineUserId]);
     if (rows.length > 0) {
-      let draft = rows[0].draft_data;
+      const row = rows[0];
+      const updatedAt = new Date(row.updated_at).getTime();
+      const now = Date.now();
+      const diffMinutes = (now - updatedAt) / (1000 * 60);
+
+      // ถ้าเซสชันค้างนานเกิน 30 นาที (หรือรอชำระเงินเกิน 120 นาที) ให้หมดอายุและรีเซ็ตเป็น IDLE อัตโนมัติ
+      // เพื่อไม่ให้ลูกค้าเดิมที่กลับมาพิมพ์สั่งซื้อใหม่ถูกเซสชันเก่าบล็อก
+      const isExpired = (row.state !== 'IDLE') && (
+        (row.state !== 'AWAITING_PAYMENT' && diffMinutes > 30) ||
+        (row.state === 'AWAITING_PAYMENT' && diffMinutes > 120)
+      );
+
+      if (isExpired) {
+        await pool.query('UPDATE line_chat_sessions SET state = "IDLE", order_id = NULL, draft_data = NULL WHERE line_user_id = ?', [lineUserId]);
+        return { state: 'IDLE', order_id: null, draft_data: null };
+      }
+
+      let draft = row.draft_data;
       if (typeof draft === 'string') {
         try { draft = JSON.parse(draft); } catch (_) {}
       }
-      return { ...rows[0], draft_data: draft };
+      return { ...row, draft_data: draft };
     }
     return { state: 'IDLE', order_id: null, draft_data: null };
   } catch (err) {
@@ -266,15 +283,107 @@ async function getOwnerContactInfo() {
   };
 }
 
-// 2. ดึงข้อมูลผักพร้อมขาย แปลงปลูก และข้อมูลติดต่อเจ้าของฟาร์ม เพื่อนำมาสร้างเป็น Context ใน AI Chatbot
+// Helper: แปลงวันที่ ค.ศ. เป็น วันที่ภาษาไทย เช่น "9 ตุลาคม 2569"
+function formatThaiDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  
+  const thaiMonths = [
+    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+  ];
+  
+  const day = d.getDate();
+  const month = thaiMonths[d.getMonth()];
+  const year = d.getFullYear() + 543;
+  return `${day} ${month} ${year}`;
+}
+
+// Helper: ตรวจสอบรอบเก็บเกี่ยวถัดไปของผักชนิดที่ระบุ จาก planting_batches และ crop_cycles
+async function getUpcomingHarvestForProduct(productName) {
+  try {
+    const lower = (productName || '').toLowerCase();
+    const searchTerms = [];
+    if (lower.includes('บุ้ง')) searchTerms.push('บุ้ง');
+    if (lower.includes('กวางตุ้ง') || lower.includes('กวางตุง')) searchTerms.push('กวางตุ้ง');
+    if (lower.includes('กรีน') || lower.includes('green')) searchTerms.push('กรีนโอ๊ค', 'green');
+    if (lower.includes('เรด') || lower.includes('red')) searchTerms.push('เรดโอ๊ค', 'red');
+    if (lower.includes('คอส') || lower.includes('cos') || lower.includes('โรเมน')) searchTerms.push('คอส', 'cos', 'โรเมน');
+    if (lower.includes('ฟิล') || lower.includes('ฟิน') || lower.includes('frillice') || lower.includes('ไอซ์เบิร์ก')) searchTerms.push('ฟิลเล่ย์', 'frillice', 'ไอซ์เบิร์ก');
+    if (lower.includes('บัตเตอร์') || lower.includes('butter')) searchTerms.push('บัตเตอร์เฮด', 'butter');
+    if (lower.includes('กาดขาว') || lower.includes('cabbage')) searchTerms.push('กาดขาว', 'cabbage');
+    if (lower.includes('เคล') || lower.includes('kale')) searchTerms.push('เคล', 'kale');
+
+    const [batches] = await pool.query(`
+      SELECT b.expected_harvest_date, b.status, c.name AS crop_name, p.name AS plot_name
+      FROM planting_batches b
+      LEFT JOIN crops c ON b.crop_id = c.id
+      LEFT JOIN plots p ON b.plot_id = p.id
+      WHERE b.status IN ('growing', 'active', 'harvest_ready')
+        AND b.expected_harvest_date IS NOT NULL
+      ORDER BY b.expected_harvest_date ASC
+    `);
+
+    const [cycles] = await pool.query(`
+      SELECT c.expected_harvest_date, c.status, c.crop_name, p.name AS plot_name
+      FROM crop_cycles c
+      LEFT JOIN plots p ON c.plot_id = p.id
+      WHERE c.status IN ('active', 'growing', 'harvest_ready')
+        AND c.expected_harvest_date IS NOT NULL
+      ORDER BY c.expected_harvest_date ASC
+    `);
+
+    const allUpcoming = [...batches, ...cycles];
+
+    for (const item of allUpcoming) {
+      const cropLower = (item.crop_name || '').toLowerCase();
+      const isMatch = searchTerms.some(term => cropLower.includes(term.toLowerCase()));
+      if (isMatch) {
+        const harvestDate = new Date(item.expected_harvest_date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const diffTime = harvestDate.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        return {
+          hasUpcoming: true,
+          harvestDate: item.expected_harvest_date,
+          harvestDateThai: formatThaiDate(item.expected_harvest_date),
+          daysRemaining: diffDays > 0 ? diffDays : 0,
+          plotName: item.plot_name || 'แปลงปลูกในฟาร์ม',
+          cropName: item.crop_name,
+        };
+      }
+    }
+  } catch (err) {
+    console.error('getUpcomingHarvestForProduct error:', err.message);
+  }
+
+  return { hasUpcoming: false };
+}
+
+// 2. ดึงข้อมูลผักพร้อมขาย ผักที่หมด/กำลังปลูก รอบเก็บเกี่ยว และข้อมูลติดต่อเจ้าของฟาร์ม เพื่อนำมาสร้างเป็น Context ใน AI Chatbot
 async function getFarmContext() {
   try {
-    const [products] = await pool.query(
+    const [availableProducts] = await pool.query(
       'SELECT name, price, unit, stock_quantity FROM products WHERE status = "available" AND stock_quantity > 0'
+    );
+    const [outOfStockProducts] = await pool.query(
+      'SELECT name, price, unit, stock_quantity, status FROM products WHERE status = "out_of_stock" OR stock_quantity <= 0'
     );
     const [plots] = await pool.query(
       'SELECT name, crop_name, field_safety_status, status FROM plots WHERE status = "active"'
     );
+    const [batches] = await pool.query(`
+      SELECT b.expected_harvest_date, b.status, c.name AS crop_name, p.name AS plot_name
+      FROM planting_batches b
+      LEFT JOIN crops c ON b.crop_id = c.id
+      LEFT JOIN plots p ON b.plot_id = p.id
+      WHERE b.status IN ('growing', 'active', 'harvest_ready')
+        AND b.expected_harvest_date IS NOT NULL
+      ORDER BY b.expected_harvest_date ASC
+    `);
     const owner = await getOwnerContactInfo();
 
     let context = 'คุณคือบอทผู้ช่วยตอบคำถามลูกค้าของฟาร์มผักสดอัจฉริยะ FarmGAP AI ที่เพาะปลูกตามมาตรฐาน GAP และผสานระบบ E-Commerce\n';
@@ -283,12 +392,30 @@ async function getFarmContext() {
     context += `- ผู้ดูแล/เจ้าของฟาร์ม: คุณ${owner.displayName}\n`;
 
     context += '\n[ข้อมูลสต็อกสินค้าพร้อมขายวันนี้แบบเรียลไทม์]:\n';
-    if (products.length > 0) {
-      products.forEach(p => {
-        context += `- ผัก: ${p.name}, ราคา: ${p.price} บาทต่อ ${p.unit}, สต็อกคงเหลือ: ${p.stock_quantity} ${p.unit}\n`;
+    if (availableProducts.length > 0) {
+      availableProducts.forEach(p => {
+        context += `- ผัก: ${p.name}, ราคา: ${p.price} บาทต่อ ${p.unit}, สต็อกคงเหลือ: ${p.stock_quantity} ${p.unit} (มีสินค้าพร้อมส่งทันที)\n`;
       });
     } else {
-      context += '- ขณะนี้สินค้าหมดชั่วคราว อยู่ระหว่างเตรียมแปลงเก็บเกี่ยวล็อตถัดไป\n';
+      context += '- ขณะนี้สินค้าพร้อมส่งหมดชั่วคราว อยู่ระหว่างเตรียมแปลงเก็บเกี่ยวล็อตถัดไป\n';
+    }
+
+    context += '\n[ข้อมูลผักที่สินค้าหมดชั่วคราวและกำหนดการเก็บเกี่ยวรอบถัดไป]:\n';
+    if (outOfStockProducts.length > 0 || batches.length > 0) {
+      if (outOfStockProducts.length > 0) {
+        outOfStockProducts.forEach(p => {
+          context += `- ผักที่หมดชั่วคราว: ${p.name} (สต็อก 0)\n`;
+        });
+      }
+      if (batches.length > 0) {
+        context += `กำหนดการเก็บเกี่ยวแปลงเพาะปลูกในฟาร์ม:\n`;
+        batches.forEach(b => {
+          const dateThai = formatThaiDate(b.expected_harvest_date);
+          context += `- พืช: ${b.crop_name}, ปลูกอยู่ที่: ${b.plot_name}, กำหนดพร้อมเก็บเกี่ยว: ${dateThai} (สถานะ: ${b.status})\n`;
+        });
+      }
+    } else {
+      context += '- ไม่มีรายการแปลงเพาะปลูกที่รอเก็บเกี่ยว\n';
     }
     
     context += '\n[ข้อมูลแปลงเพาะปลูกและสถานะความปลอดภัย GAP ปัจจุบัน]:\n';
@@ -305,12 +432,15 @@ async function getFarmContext() {
 
     context += '\n[กฎและนโยบายสำคัญในการตอบคำถามลูกค้า]:\n';
     context += '1. ตอบคำถามภาษาไทยอย่างสุภาพ มีหางเสียง "ครับ/ค่ะ" สั้นกระชับเข้าใจง่าย และให้ข้อมูลที่เป็นประโยชน์สูงสุด\n';
-    context += `2. กฎเรื่องเบอร์ติดต่อเจ้าของฟาร์ม (สำคัญมาก): ให้ระบุเบอร์โทรศัพท์ ${owner.phone} (คุณ${owner.displayName} ฟาร์ม ${owner.farmName}) "เฉพาะ" ในกรณีที่ลูกค้าถามหาเบอร์ติดต่อ ขอเบอร์โทร ขอคุยกับเจ้าของฟาร์ม/แอดมิน หรือกรณีขอเงินคืนเท่านั้น! ห้ามใส่เบอร์ติดต่อหรือชวนโทรหาเจ้าของฟาร์มท้ายคำตอบทั่วไปโดยเด็ดขาด!\n`;
-    context += `3. กฎเรื่องการขอเงินคืน (Refund): หากลูกค้าสอบถามว่า "ขอเงินคืนยังไง", "ขอเงินคืน", "โอนเงินแล้วขอยกเลิกออเดอร์" หรือทำนองเดียวกัน ให้ตอบอย่างสุภาพว่า ทางฟาร์มยินดีคืนเงินให้ตามยอดจริง โดยมีขั้นตอนง่ายๆ คือ:\n   - ส่งรูปภาพสลิปที่โอนเงินเข้ามาในแชทนี้\n   - พิมพ์แจ้งเลขบัญชีธนาคาร หรือเบอร์พร้อมเพย์ และชื่อบัญชีสำหรับรับเงินคืน\n   - ทางเจ้าของฟาร์มจะตรวจสอบและโอนเงินคืนให้โดยเร็ว หรือลูกค้าสามารถโทรแจ้งเจ้าของฟาร์มโดยตรงได้ที่เบอร์ ${owner.phone} (คุณ${owner.displayName})\n`;
-    context += '4. อ้างอิงสต็อกผักสดและสถานะแปลงเพาะปลูกข้างต้นในการตอบให้สอดคล้องกันอย่างถูกต้อง\n';
-    context += '5. แจ้งลูกค้าว่าสามารถสั่งซื้อผักสดได้โดยตรงในแชทนี้เลย (เช่น "สั่งกรีนโอ๊ค 2 แพ็ค") หรือพิมพ์ "เมนูผัก" เพื่อดูสินค้าทั้งหมด โดยฟาร์มรองรับทั้งการ "โอนเงิน/สแกน QR" และ "เก็บเงินปลายทาง (COD)"\n';
-    context += '6. หากลูกค้าถามเรื่องสถานะพัสดุหรือออเดอร์ ให้แนะนำพิมพ์คำว่า "เช็คสถานะ" เพื่อตรวจสถานะออเดอร์ล่าสุด หรือพิมพ์ "ดูประวัติ" เพื่อดูประวัติการสั่งซื้อทั้งหมดในแชท\n';
-    context += '7. ข้อห้ามเด็ดขาด: ห้ามแนบข้อความทำนองว่า "หากต้องการสอบถามข้อมูลเพิ่มเติม หรือติดต่อคุณ... โทรได้ที่เบอร์..." ท้ายคำตอบทั่วไปโดยเด็ดขาด!';
+    context += '2. กฎตอบเรื่องความพร้อมของผัก (สำคัญมาก):\n';
+    context += '   - หากลูกค้าถามว่า "ผัก... มีไหม", "มี... ไหม": ถ้ามีในสต็อกพร้อมส่ง ให้ยืนยันว่ามีพร้อมส่ง แจ้งราคา และเชิญชวนสั่งซื้อได้ทันทีในแชท (เช่น "สั่งกรีนโอ๊ค 2 ถุง")\n';
+    context += '   - หากผักชนิดนั้นหมดชั่วคราว หรือกำลังเพาะปลูกอยู่: ให้แจ้งอย่างสุภาพว่า ขณะนี้สินค้าหมดชั่วคราว แต่ทางฟาร์มกำลังปลูกอยู่ที่แปลงใด และมีกำหนดพร้อมเก็บเกี่ยวรอบถัดไปประมาณวันที่เท่าไหร่ (อ้างอิงจากข้อมูลด้านบนอย่างแม่นยำ) พร้อมชวนดูผักชนิดอื่นที่มีพร้อมส่งแทน\n';
+    context += `3. กฎเรื่องเบอร์ติดต่อเจ้าของฟาร์ม (สำคัญมาก): ให้ระบุเบอร์โทรศัพท์ ${owner.phone} (คุณ${owner.displayName} ฟาร์ม ${owner.farmName}) "เฉพาะ" ในกรณีที่ลูกค้าถามหาเบอร์ติดต่อ ขอเบอร์โทร ขอคุยกับเจ้าของฟาร์ม/แอดมิน หรือกรณีขอเงินคืนเท่านั้น! ห้ามใส่เบอร์ติดต่อหรือชวนโทรหาเจ้าของฟาร์มท้ายคำตอบทั่วไปโดยเด็ดขาด!\n`;
+    context += `4. กฎเรื่องการขอเงินคืน (Refund): หากลูกค้าสอบถามว่า "ขอเงินคืนยังไง", "ขอเงินคืน", "โอนเงินแล้วขอยกเลิกออเดอร์" หรือทำนองเดียวกัน ให้ตอบอย่างสุภาพว่า ทางฟาร์มยินดีคืนเงินให้ตามยอดจริง โดยมีขั้นตอนง่ายๆ คือ:\n   - ส่งรูปภาพสลิปที่โอนเงินเข้ามาในแชทนี้\n   - พิมพ์แจ้งเลขบัญชีธนาคาร หรือเบอร์พร้อมเพย์ และชื่อบัญชีสำหรับรับเงินคืน\n   - ทางเจ้าของฟาร์มจะตรวจสอบและโอนเงินคืนให้โดยเร็ว หรือลูกค้าสามารถโทรแจ้งเจ้าของฟาร์มโดยตรงได้ที่เบอร์ ${owner.phone} (คุณ${owner.displayName})\n`;
+    context += '5. อ้างอิงสต็อกผักสดและสถานะแปลงเพาะปลูกข้างต้นในการตอบให้สอดคล้องกันอย่างถูกต้อง\n';
+    context += '6. แจ้งลูกค้าว่าสามารถสั่งซื้อผักสดได้โดยตรงในแชทนี้เลย (เช่น "สั่งกรีนโอ๊ค 2 แพ็ค") หรือพิมพ์ "เมนูผัก" เพื่อดูสินค้าทั้งหมด โดยฟาร์มรองรับทั้งการ "โอนเงิน/สแกน QR" และ "เก็บเงินปลายทาง (COD)"\n';
+    context += '7. หากลูกค้าถามเรื่องสถานะพัสดุหรือออเดอร์ ให้แนะนำพิมพ์คำว่า "เช็คสถานะ" เพื่อตรวจสถานะออเดอร์ล่าสุด หรือพิมพ์ "ดูประวัติ" เพื่อดูประวัติการสั่งซื้อทั้งหมดในแชท\n';
+    context += '8. ข้อห้ามเด็ดขาด: ห้ามแนบข้อความทำนองว่า "หากต้องการสอบถามข้อมูลเพิ่มเติม หรือติดต่อคุณ... โทรได้ที่เบอร์..." ท้ายคำตอบทั่วไปโดยเด็ดขาด!';
     
     return context;
   } catch (err) {
@@ -329,11 +459,13 @@ function normalizeThaiQuantity(str) {
     s = s.replaceAll(td, String(i));
   });
 
-  // แปลงคำบอกจำนวนพิเศษ เช่น ครึ่งกิโล, ครึ่งถุง
-  s = s.replace(/ครึ่ง\s*(?:กิโล|กีโล|กก|โล|ถุง|แพ็ค|แพค)/g, ' 0.5 โล ');
+  // แปลงคำบอกจำนวนพิเศษ เช่น ครึ่งกิโล, ครึ่งถุง, ครึ่งขีด
+  s = s.replace(/ครึ่ง\s*(?:กิโลกรัม|กิโล|กีโล|กก\.|ก\.ก\.|กก|โล|kg)/gi, ' 0.5 กิโล ');
+  s = s.replace(/ครึ่ง\s*(?:ถุง|แพ็ค|แพค|ห่อ)/gi, ' 0.5 ถุง ');
+  s = s.replace(/ครึ่ง\s*ขีด/gi, ' 0.5 ขีด ');
   s = s.replace(/(?:^|\s)ครึ่ง(?:\s|$)/g, ' 0.5 ');
 
-  // แปลงคำบอกจำนวนภาษาไทยเดี่ยวๆ
+  // แปลงคำบอกจำนวนภาษาไทยเดี่ยวๆ (ต้องเก็บหน่วยเดิมไว้ ไม่ลบหน่วยทิ้ง)
   const wordToNum = [
     { words: ['สิบ'], val: '10' },
     { words: ['เก้า'], val: '9' },
@@ -350,8 +482,8 @@ function normalizeThaiQuantity(str) {
   for (const item of wordToNum) {
     for (const w of item.words) {
       s = s.replace(
-        new RegExp(`(^|[^ก-๙a-zA-Z0-9])${w}(?:\\s*(?:กิโล|กีโล|กก|โล|แพ็ค|แพค|ถุง|ชิ้น|หัว|ชุด))?(?=[^ก-๙a-zA-Z0-9]|$)`, 'gi'),
-        `$1 ${item.val} `
+        new RegExp(`(^|[^ก-๙a-zA-Z0-9])${w}(?:\\s*(กิโลกรัม|กิโล|กีโล|กก\\.|ก\\.ก\\.|กก|โล|แพ็ค|แพค|ถุง|ชิ้น|หัว|ชุด|ขีด))?(?=[^ก-๙a-zA-Z0-9]|$)`, 'gi'),
+        (match, prefix, unit) => `${prefix} ${item.val} ${unit ? unit + ' ' : ''}`
       );
     }
   }
@@ -359,18 +491,36 @@ function normalizeThaiQuantity(str) {
   return s.replace(/\s+/g, ' ').trim();
 }
 
+// Helper: คำนวณน้ำหนักต่อถุง (กิโลกรัม) จากชื่อสินค้า
+function getProductWeightInKg(productName) {
+  if (!productName) return 0.4;
+  const kheedMatch = productName.match(/(\d+(?:\.\d+)?)\s*ขีด/);
+  if (kheedMatch) return parseFloat(kheedMatch[1]) * 0.1;
+  const gramMatch = productName.match(/(\d+(?:\.\d+)?)\s*(?:กรัม|g|gm)/i);
+  if (gramMatch) return parseFloat(gramMatch[1]) / 1000;
+  const kgMatch = productName.match(/(\d+(?:\.\d+)?)\s*(?:กิโล|กก|kg)/i);
+  if (kgMatch) return parseFloat(kgMatch[1]);
+  return 0.4; // ค่าเริ่มต้นมาตรฐานฟาร์ม FarmGAP: 4 ขีด (400 กรัม / 0.4 กิโลกรัม) ต่อถุง
+}
+
 // Helper: สกัดคีย์เวิร์ดชื่อผักทั้งไทย/อังกฤษ/คำย่อ/คำสะกดผิดสำหรับสินค้าทุกตัวในระบบ
 function getProductKeywords(productName) {
   const lower = productName.toLowerCase();
   const keywords = [];
 
-  // 1. ดึงชื่อภาษาอังกฤษในวงเล็บ เช่น (Chinese Cabbage), (Green Oak)
+  // 1. ดึงชื่อภาษาอังกฤษในวงเล็บ เช่น (Chinese Cabbage), (Green Oak) (ข้ามคำที่เป็นหน่วย/ตัวเลข เช่น 4 ขีด, ถุงใส)
   const enMatch = lower.match(/\(([^)]+)\)/);
+  const skipWords = ['ขีด', 'ถุง', 'ถุงใส', 'กรัม', 'กก', 'gap', 'kg', 'g', 'gm'];
   if (enMatch && enMatch[1]) {
     const en = enMatch[1].trim();
-    keywords.push(en);
+    if (!skipWords.includes(en.toLowerCase()) && !/^[0-9.\s]+$/.test(en)) {
+      keywords.push(en);
+    }
     en.split(/[\s-]+/).forEach(w => {
-      if (w.length >= 3) keywords.push(w);
+      const cleanW = w.replace(/^[0-9.]+|[0-9.]+$/g, '').trim().toLowerCase();
+      if (cleanW.length >= 3 && !skipWords.includes(cleanW) && !/^\d+$/.test(cleanW)) {
+        keywords.push(cleanW);
+      }
     });
   }
 
@@ -463,7 +613,7 @@ ${productListDesc}
 }
 
 // 3. วิเคราะห์เจตนาและสกัดคำสั่งซื้อจากข้อความธรรมชาติ (Order Intent & Entity Extraction)
-async function extractOrderIntent(text) {
+export async function extractOrderIntent(text) {
   const buyKeywords = [
     'สั่ง', 'ซื้อ', 'เอา', 'รับ', 'จอง', 'order', 'ขอ', 'อยากได้', 'อยากสั่ง', 'ต้องการ',
     'จัด', 'ส่ง', 'จัดส่ง', 'เพิ่ม', 'สัก', 'ซัก', 'กิโล', 'กีโล', 'โล', 'แพ็ค', 'แพค',
@@ -472,7 +622,7 @@ async function extractOrderIntent(text) {
   const hasBuyKeyword = buyKeywords.some(k => text.includes(k));
 
   const [products] = await pool.query(
-    'SELECT id, name, price, unit, stock_quantity FROM products WHERE status = "available"'
+    'SELECT id, name, price, unit, stock_quantity, status FROM products'
   );
 
   if (products.length === 0) {
@@ -490,43 +640,95 @@ async function extractOrderIntent(text) {
   const normalizedText = normalizeThaiQuantity(cleanedText);
   const lowerText = normalizedText.toLowerCase();
 
-  // ตรวจสอบแพทเทิร์น "อย่างละ [ตัวเลข]" (เช่น "เอากรีนโอ๊ค เรดโอ๊ค คอส อย่างละ 2 ถุง")
-  const eachMatch = lowerText.match(/อย่างละ\s*([0-9]+(?:\.[0-9]+)?)/);
-  const defaultEachQty = eachMatch && parseFloat(eachMatch[1]) > 0 ? parseFloat(eachMatch[1]) : null;
+  // ตรวจสอบแพทเทิร์น "อย่างละ [ตัวเลข] [หน่วย?]" (เช่น "เอากรีนโอ๊ค เรดโอ๊ค อย่างละ 2 ถุง" หรือ "อย่างละ 2 กิโล")
+  const eachMatch = lowerText.match(/อย่างละ\s*([0-9]+(?:\.[0-9]+)?)\s*(กิโลกรัม|กิโล|กีโล|กก\.|ก\.ก\.|กก|โล|kg|ขีด|ถุง|แพ็ค|แพค|ห่อ|ชุด|อัน|ชิ้น)?/i);
+  const defaultEachRawQty = eachMatch && parseFloat(eachMatch[1]) > 0 ? parseFloat(eachMatch[1]) : null;
+  const defaultEachUnit = eachMatch && eachMatch[2] ? eachMatch[2].trim().toLowerCase() : null;
 
   let matchedItems = [];
   const addedProductIds = new Set();
 
-  // ฟังก์ชันย่อยช่วยสกัดจำนวนสินค้าจากข้อความรอบๆ ชื่อผัก
+  // ฟังก์ชันย่อยช่วยสกัดจำนวนสินค้าและหน่วย พร้อมคำนวณแปลงหน่วยเป็นจำนวนถุงอัตโนมัติ (เช่น กิโล/ขีด -> ถุง)
   const escapeRx = s => s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
-  const extractQuantityForKeyword = (segment, kw) => {
-    let qty = null;
+  const extractQuantityAndUnitForKeyword = (segment, kw, product) => {
+    const unitsRegexStr = '(?:กิโลกรัม|กิโล|กีโล|กก\\.|ก\\.ก\\.|กก|โล|kg|ขีด|ถุง|แพ็ค|แพค|ห่อ|ชุด|อัน|ชิ้น)';
     const escapedKw = escapeRx(kw);
-    const regexPatterns = [
-      new RegExp(`${escapedKw}[^0-9]{0,25}([0-9]+(?:\\.[0-9]+)?)`, 'i'),
-      new RegExp(`([0-9]+(?:\\.[0-9]+)?)[^0-9]{0,25}${escapedKw}`, 'i'),
-    ];
+    const weightPerBag = getProductWeightInKg(product?.name);
 
-    for (const rx of regexPatterns) {
-      const match = segment.match(rx);
-      if (match && match[1]) {
-        const parsed = parseFloat(match[1]);
-        if (!isNaN(parsed) && parsed > 0) {
-          qty = parsed;
-          break;
-        }
-      }
+    // 1. kw ... num unit
+    let rx = new RegExp(escapedKw + '[^0-9]{0,25}?([0-9]+(?:\\.[0-9]+)?)\\s*(' + unitsRegexStr + ')?', 'i');
+    let match = segment.match(rx);
+
+    // 2. num unit ... kw
+    if (!match) {
+      rx = new RegExp('([0-9]+(?:\\.[0-9]+)?)\\s*(' + unitsRegexStr + ')?[^0-9]{0,25}?' + escapedKw, 'i');
+      match = segment.match(rx);
     }
 
-    if (!qty) {
-      const unitMatch = segment.match(new RegExp(`([0-9]+(?:\\.[0-9]+)?)\\s*(?:กิโล|กีโล|กก|ก\\.ก\\.|โล|แพ็ค|แพค|ถุง|ชิ้น|หัว|ชุด)[^0-9]*${escapedKw}`, 'i')) ||
-                        segment.match(new RegExp(`${escapedKw}[^0-9]*([0-9]+(?:\\.[0-9]+)?)\\s*(?:กิโล|กีโล|กก|ก\\.ก\\.|โล|แพ็ค|แพค|ถุง|ชิ้น|หัว|ชุด)`, 'i'));
-      if (unitMatch && unitMatch[1]) {
-        qty = parseFloat(unitMatch[1]);
-      }
+    let rawQty = null;
+    let rawUnit = null;
+
+    if (match) {
+      rawQty = parseFloat(match[1]);
+      rawUnit = match[2] ? match[2].trim().toLowerCase() : null;
     }
 
-    return qty;
+    if (!rawQty || isNaN(rawQty) || rawQty <= 0) {
+      return { qty: null, note: null };
+    }
+
+    const isKg = rawUnit && /^(กิโลกรัม|กิโล|กีโล|กก\.|ก\.ก\.|กก|โล|kg)$/i.test(rawUnit);
+    const isKheed = rawUnit && /^ขีด$/i.test(rawUnit);
+
+    let finalQty = rawQty;
+    let note = null;
+
+    if (isKg) {
+      const calculated = rawQty / weightPerBag;
+      finalQty = Math.round(calculated);
+      if (finalQty < 1) finalQty = 1;
+      const kheedPerBag = Math.round(weightPerBag * 10);
+      if (calculated % 1 === 0) {
+        note = `คำนวณจาก ${rawQty} กิโลกรัม = ${finalQty} ถุงพอดี (ถุงละ ${kheedPerBag} ขีด)`;
+      } else {
+        note = `คำนวณจาก ${rawQty} กิโลกรัม ≈ ${finalQty} ถุง (ถุงละ ${kheedPerBag} ขีด)`;
+      }
+    } else if (isKheed) {
+      const kheedPerBag = Math.round(weightPerBag * 10);
+      const calculated = rawQty / (weightPerBag * 10);
+      finalQty = Math.round(calculated);
+      if (finalQty < 1) finalQty = 1;
+      note = `คำนวณจาก ${rawQty} ขีด = ${finalQty} ถุง (ถุงละ ${kheedPerBag} ขีด)`;
+    } else {
+      finalQty = Math.round(rawQty);
+    }
+
+    return { qty: finalQty, rawQty, rawUnit, note };
+  };
+
+  // Helper สำหรับคำนวณจำนวนกรณีมี "อย่างละ ..."
+  const calculateDefaultEachQty = (product) => {
+    if (!defaultEachRawQty) return { qty: 1, note: null };
+    const weightPerBag = getProductWeightInKg(product?.name);
+    const isKg = defaultEachUnit && /^(กิโลกรัม|กิโล|กีโล|กก\.|ก\.ก\.|กก|โล|kg)$/i.test(defaultEachUnit);
+    const isKheed = defaultEachUnit && /^ขีด$/i.test(defaultEachUnit);
+    if (isKg) {
+      const calculated = defaultEachRawQty / weightPerBag;
+      const finalQty = Math.max(1, Math.round(calculated));
+      const kheedPerBag = Math.round(weightPerBag * 10);
+      return {
+        qty: finalQty,
+        note: `คำนวณจาก ${defaultEachRawQty} กิโลกรัม = ${finalQty} ถุง (ถุงละ ${kheedPerBag} ขีด)`,
+      };
+    } else if (isKheed) {
+      const kheedPerBag = Math.round(weightPerBag * 10);
+      const finalQty = Math.max(1, Math.round(defaultEachRawQty / (weightPerBag * 10)));
+      return {
+        qty: finalQty,
+        note: `คำนวณจาก ${defaultEachRawQty} ขีด = ${finalQty} ถุง (ถุงละ ${kheedPerBag} ขีด)`,
+      };
+    }
+    return { qty: Math.round(defaultEachRawQty), note: null };
   };
 
   // 3. วิเคราะห์แบบแบ่ง Segment (แบ่งตามบรรทัด, จุลภาค, หรือคำเชื่อม "และ", "กับ", "แล้วก็", "+")
@@ -539,18 +741,26 @@ async function extractOrderIntent(text) {
       const matchedKw = keywords.find(kw => segment.includes(kw));
 
       if (matchedKw) {
-        let qty = extractQuantityForKeyword(segment, matchedKw);
-        if (!qty && defaultEachQty) qty = defaultEachQty;
+        const parsed = extractQuantityAndUnitForKeyword(segment, matchedKw, product);
+        let qty = parsed.qty;
+        let note = parsed.note;
+
+        if (!qty && defaultEachRawQty) {
+          const def = calculateDefaultEachQty(product);
+          qty = def.qty;
+          note = def.note;
+        }
         if (!qty) qty = 1;
 
         matchedItems.push({
           product_id: product.id,
           name: product.name,
           price: Number(product.price),
-          unit: product.unit || 'กก.',
+          unit: product.unit || 'ถุง',
           quantity: qty,
           stock_quantity: Number(product.stock_quantity),
           subtotal: Number(product.price) * qty,
+          conversion_note: note,
         });
         addedProductIds.add(product.id);
       }
@@ -565,18 +775,26 @@ async function extractOrderIntent(text) {
       const matchedKw = keywords.find(kw => lowerText.includes(kw));
 
       if (matchedKw) {
-        let qty = extractQuantityForKeyword(lowerText, matchedKw);
-        if (!qty && defaultEachQty) qty = defaultEachQty;
+        const parsed = extractQuantityAndUnitForKeyword(lowerText, matchedKw, product);
+        let qty = parsed.qty;
+        let note = parsed.note;
+
+        if (!qty && defaultEachRawQty) {
+          const def = calculateDefaultEachQty(product);
+          qty = def.qty;
+          note = def.note;
+        }
         if (!qty) qty = 1;
 
         matchedItems.push({
           product_id: product.id,
           name: product.name,
           price: Number(product.price),
-          unit: product.unit || 'กก.',
+          unit: product.unit || 'ถุง',
           quantity: qty,
           stock_quantity: Number(product.stock_quantity),
           subtotal: Number(product.price) * qty,
+          conversion_note: note,
         });
         addedProductIds.add(product.id);
       }
@@ -625,18 +843,32 @@ async function extractOrderIntent(text) {
     return { isOrder: false };
   }
 
-  // ตรวจสอบสต็อกสินค้า
+  // ตรวจสอบสต็อกสินค้าและรอบเก็บเกี่ยวถัดไป
   for (const item of matchedItems) {
-    if (item.stock_quantity <= 0) {
-      return {
-        isOrder: true,
-        error: `ขออภัยครับ ขณะนี้ผัก "${item.name}" สินค้าหมดชั่วคราวครับ ทางฟาร์มกำลังเตรียมเก็บเกี่ยวแปลงถัดไปครับ 🌱`,
-      };
+    const isOutOfStock = item.status === 'out_of_stock' || item.stock_quantity <= 0;
+    if (isOutOfStock) {
+      const harvest = await getUpcomingHarvestForProduct(item.name);
+      if (harvest.hasUpcoming) {
+        return {
+          isOrder: true,
+          error: `ขออภัยครับ ขณะนี้ผัก "${item.name}" ในสต็อกหมดชั่วคราวครับ 🌱\n\n🚜 ทางฟาร์มกำลังเพาะปลูกอยู่ที่ "${harvest.plotName}" คาดว่าจะพร้อมเก็บเกี่ยวรอบถัดไปประมาณวันที่ ${harvest.harvestDateThai} (อีกประมาณ ${harvest.daysRemaining} วัน) ครับ\n\nคุณลูกค้าสามารถพิมพ์ "เมนูผัก" เพื่อเลือกชมผักสดชนิดอื่นๆ ที่มีพร้อมส่งวันนี้ได้เลยครับ! 😊`,
+        };
+      } else {
+        return {
+          isOrder: true,
+          error: `ขออภัยครับ ขณะนี้ผัก "${item.name}" ในสต็อกหมดชั่วคราวครับ 🌱 ทางฟาร์มกำลังเตรียมแปลงสำหรับรอบปลูกถัดไปครับ\n\nคุณลูกค้าสามารถพิมพ์ "เมนูผัก" เพื่อเลือกดูผักสดชนิดอื่นๆ ที่มีพร้อมส่งวันนี้ได้เลยครับ! 😊`,
+        };
+      }
     }
     if (item.stock_quantity < item.quantity) {
+      const harvest = await getUpcomingHarvestForProduct(item.name);
+      let harvestNote = '';
+      if (harvest.hasUpcoming) {
+        harvestNote = `\n\n🚜 ทั้งนี้ทางฟาร์มมีรอบเก็บเกี่ยวเพิ่มเติมประมาณวันที่ ${harvest.harvestDateThai} ครับ`;
+      }
       return {
         isOrder: true,
-        error: `ขออภัยครับ ผัก "${item.name}" ปัจจุบันมีสต็อกพร้อมส่งเพียง ${item.stock_quantity} ${item.unit} (คุณสั่ง ${item.quantity} ${item.unit}) รบกวนระบุจำนวนใหม่ได้เลยครับ`,
+        error: `ขออภัยครับ ผัก "${item.name}" ปัจจุบันมีสต็อกพร้อมส่งเพียง ${item.stock_quantity} ${item.unit} (คุณลูกค้าสั่ง ${item.quantity} ${item.unit}) ครับ 🌱${harvestNote}\n\nคุณลูกค้ารับ ${item.stock_quantity} ${item.unit} เท่าที่มีพร้อมส่งก่อน หรือต้องการระบุจำนวนใหม่ สามารถพิมพ์บอกได้เลยครับ 😊`,
       };
     }
   }
@@ -652,7 +884,13 @@ async function extractOrderIntent(text) {
 
 // 4. Flex Message: สรุปรายการสั่งซื้อและขอที่อยู่จัดส่ง
 async function replyOrderDraftConfirmation(replyToken, items, totalAmount) {
-  const itemsText = items.map(it => `• ${it.name} จำนวน ${it.quantity} ${it.unit} (฿${it.subtotal.toLocaleString()})`).join('\n');
+  const itemsText = items.map(it => {
+    let line = `• ${it.name} จำนวน ${it.quantity} ${it.unit} (฿${it.subtotal.toLocaleString()})`;
+    if (it.conversion_note) {
+      line += `\n  ↳ 💡 ${it.conversion_note}`;
+    }
+    return line;
+  }).join('\n');
 
   const flexCard = {
     type: 'flex',
@@ -836,6 +1074,239 @@ async function replyOrderDraftConfirmation(replyToken, items, totalAmount) {
   } catch (err) {
     console.error('Failed to reply order draft confirmation:', err.message);
   }
+}
+
+// 4.1 Flex Message: สรุปรายการสั่งซื้อสำหรับลูกค้าเดิม (ใช้ข้อมูลจัดส่งเดิมได้ทันที)
+async function replyReturningCustomerConfirmation(replyToken, items, totalAmount, existingContact) {
+  const itemsText = items.map(it => {
+    let line = `• ${it.name} จำนวน ${it.quantity} ${it.unit} (฿${it.subtotal.toLocaleString()})`;
+    if (it.conversion_note) {
+      line += `\n  ↳ 💡 ${it.conversion_note}`;
+    }
+    return line;
+  }).join('\n');
+
+  const flexCard = {
+    type: 'flex',
+    altText: 'ยืนยันรายการสั่งซื้อผักสด FarmGAP',
+    contents: {
+      type: 'bubble',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: '#173f2a',
+        paddingAll: 'lg',
+        contents: [
+          {
+            type: 'text',
+            text: '🥗 ยืนยันรายการผักสดที่ต้องการสั่ง',
+            weight: 'bold',
+            color: '#f4d27a',
+            size: 'md',
+          },
+        ],
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'md',
+        contents: [
+          {
+            type: 'text',
+            text: itemsText,
+            wrap: true,
+            size: 'sm',
+            color: '#2b3b2b',
+            weight: 'bold',
+          },
+          {
+            type: 'separator',
+          },
+          {
+            type: 'box',
+            layout: 'horizontal',
+            contents: [
+              {
+                type: 'text',
+                text: 'ยอดรวมทั้งสิ้น:',
+                size: 'sm',
+                color: '#666666',
+              },
+              {
+                type: 'text',
+                text: `฿${totalAmount.toLocaleString()} บาท`,
+                size: 'md',
+                weight: 'bold',
+                color: '#2e7d32',
+                align: 'end',
+              },
+            ],
+          },
+          {
+            type: 'box',
+            layout: 'vertical',
+            backgroundColor: '#f0fdf4',
+            borderColor: '#22c55e',
+            borderWidth: '2px',
+            cornerRadius: 'lg',
+            paddingAll: 'md',
+            spacing: 'xs',
+            contents: [
+              {
+                type: 'text',
+                text: '📍 ใช้ข้อมูลจัดส่งเดิมนี้เลยไหมครับ?',
+                weight: 'bold',
+                size: 'sm',
+                color: '#166534',
+                wrap: true,
+              },
+              {
+                type: 'text',
+                text: `👤 ผู้รับ: ${existingContact.name || 'คุณลูกค้า'}`,
+                size: 'xs',
+                weight: 'bold',
+                color: '#1f2937',
+              },
+              {
+                type: 'text',
+                text: `📱 เบอร์โทร: ${existingContact.phone || '-'}`,
+                size: 'xs',
+                weight: 'bold',
+                color: '#1f2937',
+              },
+              {
+                type: 'text',
+                text: `🏠 ที่อยู่: ${existingContact.address || '-'}`,
+                size: 'xs',
+                color: '#374151',
+                wrap: true,
+              },
+              {
+                type: 'separator',
+                margin: 'sm',
+              },
+              {
+                type: 'text',
+                text: '👉 แตะปุ่ม [✅ ใช้ข้อมูลเดิมนี้เลย] ด้านล่างเพื่อดำเนินการต่อทันที',
+                size: 'xxs',
+                color: '#15803d',
+                weight: 'bold',
+                wrap: true,
+              },
+            ],
+          },
+          {
+            type: 'box',
+            layout: 'vertical',
+            backgroundColor: '#fffbeb',
+            borderColor: '#fde68a',
+            borderWidth: '1px',
+            cornerRadius: 'md',
+            paddingAll: 'sm',
+            spacing: 'xxs',
+            margin: 'sm',
+            contents: [
+              {
+                type: 'text',
+                text: '✏️ หรือต้องการส่งที่อยู่อื่น / เปลี่ยนข้อมูลใหม่:',
+                size: 'xxs',
+                weight: 'bold',
+                color: '#92400e',
+                wrap: true,
+              },
+              {
+                type: 'text',
+                text: 'พิมพ์ ชื่อ เบอร์โทร และที่อยู่ใหม่ ส่งในแชทนี้ได้เลยครับ',
+                size: 'xxs',
+                color: '#78350f',
+                wrap: true,
+              },
+              {
+                type: 'text',
+                text: '💡 ตัวอย่าง: สมชาย ใจดี 0812345678 123/4 ม.5 ต.สุเทพ อ.เมือง จ.เชียงใหม่ 50200',
+                size: 'xxs',
+                color: '#1e3a8a',
+                weight: 'bold',
+                wrap: true,
+              },
+            ],
+          },
+        ],
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'sm',
+        contents: [
+          {
+            type: 'button',
+            action: {
+              type: 'message',
+              label: '✅ ใช้ข้อมูลเดิมนี้เลย',
+              text: 'ใช้ข้อมูลเดิม',
+            },
+            style: 'primary',
+            color: '#16a34a',
+            height: 'sm',
+          },
+          {
+            type: 'button',
+            action: {
+              type: 'message',
+              label: '❌ ยกเลิกการสั่งซื้อ',
+              text: 'ยกเลิก',
+            },
+            style: 'secondary',
+            height: 'sm',
+          },
+        ],
+      },
+    },
+  };
+
+  try {
+    await client.replyMessage({
+      replyToken: replyToken,
+      messages: [flexCard],
+    });
+  } catch (err) {
+    console.error('Failed to reply returning customer confirmation:', err.message);
+  }
+}
+
+// Helper: ส่งการ์ดยืนยันออเดอร์ (ตรวจเช็คว่าเป็นลูกค้าเดิมที่มีที่อยู่แล้ว หรือลูกค้าใหม่)
+async function sendSmartOrderDraftConfirmation(replyToken, userId, items, totalAmount) {
+  try {
+    const [custRows] = await pool.query('SELECT display_name, phone, address FROM customers WHERE line_user_id = ?', [userId]);
+    const cust = custRows[0] || {};
+    const hasAddress = cust.address && cust.address !== '-' && cust.address.trim().length >= 5;
+    const hasPhone = cust.phone && cust.phone !== '-' && cust.phone.trim().length >= 9;
+
+    if (hasAddress && hasPhone) {
+      const existingContact = {
+        name: cust.display_name && cust.display_name !== 'ลูกค้า LINE' ? cust.display_name : 'คุณลูกค้า',
+        phone: cust.phone,
+        address: cust.address,
+      };
+
+      await setChatSession(userId, 'AWAITING_ADDRESS', null, {
+        items,
+        totalAmount,
+        existing_contact: existingContact,
+      });
+
+      return replyReturningCustomerConfirmation(replyToken, items, totalAmount, existingContact);
+    }
+  } catch (err) {
+    console.error('sendSmartOrderDraftConfirmation error:', err.message);
+  }
+
+  // Fallback สำหรับลูกค้าใหม่ที่ยังไม่มีข้อมูลจัดส่ง
+  await setChatSession(userId, 'AWAITING_ADDRESS', null, {
+    items,
+    totalAmount,
+  });
+  return replyOrderDraftConfirmation(replyToken, items, totalAmount);
 }
 
 // 5. Flex Message: ใบแจ้งหนี้และช่องทางโอนเงิน (Invoice & Payment)
@@ -1481,7 +1952,7 @@ async function replyVegMenu(replyToken, userId) {
             contents: [
               {
                 type: 'text',
-                text: '💡 วิธีสั่งซื้อ: พิมพ์สั่งในแชทได้ทันที เช่น "สั่งกรีนโอ๊ค 2 กิโล" หรือคลิกปุ่มสั่งซื้อผ่านหน้าเว็บด้านล่างนี้ได้เลยครับ',
+                text: '💡 วิธีสั่งซื้อ: พิมพ์สั่งในแชทได้ทันทีครับ เช่น:\n• "สั่งกรีนโอ๊ค 2 ถุง"\n• "ขอสั่งฟิลเล่ย์ 3 ถุง"\n(สามารถสั่งเป็น "กิโล" ได้ ระบบจะคำนวณเป็นจำนวนถุงให้อัตโนมัติครับ เช่น 2 กิโล = 5 ถุง 🌱)',
                 wrap: true,
                 size: 'xs',
                 color: '#2e7d32',
@@ -1499,23 +1970,12 @@ async function replyVegMenu(replyToken, userId) {
           {
             type: 'button',
             action: {
-              type: 'uri',
-              label: '🛒 เปิดหน้าร้านสั่งซื้อผัก (LIFF)',
-              uri: process.env.LIFF_ORDER_URL || 'https://liff.line.me/dummy-liff-order-id',
-            },
-            style: 'primary',
-            color: '#173f2a',
-            height: 'sm',
-          },
-          {
-            type: 'button',
-            action: {
               type: 'message',
               label: '📦 เช็คสถานะออเดอร์ของฉัน',
               text: 'เช็คสถานะ',
             },
-            style: 'link',
-            color: '#2e7d32',
+            style: 'primary',
+            color: '#173f2a',
             height: 'sm',
           },
         ],
@@ -1530,6 +1990,96 @@ async function replyVegMenu(replyToken, userId) {
     });
   } catch (err) {
     console.error('Failed to reply menu:', err.message);
+  }
+}
+
+// Flex Message: ส่งลิงก์เปิดหน้าร้านเว็บ/LIFF ให้ลูกค้าที่สนใจสั่งทางเว็บ
+async function replyWebStoreLink(replyToken) {
+  const liffUrl = process.env.LIFF_ORDER_URL || 'https://liff.line.me/2011230817-FlfQg9Yb';
+
+  const flexCard = {
+    type: 'flex',
+    altText: '🛒 ลิงก์หน้าร้านสั่งซื้อผัก FarmGAP',
+    contents: {
+      type: 'bubble',
+      size: 'kilo',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: '#173f2a',
+        paddingAll: 'md',
+        contents: [
+          {
+            type: 'text',
+            text: '🛒 หน้าร้านสั่งซื้อผักสด FarmGAP',
+            weight: 'bold',
+            color: '#f4d27a',
+            size: 'sm',
+          },
+        ],
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'sm',
+        paddingAll: 'md',
+        contents: [
+          {
+            type: 'text',
+            text: 'คุณลูกค้าสามารถแตะปุ่มด้านล่างเพื่อเปิดหน้าร้าน เลือกดูผักสด และสั่งซื้อผ่านหน้าเว็บได้เลยครับ 🌱',
+            wrap: true,
+            size: 'xs',
+            color: '#374151',
+          },
+          {
+            type: 'box',
+            layout: 'vertical',
+            backgroundColor: '#f0fdf4',
+            borderColor: '#bbf7d0',
+            borderWidth: '1px',
+            cornerRadius: 'md',
+            paddingAll: 'sm',
+            contents: [
+              {
+                type: 'text',
+                text: '💡 หรือจะพิมพ์สั่งในแชทนี้ได้ง่ายๆ เลยครับ เช่น "สั่งกรีนโอ๊ค 2 ถุง"',
+                size: 'xxs',
+                color: '#15803d',
+                wrap: true,
+              },
+            ],
+          },
+        ],
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'xs',
+        paddingAll: 'sm',
+        contents: [
+          {
+            type: 'button',
+            action: {
+              type: 'uri',
+              label: '🛒 เปิดหน้าร้านสั่งซื้อผัก',
+              uri: liffUrl,
+            },
+            style: 'primary',
+            color: '#173f2a',
+            height: 'sm',
+          },
+        ],
+      },
+    },
+  };
+
+  try {
+    await client.replyMessage({
+      replyToken: replyToken,
+      messages: [flexCard],
+    });
+  } catch (err) {
+    console.error('Failed to reply web store link:', err.message);
   }
 }
 
@@ -3919,13 +4469,13 @@ async function createChatOrder(userId, draftData, paymentMethod = 'transfer') {
       ]);
     }
 
-    // 4. Create Order
+    // 4. Create Order with snapshot recipient info
     const orderCode = generateOrderCode();
     const noteDetail = `ผู้รับ: ${finalName} | โทร: ${finalPhone} | ที่อยู่: ${finalAddress}${paymentMethod === 'cod' ? ' | ชำระเงินปลายทาง (COD)' : ''}`;
     const [orderResult] = await connection.query(
-      `INSERT INTO orders (order_code, customer_id, total_amount, status, delivery_type, payment_method, notes)
-       VALUES (?, ?, ?, 'pending', 'delivery', ?, ?)`,
-      [orderCode, customer.id, totalAmount, paymentMethod, noteDetail]
+      `INSERT INTO orders (order_code, customer_id, total_amount, status, delivery_type, payment_method, notes, recipient_name, recipient_phone, recipient_address)
+       VALUES (?, ?, ?, 'pending', 'delivery', ?, ?, ?, ?, ?)`,
+      [orderCode, customer.id, totalAmount, paymentMethod, noteDetail, finalName, finalPhone, finalAddress]
     );
     const orderId = orderResult.insertId;
 
@@ -4253,18 +4803,57 @@ async function handleEvent(event) {
 
       // 1. ตรวจสอบว่าผู้ใช้สั่งซื้อใหม่ หรือต้องการเปลี่ยนรายการผักในออเดอร์หรือไม่
       const orderCheck = await extractOrderIntent(text);
-      if (orderCheck.isOrder && orderCheck.items && orderCheck.items.length > 0) {
-        await setChatSession(userId, 'AWAITING_ADDRESS', null, {
-          ...draft,
-          items: orderCheck.items,
-          totalAmount: orderCheck.totalAmount,
-        });
-        return replyOrderDraftConfirmation(replyToken, orderCheck.items, orderCheck.totalAmount);
+      if (orderCheck.isOrder) {
+        if (orderCheck.error) {
+          return client.replyMessage({
+            replyToken: replyToken,
+            messages: [{ type: 'text', text: orderCheck.error }],
+          });
+        }
+        if (orderCheck.items && orderCheck.items.length > 0) {
+          return sendSmartOrderDraftConfirmation(replyToken, userId, orderCheck.items, orderCheck.totalAmount);
+        }
       }
 
       // 2. ตรวจสอบว่าผู้ใช้ขอดูเมนูผักหรือไม่
       if (isMenuInquiry(text)) {
         return replyVegMenu(replyToken, userId);
+      }
+
+      // 2.1 ตรวจสอบว่าลูกค้ากดยืนยันใช้ข้อมูลจัดส่งเดิมหรือไม่
+      const isConfirmExisting = [
+        'ใช้ข้อมูลเดิม', 'ข้อมูลเดิม', 'ที่อยู่เดิม', 'ที่เดิม', 'เหมือนเดิม',
+        'ส่งที่เดิม', 'ใช้ที่อยู่เดิม', 'ตามเดิม', 'ใช่', 'ใช่ครับ', 'ใช่ค่ะ', 'ตกลง', 'ok', 'yes'
+      ].some(k => lowerTrimText === k || lowerTrimText.startsWith(k));
+
+      if (isConfirmExisting) {
+        let existingName = draft.existing_contact?.name || draft.contact_name;
+        let existingPhone = draft.existing_contact?.phone || draft.contact_phone;
+        let existingAddress = draft.existing_contact?.address || draft.contact_address;
+
+        if (!existingAddress || !existingPhone) {
+          const [custRows] = await pool.query('SELECT display_name, phone, address FROM customers WHERE line_user_id = ?', [userId]);
+          if (custRows.length > 0) {
+            existingName = existingName || (custRows[0].display_name !== 'ลูกค้า LINE' ? custRows[0].display_name : 'คุณลูกค้า');
+            existingPhone = existingPhone || custRows[0].phone;
+            existingAddress = existingAddress || custRows[0].address;
+          }
+        }
+
+        if (existingAddress && existingPhone && existingAddress !== '-' && existingPhone !== '-') {
+          const contactDraft = {
+            ...draft,
+            items,
+            totalAmount,
+            contact_name: existingName || 'คุณลูกค้า',
+            contact_phone: existingPhone,
+            contact_address: existingAddress,
+          };
+
+          // Transition to AWAITING_PAYMENT_METHOD and ask customer to choose
+          await setChatSession(userId, 'AWAITING_PAYMENT_METHOD', null, contactDraft);
+          return replyPaymentMethodSelection(replyToken, contactDraft);
+        }
       }
 
       // Extract clean name, phone, address with hybrid AI & Regex
@@ -4398,6 +4987,20 @@ async function handleEvent(event) {
 
     // STATE: AWAITING_PAYMENT_METHOD (Customer is choosing between Bank Transfer and COD)
     if (session.state === 'AWAITING_PAYMENT_METHOD' && session.draft_data?.items) {
+      // ตรวจสอบว่าลูกค้าเปลี่ยนใจพิมพ์สั่งซื้อใหม่หรือไม่
+      const orderCheck = await extractOrderIntent(text);
+      if (orderCheck.isOrder) {
+        if (orderCheck.error) {
+          return client.replyMessage({
+            replyToken: replyToken,
+            messages: [{ type: 'text', text: orderCheck.error }],
+          });
+        }
+        if (orderCheck.items && orderCheck.items.length > 0) {
+          return sendSmartOrderDraftConfirmation(replyToken, userId, orderCheck.items, orderCheck.totalAmount);
+        }
+      }
+
       const lowerText = text.toLowerCase().trim();
       let isCod = lowerText === 'เก็บเงินปลายทาง' || lowerText === 'ปลายทาง' || lowerText === 'cod' || lowerText.includes('ปลายทาง') || lowerText.includes('cod') || lowerText === '2' || lowerText.includes('เงินสด');
       let isTransfer = lowerText === 'โอนเงิน' || lowerText === 'โอน' || lowerText.includes('โอน') || lowerText.includes('พร้อมเพย์') || lowerText.includes('qr') || lowerText === '1' || lowerText === 'transfer';
@@ -4463,6 +5066,20 @@ async function handleEvent(event) {
 
     // STATE: AWAITING_PAYMENT (Customer typed text instead of sending slip image)
     if (session.state === 'AWAITING_PAYMENT' && session.order_id) {
+      // ตรวจสอบว่าลูกค้าเปลี่ยนใจพิมพ์สั่งซื้อใหม่หรือไม่
+      const orderCheck = await extractOrderIntent(text);
+      if (orderCheck.isOrder) {
+        if (orderCheck.error) {
+          return client.replyMessage({
+            replyToken: replyToken,
+            messages: [{ type: 'text', text: orderCheck.error }],
+          });
+        }
+        if (orderCheck.items && orderCheck.items.length > 0) {
+          return sendSmartOrderDraftConfirmation(replyToken, userId, orderCheck.items, orderCheck.totalAmount);
+        }
+      }
+
       const orderCode = session.draft_data?.order_code || 'ORD';
       const totalAmount = session.draft_data?.total_amount || 0;
 
@@ -4608,6 +5225,16 @@ function isMenuInquiry(rawText) {
       return replyOwnerContact(replyToken);
     }
 
+    // ตรวจสอบคำถามขอสั่งซื้อผ่านหน้าเว็บ / ขอลิงก์หน้าร้าน LIFF
+    const isWebStoreInquiry = [
+      'สั่งบนเว็บ', 'สั่งในเว็บ', 'สั่งผ่านเว็บ', 'หน้าเว็บ', 'หน้าร้าน', 'เว็บ', 'เว็ป', 'เวบ',
+      'web', 'liff', 'ขอลิ้งค์', 'ขอลิงก์', 'ลิ้งสั่งซื้อ', 'ลิงก์สั่งซื้อ', 'สั่งซื้อผ่านเว็บ', 'เปิดเว็บ', 'เปิดหน้าร้าน', 'ขอเว็บ', 'สั่งผ่านเว็บยังไง'
+    ].some(k => lowerTrimText === k || lowerTrimText.includes(k));
+
+    if (isWebStoreInquiry) {
+      return replyWebStoreLink(replyToken);
+    }
+
     // Check if customer is attempting to cancel an order from IDLE state
     const isIdleCancel = isCancelIntent(text) || (await isCancelWithGemini(text));
     if (isIdleCancel) {
@@ -4658,13 +5285,7 @@ function isMenuInquiry(rawText) {
       }
 
       if (orderIntent.items && orderIntent.items.length > 0) {
-        // Set session to AWAITING_ADDRESS
-        await setChatSession(userId, 'AWAITING_ADDRESS', null, {
-          items: orderIntent.items,
-          totalAmount: orderIntent.totalAmount,
-        });
-
-        return replyOrderDraftConfirmation(replyToken, orderIntent.items, orderIntent.totalAmount);
+        return sendSmartOrderDraftConfirmation(replyToken, userId, orderIntent.items, orderIntent.totalAmount);
       }
     }
 

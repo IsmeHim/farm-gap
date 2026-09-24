@@ -29,7 +29,14 @@ harvestRouter.post('/smart-record', async (req, res) => {
       image_url,
       is_available = true,
       product_id,
+      is_partial = false,
+      harvested_plants_count = 0,
+      destination = 'cold_storage', // 'cold_storage' or 'direct_stock'
     } = req.body;
+
+    const isPartialHarvest = Boolean(is_partial);
+    const plantsHarvested = Number(harvested_plants_count) || 0;
+    const dest = destination || 'cold_storage';
 
     let targetPlotId = plot_id;
     let activeBatch = null;
@@ -94,18 +101,36 @@ harvestRouter.post('/smart-record', async (req, res) => {
       const [u] = await pool.query('SELECT display_name FROM users WHERE id = ?', [req.user.id]);
       worker = u[0]?.display_name || 'เจ้าของฟาร์ม';
     }
+    const destLabel = dest === 'cold_storage' ? '❄️ เข้าห้องเย็น/ตู้เย็นพักผัก' : '🛒 วางขายหน้าร้าน LINE';
+    const partialLabel = isPartialHarvest ? ` (ทยอยเก็บเกี่ยว ${plantsHarvested > 0 ? `${plantsHarvested} ต้น` : ''})` : ' (ปิดรอบแปลง)';
     const postHarvestText = postharvest_handling || notes || 'ตัดแต่งราก คัดแยกใบเหลือง ล้างด้วยน้ำสะอาด บรรจุถุงเจาะรูระบายอากาศ มาตรฐาน GAP';
-    const logNotes = `เก็บเกี่ยว ${weightKg} กก. บรรจุ ${bagType} ได้ ${totalPacks} ถุง ราคาถุงละ ${unitPrice} บาท (รวม ฿${totalRevenue.toLocaleString()}) ช่องทาง: ${sale_channel}`;
+    const logNotes = `เก็บเกี่ยว ${weightKg} กก.${partialLabel} บรรจุ ${bagType} ได้ ${totalPacks} ถุง ราคาถุงละ ${unitPrice} บาท (รวม ฿${totalRevenue.toLocaleString()}) ปลายทาง: ${destLabel} ช่องทาง: ${sale_channel}`;
 
     // บันทึกลงตาราง harvest_logs
+    const initialStocked = sync_to_stock ? totalPacks : 0;
+    const initialStatus = sync_to_stock ? 'fully_stocked' : 'unstocked';
+
     const [hResult] = await pool.query(
-      `INSERT INTO harvest_logs (user_id, plot_id, harvest_date, quantity, unit, quality_grade, lot_code, revenue, harvest_hygiene, postharvest_handling, worker_name, notes, created_by, updated_by)
-       VALUES (?, ?, ?, ?, 'กก.', ?, ?, ?, 'สะอาด', ?, ?, ?, ?, ?)`,
+      `INSERT INTO harvest_logs (
+        user_id, plot_id, batch_id, harvest_date, quantity, unit,
+        is_partial, harvested_plants_count, destination,
+        total_packs, stocked_quantity, stock_status, product_id,
+        quality_grade, lot_code, revenue, harvest_hygiene,
+        postharvest_handling, worker_name, notes, created_by, updated_by
+      ) VALUES (?, ?, ?, ?, ?, 'กก.', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'สะอาด', ?, ?, ?, ?, ?)`,
       [
         req.user.id,
         targetPlotId,
+        activeBatch?.id || null,
         hDate,
         weightKg,
+        isPartialHarvest ? 1 : 0,
+        plantsHarvested,
+        dest,
+        totalPacks,
+        initialStocked,
+        initialStatus,
+        product_id || null,
         quality_grade,
         lotCode,
         totalRevenue,
@@ -116,6 +141,25 @@ harvestRouter.post('/smart-record', async (req, res) => {
         req.user.email,
       ]
     );
+
+    // ถ้าเลือกเก็บเข้าห้องเย็น/ตู้เย็นพักผัก ให้บันทึกลง storage_logs อัตโนมัติ
+    if (dest === 'cold_storage') {
+      await pool.query(
+        `INSERT INTO storage_logs (
+          user_id, harvest_id, log_date, storage_location,
+          storage_conditions, notes, worker_name, created_by, updated_by
+        ) VALUES (?, ?, ?, 'ห้องเย็น / ตู้เย็นพักผลผลิตฟาร์ม', 'อุณหภูมิควบคุม 4-8°C ความชื้นสัมพัทธ์ 90-95%', ?, ?, ?, ?)`,
+        [
+          req.user.id,
+          hResult.insertId,
+          hDate,
+          `พักผักรอแพ็ก/คัดเกรด: ${plot.crop_name} ${weightKg} กก. (${totalPacks} ถุง) ล็อต ${lotCode}`,
+          worker,
+          req.user.email,
+          req.user.email,
+        ]
+      ).catch(e => console.warn('Failed to insert storage_log:', e.message));
+    }
 
     // ซิงค์เข้าสต็อกหน้าร้าน products (หน่วยเป็น 'ถุง')
     let syncedProduct = null;
@@ -133,38 +177,55 @@ harvestRouter.post('/smart-record', async (req, res) => {
         if (pRows[0]) existingProd = pRows[0];
       }
 
+      const effectiveProdStatus = (dest === 'cold_storage' && !is_available) ? 'out_of_stock' : (is_available ? 'available' : 'out_of_stock');
+
       if (existingProd) {
         const newStock = Number(existingProd.stock_quantity || 0) + totalPacks;
-        const updateStatus = is_available ? 'available' : existingProd.status;
         const newPrice = unitPrice > 0 ? unitPrice : existingProd.price;
         const newImg = image_url || existingProd.image_url;
 
         await pool.query(
           `UPDATE products SET stock_quantity = ?, price = ?, unit = 'ถุง', image_url = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-          [newStock, newPrice, newImg, updateStatus, existingProd.id]
+          [newStock, newPrice, newImg, effectiveProdStatus, existingProd.id]
         );
         const [upd] = await pool.query('SELECT * FROM products WHERE id = ?', [existingProd.id]);
         syncedProduct = { ...upd[0], is_new: false, previous_stock: existingProd.stock_quantity, added_stock: totalPacks, package_type: bagType };
       } else {
         const prodImg = image_url || 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=600&auto=format&fit=crop&q=80';
-        const prodStatus = is_available ? 'available' : 'out_of_stock';
 
         const [pIns] = await pool.query(
           `INSERT INTO products (plot_id, name, category, price, unit, stock_quantity, image_url, status)
            VALUES (?, ?, 'ผักสด GAP', ?, 'ถุง', ?, ?, ?)`,
-          [targetPlotId, `${plot.crop_name} สด GAP (4 ขีด)`, unitPrice, totalPacks, prodImg, prodStatus]
+          [targetPlotId, `${plot.crop_name} สด GAP (4 ขีด)`, unitPrice, totalPacks, prodImg, effectiveProdStatus]
         );
         const [newP] = await pool.query('SELECT * FROM products WHERE id = ?', [pIns.insertId]);
         syncedProduct = { ...newP[0], is_new: true, added_stock: totalPacks, package_type: bagType };
       }
+      if (syncedProduct) {
+        await pool.query('UPDATE harvest_logs SET product_id = ? WHERE id = ?', [syncedProduct.id, hResult.insertId]);
+      }
     }
 
-    // ปรับสถานะรอบการปลูก planting_batches เป็น 'harvested'
+    // จัดการ planting_batches และ plots ตามเงื่อนไข isPartialHarvest
     if (activeBatch) {
-      await pool.query(
-        `UPDATE planting_batches SET status = 'harvested', actual_harvest_date = ? WHERE id = ?`,
-        [hDate, activeBatch.id]
-      );
+      if (plantsHarvested > 0) {
+        await pool.query(
+          `UPDATE planting_batches
+           SET total_harvested_count = COALESCE(total_harvested_count, 0) + ?,
+               remaining_count = GREATEST(0, COALESCE(remaining_count, initial_count, 0) - ?),
+               updated_at = NOW()
+           WHERE id = ?`,
+          [plantsHarvested, plantsHarvested, activeBatch.id]
+        );
+      }
+
+      if (!isPartialHarvest) {
+        // เก็บเกี่ยวหมดแปลง -> ปิดรอบ batch
+        await pool.query(
+          `UPDATE planting_batches SET status = 'harvested', actual_harvest_date = ? WHERE id = ?`,
+          [hDate, activeBatch.id]
+        );
+      }
     }
 
     // บันทึกลง crop_activities (Timeline ตามมาตรฐาน GAP)
@@ -175,41 +236,47 @@ harvestRouter.post('/smart-record', async (req, res) => {
         req.user.id,
         targetPlotId,
         hDate,
-        `เก็บเกี่ยวผลผลิต ${plot.crop_name} (เข้าสต็อก ${totalPacks} ถุง)`,
+        `เก็บเกี่ยวผลผลิต ${plot.crop_name}${partialLabel} (${totalPacks} ถุง)`,
         logNotes,
         worker
       ]
     );
 
-    // ปรับปรุงสถานะแปลงเป็น 'empty' หรือ 'resting' เพื่อเตรียมรอบถัดไป
-    await pool.query(
-      `UPDATE plots 
-       SET status = 'empty', 
-           crop_name = '-', 
-           planting_date = NULL, 
-           expected_harvest_date = NULL, 
-           current_batch_id = NULL,
-           updated_by = ?, 
-           updated_at = CURRENT_TIMESTAMP 
-       WHERE id = ?`,
-      [req.user.email, targetPlotId]
-    );
+    // หากเป็นการเก็บเกี่ยวหมดแปลง ให้รีเซ็ตแปลงเป็น empty
+    if (!isPartialHarvest) {
+      await pool.query(
+        `UPDATE plots 
+         SET status = 'empty', 
+             crop_name = '-', 
+             planting_date = NULL, 
+             expected_harvest_date = NULL, 
+             current_batch_id = NULL,
+             updated_by = ?, 
+             updated_at = CURRENT_TIMESTAMP 
+         WHERE id = ?`,
+        [req.user.email, targetPlotId]
+      );
 
-    // อัปเดตข้อมูลผลผลิตใน crop_cycles (ถ้ามี)
-    await pool.query(
-      `UPDATE crop_cycles SET 
-        status = 'harvested',
-        harvest_date = ?,
-        harvest_quantity = ?,
-        harvest_unit = 'กก.',
-        quality_grade = ?,
-        lot_code = ?
-       WHERE plot_id = ? AND user_id = ? AND status = 'active'
-       ORDER BY id DESC LIMIT 1`,
-      [hDate, weightKg, quality_grade, lotCode, targetPlotId, req.user.id]
-    );
+      // อัปเดตข้อมูลผลผลิตใน crop_cycles (ถ้ามี)
+      await pool.query(
+        `UPDATE crop_cycles SET 
+          status = 'harvested',
+          harvest_date = ?,
+          harvest_quantity = ?,
+          harvest_unit = 'กก.',
+          quality_grade = ?,
+          lot_code = ?
+         WHERE plot_id = ? AND user_id = ? AND status = 'active'
+         ORDER BY id DESC LIMIT 1`,
+        [hDate, weightKg, quality_grade, lotCode, targetPlotId, req.user.id]
+      ).catch(() => {});
+    }
 
     const [hRow] = await pool.query('SELECT * FROM harvest_logs WHERE id = ?', [hResult.insertId]);
+
+    const partialMsg = isPartialHarvest
+      ? ` (ทยอยเก็บเกี่ยว แปลงยังคงสถานะปลูกต่อ)`
+      : ` (เก็บเกี่ยวหมดแปลง รีเซ็ตแปลงพร้อมปลูกรอบใหม่)`;
 
     res.json({
       success: true,
@@ -217,6 +284,8 @@ harvestRouter.post('/smart-record', async (req, res) => {
       lot_code: lotCode,
       product: syncedProduct,
       phi_warning: phiWarning,
+      is_partial: isPartialHarvest,
+      destination: dest,
       summary: {
         cropName: plot.crop_name,
         lotNumber: lotCode,
@@ -224,11 +293,160 @@ harvestRouter.post('/smart-record', async (req, res) => {
         totalPacks,
         unitPrice,
         totalValue: totalRevenue,
-        packageType: bagType
+        packageType: bagType,
+        destination: dest,
+        isPartial: isPartialHarvest
       },
-      message: `เก็บเกี่ยว ${plot.crop_name} น้ำหนัก ${weightKg} กก. บรรจุได้ ${totalPacks} ถุง (มูลค่า ฿${totalRevenue.toLocaleString()}) นำเข้าสต็อกเรียบร้อย!`
+      message: `เก็บเกี่ยว ${plot.crop_name} น้ำหนัก ${weightKg} กก. (${totalPacks} ถุง มูลค่า ฿${totalRevenue.toLocaleString()}) เรียบร้อย!${partialMsg}`
     });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. นำผลผลิตที่เก็บเกี่ยวแล้วลงสต็อกสินค้าหน้าร้าน (Stock Allocation Engine)
+harvestRouter.post('/:id/stock', async (req, res) => {
+  try {
+    const harvestId = req.params.id;
+    const {
+      quantity_to_stock,
+      product_id,
+      product_name,
+      price,
+      is_available = true,
+      image_url,
+    } = req.body;
+
+    const [hRows] = await pool.query(
+      `SELECT h.*, p.name AS plot_name, p.crop_name, c.name AS batch_crop_name 
+       FROM harvest_logs h 
+       LEFT JOIN plots p ON h.plot_id = p.id 
+       LEFT JOIN planting_batches b ON h.batch_id = b.id
+       LEFT JOIN crops c ON b.crop_id = c.id
+       WHERE h.id = ? AND h.user_id = ?`,
+      [harvestId, req.user.id]
+    );
+
+    if (!hRows[0]) {
+      return res.status(404).json({ error: 'ไม่พบรายการเก็บเกี่ยวนี้' });
+    }
+
+    const harvest = hRows[0];
+    const cropName = harvest.batch_crop_name || harvest.crop_name || 'ผักสด';
+    const totalPacks = harvest.total_packs > 0 
+      ? harvest.total_packs 
+      : Math.max(1, Math.floor(Number(harvest.quantity || 0) / 0.4));
+    const currentStocked = Number(harvest.stocked_quantity || 0);
+    const remaining = Math.max(0, totalPacks - currentStocked);
+
+    const qtyToStock = parseInt(quantity_to_stock, 10);
+    if (isNaN(qtyToStock) || qtyToStock <= 0) {
+      return res.status(400).json({ error: 'กรุณาระบุจำนวนที่ต้องการลงสต็อกให้ถูกต้อง (มากกว่า 0 ถุง)' });
+    }
+
+    if (qtyToStock > remaining) {
+      return res.status(400).json({ 
+        error: `จำนวนที่ต้องการลงสต็อก (${qtyToStock} ถุง) เกินกว่าจำนวนคงเหลือที่รอลงสต็อก (${remaining} ถุง)` 
+      });
+    }
+
+    // ค้นหาสินค้าที่ตรงกับชนิดผักโดยตรง (ไม่ใช้ plot_id ที่อาจเป็นผักชนิดอื่นจากรอบก่อน)
+    let targetProduct = null;
+    if (product_id) {
+      const [pRows] = await pool.query('SELECT * FROM products WHERE id = ?', [product_id]);
+      if (pRows[0]) targetProduct = pRows[0];
+    }
+
+    if (!targetProduct && harvest.product_id) {
+      const [pRows] = await pool.query('SELECT * FROM products WHERE id = ?', [harvest.product_id]);
+      if (pRows[0]) targetProduct = pRows[0];
+    }
+
+    if (!targetProduct) {
+      // ค้นหาตามชื่อผักตรงกัน
+      const [pRows] = await pool.query(
+        `SELECT * FROM products WHERE name LIKE ? OR ? LIKE CONCAT('%', name, '%') ORDER BY id DESC LIMIT 1`,
+        [`%${cropName}%`, cropName]
+      );
+      if (pRows[0]) targetProduct = pRows[0];
+    }
+
+    const unitPrice = Number(price) > 0 ? Number(price) : (targetProduct ? Number(targetProduct.price) : 20);
+    const prodStatus = is_available ? 'available' : 'out_of_stock';
+    const prodImg = image_url || targetProduct?.image_url || 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=600&auto=format&fit=crop&q=80';
+
+    let finalProductId = null;
+    if (targetProduct) {
+      const newStock = Number(targetProduct.stock_quantity || 0) + qtyToStock;
+      await pool.query(
+        `UPDATE products 
+         SET stock_quantity = ?, 
+             price = ?, 
+             unit = 'ถุง', 
+             image_url = ?, 
+             status = ?, 
+             updated_at = CURRENT_TIMESTAMP 
+         WHERE id = ?`,
+        [newStock, unitPrice, prodImg, prodStatus, targetProduct.id]
+      );
+      finalProductId = targetProduct.id;
+    } else {
+      const pName = product_name || `${harvest.crop_name || 'ผักสด'} สด GAP (4 ขีด)`;
+      const [pIns] = await pool.query(
+        `INSERT INTO products (plot_id, name, category, price, unit, stock_quantity, image_url, status)
+         VALUES (?, ?, 'ผักสด GAP', ?, 'ถุง', ?, ?, ?)`,
+        [harvest.plot_id, pName, unitPrice, qtyToStock, prodImg, prodStatus]
+      );
+      finalProductId = pIns.insertId;
+    }
+
+    const [updatedProdRows] = await pool.query('SELECT * FROM products WHERE id = ?', [finalProductId]);
+    const updatedProduct = updatedProdRows[0];
+
+    // อัปเดต harvest_logs
+    const newStockedTotal = currentStocked + qtyToStock;
+    const newStatus = (newStockedTotal >= totalPacks) ? 'fully_stocked' : 'partial';
+
+    await pool.query(
+      `UPDATE harvest_logs 
+       SET total_packs = ?, 
+           stocked_quantity = ?, 
+           stock_status = ?, 
+           product_id = ?, 
+           updated_at = CURRENT_TIMESTAMP 
+       WHERE id = ?`,
+      [totalPacks, newStockedTotal, newStatus, finalProductId, harvestId]
+    );
+
+    // บันทึกกิจกรรม GAP Traceability ลง crop_activities
+    const lotLabel = harvest.lot_code ? `ล็อต ${harvest.lot_code}` : `รอบวันที่ ${harvest.harvest_date}`;
+    await pool.query(
+      `INSERT INTO crop_activities (user_id, plot_id, activity_date, stage, title, details, operator_name)
+       VALUES (?, ?, CURDATE(), 'harvest', ?, ?, ?)`,
+      [
+        req.user.id,
+        harvest.plot_id,
+        `นำผลผลิตลงสต็อกขาย (${qtyToStock} ถุง)`,
+        `นำผลผลิต ${harvest.crop_name || 'ผัก'} ${lotLabel} จำนวน ${qtyToStock} ถุง (สะสม ${newStockedTotal}/${totalPacks} ถุง) ลงสต็อกสินค้าหน้าร้าน LINE Shop เรียบร้อย`,
+        req.user.display_name || harvest.worker_name || 'เจ้าของฟาร์ม'
+      ]
+    ).catch(e => console.warn('Activity log insert error:', e.message));
+
+    const [finalHarvestRows] = await pool.query('SELECT * FROM harvest_logs WHERE id = ?', [harvestId]);
+
+    res.json({
+      success: true,
+      harvest: finalHarvestRows[0],
+      product: updatedProduct,
+      stocked_now: qtyToStock,
+      total_packs: totalPacks,
+      stocked_total: newStockedTotal,
+      remaining: Math.max(0, totalPacks - newStockedTotal),
+      stock_status: newStatus,
+      message: `นำผักลงสต็อกสินค้า ${qtyToStock} ถุง เรียบร้อย! ${newStatus === 'fully_stocked' ? '(ลงสต็อกครบ 100% แล้ว)' : `(คงเหลือรอลงสต็อก ${totalPacks - newStockedTotal} ถุง)`}`
+    });
+  } catch (err) {
+    console.error('Error stocking harvest:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -236,9 +454,17 @@ harvestRouter.post('/smart-record', async (req, res) => {
 // Standard CRUD fallback
 harvestRouter.use('/', crudRouter('harvest_logs', [
   'plot_id',
+  'batch_id',
   'harvest_date',
   'quantity',
   'unit',
+  'is_partial',
+  'harvested_plants_count',
+  'destination',
+  'total_packs',
+  'stocked_quantity',
+  'stock_status',
+  'product_id',
   'quality_grade',
   'lot_code',
   'revenue',

@@ -26,6 +26,14 @@ const statusText = {
   out_of_stock: 'หมดสต็อก',
 };
 
+const formatQuantity = (val, unit) => {
+  const num = Number(val || 0);
+  if ((unit && ['ถุง', 'ชิ้น', 'ห่อ', 'แพ็ก', 'กล่อง', 'ถาด', 'ต้น', 'มัด'].includes(unit)) || num % 1 === 0) {
+    return Math.round(num).toLocaleString();
+  }
+  return num.toLocaleString(undefined, { maximumFractionDigits: 1 });
+};
+
 export default function Products() {
   const [products, setProducts] = useState([]);
   const [plots, setPlots] = useState([]);
@@ -144,7 +152,7 @@ export default function Products() {
           </div>
           <div className="grid grid-cols-3 gap-3">
             <Metric label="พร้อมขาย" value={stats.available} />
-            <Metric label="สต็อก" value={stats.stock.toFixed(1)} />
+            <Metric label="สต็อก" value={formatQuantity(stats.stock)} />
             <Metric label="มูลค่า" value={`฿${stats.value.toLocaleString()}`} />
           </div>
         </div>
@@ -205,7 +213,7 @@ export default function Products() {
                   <div className="flex items-center gap-2 text-xs font-bold text-emerald-800">
                     <PackageCheck className="h-4 w-4" /> คงเหลือ
                   </div>
-                  <div className="mt-1 text-lg font-black text-emerald-950">{Number(product.stock_quantity || 0).toFixed(1)} {product.unit}</div>
+                  <div className="mt-1 text-lg font-black text-emerald-950">{formatQuantity(product.stock_quantity, product.unit)} {product.unit}</div>
                 </div>
                 <div className="rounded-xl bg-amber-50 p-3">
                   <div className="flex items-center gap-2 text-xs font-bold text-amber-800">

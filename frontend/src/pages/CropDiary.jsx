@@ -241,10 +241,12 @@ export default function CropDiary() {
   const loadCycles = async (plotId) => {
     try {
       const res = await api.get('/api/diary/cycles', { params: { plot_id: plotId } });
-      setCycles(res.data || []);
-      if (res.data && res.data.length > 0) {
-        // Default to the first (latest) cycle
-        setSelectedCycleId(res.data[0].id.toString());
+      const cycleList = res.data || [];
+      setCycles(cycleList);
+      if (cycleList.length > 0) {
+        // Default to active cycle if exists, else the latest cycle
+        const activeCycle = cycleList.find(c => c.status === 'active' || c.status === 'growing');
+        setSelectedCycleId(activeCycle ? activeCycle.id.toString() : cycleList[0].id.toString());
       } else {
         setSelectedCycleId('');
       }
@@ -452,12 +454,15 @@ export default function CropDiary() {
               onChange={(e) => setSelectedCycleId(e.target.value)}
               className="flex-1 bg-emerald-50/60 border border-emerald-200 text-emerald-950 rounded-xl px-3 py-2 text-sm font-semibold focus:ring-2 focus:ring-emerald-500 outline-none"
             >
-              <option value="">ทั้งหมดในแปลงนี้</option>
-              {cycles.map((c) => (
-                <option key={c.id} value={c.id}>
-                  รอบที่ {c.cycle_number} ({c.cycle_code || `BATCH-R${c.cycle_number}`}) • {c.crop_name}
-                </option>
-              ))}
+              {cycles.map((c) => {
+                const isActive = c.status === 'active' || c.status === 'growing';
+                return (
+                  <option key={c.id} value={c.id}>
+                    รอบที่ {c.cycle_number} ({c.cycle_code || `R${c.cycle_number}`}) • {c.crop_name} {isActive ? '🌱 (รอบปัจจุบัน)' : '✅ (จบรอบแล้ว)'}
+                  </option>
+                );
+              })}
+              <option value="">ทั้งหมดในแปลงนี้ (ดูประวัติรวมทุกรอบ)</option>
             </select>
           </div>
         </div>
@@ -467,20 +472,38 @@ export default function CropDiary() {
           <div className="flex items-center gap-3 bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100 text-xs">
             <div>
               <span className="text-gray-500">พืช:</span>{' '}
-              <span className="font-bold text-emerald-900">{currentPlot.crop_name}</span>
+              <span className="font-bold text-emerald-900">{currentCycle?.crop_name || currentPlot.crop_name}</span>
             </div>
             <div className="h-4 w-px bg-emerald-200" />
             <div>
               <span className="text-gray-500">วันปลูก:</span>{' '}
               <span className="font-semibold text-emerald-900">
-                {formatDateDisplay(currentPlot.planting_date)}
+                {formatDateDisplay(currentCycle?.planting_date || currentPlot.planting_date)}
               </span>
             </div>
-            {currentCycle && (
+            {currentCycle ? (
               <>
                 <div className="h-4 w-px bg-emerald-200" />
-                <span className="px-2 py-0.5 rounded-full font-mono font-bold bg-emerald-600 text-white text-[11px]">
+                <span className={`px-2 py-0.5 rounded-full font-mono font-bold text-[11px] ${
+                  currentCycle.status === 'active' || currentCycle.status === 'growing'
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-slate-200 text-slate-700'
+                }`}>
                   {currentCycle.cycle_code || `R${currentCycle.cycle_number}`}
+                </span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                  currentCycle.status === 'active' || currentCycle.status === 'growing'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {currentCycle.status === 'active' || currentCycle.status === 'growing' ? '🌱 รอบปัจจุบัน' : '✅ จบรอบแล้ว'}
+                </span>
+              </>
+            ) : (
+              <>
+                <div className="h-4 w-px bg-emerald-200" />
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-900">
+                  แสดงรวมทุกรอบ
                 </span>
               </>
             )}
@@ -529,10 +552,27 @@ export default function CropDiary() {
       <div className="surface rounded-2xl p-6 border border-emerald-100 shadow-sm bg-white">
         <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
-            <Layers className="w-5 h-5 text-emerald-600" />
-            <h3 className="text-base font-bold text-gray-800">
-              ไทม์ไลน์บันทึกการเติบโต ({activities.length} รายการ)
-            </h3>
+            <Layers className="w-5 h-5 text-emerald-600 shrink-0" />
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-base font-bold text-gray-800">
+                ไทม์ไลน์บันทึกการเติบโต
+              </h3>
+              {currentCycle ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-900 border border-emerald-200">
+                  <span>รอบที่ {currentCycle.cycle_number}: {currentCycle.crop_name}</span>
+                  {currentCycle.status === 'active' || currentCycle.status === 'growing' ? (
+                    <span className="bg-emerald-600 text-white text-[10px] px-1.5 py-0.5 rounded font-medium">รอบปัจจุบัน</span>
+                  ) : (
+                    <span className="bg-slate-200 text-slate-700 text-[10px] px-1.5 py-0.5 rounded font-medium">จบรอบแล้ว</span>
+                  )}
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">
+                  รวมทุกรอบในแปลงนี้
+                </span>
+              )}
+              <span className="text-xs text-gray-400 font-medium">({activities.length} รายการ)</span>
+            </div>
           </div>
           <button
             onClick={loadActivities}

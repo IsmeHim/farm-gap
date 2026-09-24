@@ -110,7 +110,7 @@ export default function Login() {
                   <input
                     className="input"
                     value={form.username}
-                    placeholder="เช่น admin, somchai (ภาษาอังกฤษ/ตัวเลข)"
+                    placeholder="เช่น somchai "
                     onChange={e => setForm({ ...form, username: e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, '') })}
                   />
                 </div>
@@ -143,7 +143,7 @@ export default function Login() {
                   className="input"
                   type="text"
                   required
-                  placeholder="กรอกอีเมล หรือ username (เช่น admin)"
+                  placeholder="กรอกอีเมล หรือ username ของคุณ"
                   value={form.identifier}
                   onChange={e => setForm({ ...form, identifier: e.target.value })}
                   autoComplete="username"
