@@ -10,6 +10,7 @@ FarmGAP เป็นแพลตฟอร์มบริหารจัดกา
 3. [ระบบ AI และอัลกอริทึมที่ใช้งาน (AI & Analytics Engine)](#-ระบบ-ai-และอัลกอริทึมที่ใช้งาน-ai--analytics-engine)
 4. [โครงสร้างบทบาทและสิทธิ์ผู้ใช้งาน (Role-Based Access Control)](#-โครงสร้างบทบาทและสิทธิ์ผู้ใช้งาน-role-based-access-control)
 5. [โครงสร้างโฟลเดอร์ของโปรเจกต์ (Project Architecture)](#-โครงสร้างโฟลเดอร์ของโปรเจกต์-project-architecture)
+   - [สถาปัตยกรรมโมดูลบริการ LINE OA & AI Engine (`services/line`)](#-สถาปัตยกรรมโมดูลบริการ-line-oa--ai-engine-backendserviceline)
 6. [ขั้นตอนการเตรียมตัวก่อน Deploy ขึ้น Production](#-ขั้นตอนการเตรียมตัวก่อน-deploy-ขึ้น-production)
 7. [การตั้งค่าบน LINE Developers Console & LINE Official Account](#-การตั้งค่าบน-line-developers-console--line-official-account)
 8. [จุดที่ต้องเปลี่ยน URL / Configurations (Local ➡️ Production)](#-จุดที่ต้องเปลี่ยน-url--configurations-local-️-production)
@@ -180,8 +181,10 @@ farmgap/
 │   │       ├── report.js           # สร้างข้อมูลรายงานส่งตรวจประเมิน GAP (มกษ. 9001)
 │   │       ├── trace.js            # ระบบสืบย้อนกลับผลผลิต (Traceability) ผ่านรหัส Lot
 │   │       ├── upload.js           # บริการอัปโหลดไฟล์ภาพผ่าน Multer
-│   │       ├── line.js             # LINE Webhook & Gemini AI Chatbot Engine
+│   │       ├── line.js             # LINE Webhook Controller (Modular Entry Point ขนาดกะทัดรัด)
 │   │       └── ai.js               # K-Means Clustering & Product Recommendation Engine
+│   │   └── services/
+│   │       └── line/               # สถาปัตยกรรมบริการ LINE OA & AI Engine (ดูโครงสร้างละเอียดด้านล่าง)
 │   ├── package.json
 │   └── .env.example
 ├── frontend/
@@ -223,6 +226,41 @@ farmgap/
 ├── use_case_diagram.drawio         # ผัง Use Case Diagram ฉบับสมบูรณ์สำหรับเปิดใน draw.io
 ├── use_case_specification.md       # เอกสารวิเคราะห์ข้อกำหนด Use Case แบบละเอียดทุกโมดูล
 └── README.md                       # เอกสารสรุปภาพรวมและคู่มือระบบฉบับล่าสุด
+```
+
+### 🤖 สถาปัตยกรรมโมดูลบริการ LINE OA & AI Engine (`backend/src/services/line/`)
+
+ระบบ LINE Chatbot และ Webhook ได้รับการจัดโครงสร้างตามหลัก **Modular Clean Architecture** (แยกจาก `routes/line.js` เดิมที่มีขนาดกว่า 5,355 บรรทัด ให้กลายเป็น Controller ขนาดกะทัดรัดเพียง 26 บรรทัด และจัดกลุ่มไฟล์ย่อยตามหน้าที่อย่างเป็นระเบียบเพื่อง่ายต่อการบำรุงรักษาและต่อยอด):
+
+```text
+backend/src/services/line/
+├── config.js                        # จัดการ LINE MessagingApiClient, Retry Wrapper, ตาราง Session ใน DB
+├── orderService.js                  # จัดการออเดอร์ในแชท: สร้างออเดอร์, เช็คและตัดสต็อก, คืนสต็อก/ยกเลิกออเดอร์
+├── eventHandler.js                  # จุดศูนย์กลางคัดแยกเหตุการณ์ (Event Router) และ State Machine ของแชท
+│
+├── ai/                              # บริการด้าน AI และบริบทฟาร์ม (AI & LLM Services)
+│   ├── farmContext.js               # ดึงข้อมูลแปลง GAP, แผนเก็บเกี่ยว และสต็อกผักสด มาสร้างเป็น Dynamic System Instruction
+│   └── gemini.js                    # ถาม-ตอบ Google Gemini (Multi-model Fallback: 2.0-flash / 1.5-flash) และ AI ตรวจจับเจตนายกเลิก
+│
+├── parsers/                         # ตัวประมวลผลข้อความและสกัดข้อมูลอัจฉริยะ (NLP & Smart Extraction)
+│   ├── orderIntent.js               # สกัดรายการสั่งซื้อ, แปลง กิโล/ขีด -> ถุง อัตโนมัติ (Fast-path < 2ms)
+│   └── addressParser.js             # สกัดชื่อ เบอร์โทร ที่อยู่ ด้วย Hybrid NLP (Regex ตรวจสอบรหัส ปณ. + Gemini AI Fallback)
+│
+├── flex/                            # แม่แบบข้อความ Flex Message UI Cards สำหรับห้องแชท LINE
+│   ├── vegMenuCard.js               # การ์ดแสดงเมนูผักสดพร้อมส่ง พร้อมราคาและคำแนะนำการสั่ง
+│   ├── webStoreCard.js              # การ์ดส่งลิงก์หน้าร้านสั่งซื้อบนเว็บไซต์ (LIFF Store)
+│   ├── orderDraftCard.js            # การ์ดสรุปรายการสั่งซื้อ (ลูกค้าใหม่) และการ์ดยืนยันใช้ที่อยู่เดิม (ลูกค้าเก่า)
+│   ├── missingContactCard.js        # การ์ดแจ้งเตือนข้อมูลจัดส่งที่ยังขาด (ที่อยู่, เบอร์โทร, ชื่อผู้รับ)
+│   ├── invoiceCard.js               # ใบแจ้งหนี้พร้อม PromptPay QR Code ล็อกยอดเงินเป๊ะ และการ์ดยืนยันการรับสลิปเงินโอน
+│   ├── paymentSelectionCard.js      # การ์ดเลือกช่องทางชำระเงิน (โอนเงินผ่านบัญชี/QR Code หรือ เก็บเงินปลายทาง COD)
+│   ├── codCard.js                   # การ์ดยืนยันคำสั่งซื้อแบบเก็บเงินปลายทาง (COD)
+│   ├── orderStatusCard.js           # การ์ดแสดงสถานะคำสั่งซื้อล่าสุด (Tracking) และการ์ดประวัติการสั่งซื้อย้อนหลัง
+│   ├── welcomeCard.js               # การ์ดต้อนรับเมื่อลูกค้ากดเพิ่มเพื่อน หรือพิมพ์ทักทาย (สวัสดี, เริ่มต้น)
+│   └── refundCard.js                # การ์ดแนะนำขั้นตอนการขอรับเงินคืน (Refund) และปุ่มโทรออกหาเจ้าของฟาร์มโดยตรง
+│
+└── notifications/                   # บริการส่งข้อความแจ้งเตือนอัตโนมัติ (LINE Push Notifications)
+    ├── adminNotifier.js             # ส่ง Flex Message แจ้งเตือนเจ้าของฟาร์มทันทีเมื่อมีออเดอร์ใหม่ หรือลูกค้าแนบสลิปชำระเงิน
+    └── customerNotifier.js          # ส่ง Flex Message แจ้งเตือนลูกค้าเมื่อสถานะออเดอร์เปลี่ยน (ชำระเงินแล้ว, กำลังจัดส่ง, จัดส่งสำเร็จ)
 ```
 
 ---
