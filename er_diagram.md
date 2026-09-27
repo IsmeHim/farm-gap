@@ -75,10 +75,14 @@ erDiagram
         string water_source_type
         date soil_test_date
         string soil_test_result
-        text previous_crop_history
         string field_safety_status
-        text soil_notes
+        text soil_recipe
+        date soil_prep_date
+        date seed_prep_date
+        text seed_notes
+        int seed_crop_id
         string status
+        int current_batch_id
         text notes
         string created_by
         string updated_by
@@ -363,10 +367,14 @@ erDiagram
 * **water_source_type**: `VARCHAR(100)` - ประเภทแหล่งน้ำ (เช่น แหล่งน้ำเปิด, บ่อน้ำบาดาล)
 * **soil_test_date**: `DATE` - วันที่สุ่มตรวจสภาพดินล่าสุด
 * **soil_test_result**: `VARCHAR(255)` - ผลการตรวจวิเคราะห์ดิน
-* **previous_crop_history**: `TEXT` - ประวัติหรือประเพณีการปลูกพืชรอบก่อนหน้า
 * **field_safety_status**: `VARCHAR(50) DEFAULT 'ปลอดภัย'` - สถานะความปลอดภัยของแปลงปลูก
-* **soil_notes**: `TEXT` - หมายเหตุเพิ่มเติมเกี่ยวกับดิน
-* **status**: `VARCHAR(50) DEFAULT 'active'` - สถานะของแปลงปลูก (active / inactive)
+* **soil_recipe**: `TEXT` - สูตรปรุงดินประจำแปลง
+* **soil_prep_date**: `DATE` - วันที่ปรุงดิน
+* **seed_prep_date**: `DATE` - วันที่เพาะเมล็ด
+* **seed_notes**: `TEXT` - บันทึก/สูตรการเพาะเมล็ด
+* **seed_crop_id**: `INT` - รหัสผักที่เพาะเมล็ดไว้
+* **status**: `VARCHAR(50) DEFAULT 'empty'` - สถานะของแปลงปลูก (empty / growing / harvest_ready)
+* **current_batch_id**: `INT` - รหัสรอบการเพาะปลูกปัจจุบัน (planting_batches)
 * **notes**: `TEXT` - บันทึกอื่น ๆ เพิ่มเติม
 * *ฟิลด์ระบบบันทึกประวัติ*: `created_by`, `updated_by`, `updated_at`, `created_at`
 

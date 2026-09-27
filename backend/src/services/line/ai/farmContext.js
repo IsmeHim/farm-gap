@@ -56,7 +56,7 @@ export function formatThaiDate(dateStr) {
   return `${day} ${month} ${year}`;
 }
 
-// Helper: ตรวจสอบรอบเก็บเกี่ยวถัดไปของผักชนิดที่ระบุ จาก planting_batches และ crop_cycles
+// Helper: ตรวจสอบรอบเก็บเกี่ยวถัดไปของผักชนิดที่ระบุ จาก planting_batches
 export async function getUpcomingHarvestForProduct(productName) {
   try {
     const lower = (productName || '').toLowerCase();
@@ -81,16 +81,7 @@ export async function getUpcomingHarvestForProduct(productName) {
       ORDER BY b.expected_harvest_date ASC
     `);
 
-    const [cycles] = await pool.query(`
-      SELECT c.expected_harvest_date, c.status, c.crop_name, p.name AS plot_name
-      FROM crop_cycles c
-      LEFT JOIN plots p ON c.plot_id = p.id
-      WHERE c.status IN ('active', 'growing', 'harvest_ready')
-        AND c.expected_harvest_date IS NOT NULL
-      ORDER BY c.expected_harvest_date ASC
-    `);
-
-    const allUpcoming = [...batches, ...cycles];
+    const allUpcoming = batches;
 
     for (const item of allUpcoming) {
       const cropLower = (item.crop_name || '').toLowerCase();

@@ -11,7 +11,7 @@ r.get('/:year', async (req, res) => {
   const start = `${year}-01-01`, end = `${year}-12-31`;
   const uid = req.user.id;
   const q = (sql, params) => pool.query(sql, params).then(([rows]) => rows);
-  const [plots, batches, water, chems, pests, harvest, storage, costs, profile, activities, cycles] = await Promise.all([
+  const [plots, batches, water, chems, pests, harvest, storage, costs, profile, activities] = await Promise.all([
     q(`SELECT p.*, 
               COALESCE(NULLIF(b.soil_recipe, ''), p.soil_recipe) AS effective_soil_recipe,
               COALESCE(NULLIF(b.soil_recipe, ''), p.soil_recipe) AS soil_recipe
@@ -39,8 +39,21 @@ r.get('/:year', async (req, res) => {
        JOIN plots p ON p.id = a.plot_id 
        WHERE a.user_id=? AND a.activity_date BETWEEN ? AND ? 
        ORDER BY a.activity_date ASC`, [uid, start, end]),
-    q('SELECT * FROM crop_cycles WHERE user_id=? ORDER BY cycle_number ASC, id ASC', [uid]).catch(() => []),
   ]);
+
+  // Derive cycles structure from batches so report maintains backward compatibility
+  const cycles = (batches || []).map((b, idx) => ({
+    id: b.id,
+    plot_id: b.plot_id,
+    cycle_number: idx + 1,
+    cycle_code: b.batch_code,
+    crop_name: b.crop_name,
+    planting_date: b.start_date,
+    expected_harvest_date: b.expected_harvest_date,
+    status: b.status,
+    notes: b.notes
+  }));
+
   res.json({ year, profile: profile[0], plots, batches, water, chems, pests, harvest, storage, workers: [], costs, activities, cycles });
 });
 

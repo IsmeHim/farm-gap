@@ -142,32 +142,14 @@ batchesRouter.post('/', async (req, res) => {
       [crop.name, start_date, expected_harvest_date, batchId, effectiveSoilRecipe, effectiveSoilPrepDate, plot_id, req.user.id]
     );
 
-    // Sync with crop_cycles for Crop Diary Timeline
-    await pool.query(
-      `UPDATE crop_cycles SET status = 'harvested' WHERE plot_id = ? AND user_id = ? AND status = 'active'`,
-      [plot_id, req.user.id]
-    );
-    const [prevCycles] = await pool.query(
-      `SELECT MAX(cycle_number) as max_c FROM crop_cycles WHERE plot_id = ? AND user_id = ?`,
-      [plot_id, req.user.id]
-    );
-    const newCycleNum = (prevCycles[0]?.max_c || 0) + 1;
-    const [cycleIns] = await pool.query(
-      `INSERT INTO crop_cycles (user_id, plot_id, cycle_number, cycle_code, crop_name, planting_date, expected_harvest_date, status, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
-      [req.user.id, plot_id, newCycleNum, batch_code, crop.name, start_date, expected_harvest_date, notes || 'รอบปลูกใหม่']
-    );
-    const cycleId = cycleIns.insertId;
-
     // 5. บันทึกลง crop_activities ให้สอดคล้องกับ Timeline ต้นน้ำ GAP
     const countInfo = initCount ? ` จำนวน ${initCount.toLocaleString()} ${unit}` : '';
     await pool.query(
-      `INSERT INTO crop_activities (user_id, plot_id, cycle_id, activity_date, stage, title, details, materials_used, operator_name)
-       VALUES (?, ?, ?, ?, 'planting', ?, ?, ?, ?)`,
+      `INSERT INTO crop_activities (user_id, plot_id, activity_date, stage, title, details, materials_used, operator_name)
+       VALUES (?, ?, ?, 'planting', ?, ?, ?, ?)`,
       [
         req.user.id,
         plot_id,
-        cycleId,
         start_date,
         `เริ่มรอบการปลูก ${crop.name}${countInfo} (${batch_code})`,
         notes || `เริ่มลงแปลง/เพาะกล้า${countInfo} คาดเก็บเกี่ยว ${expected_harvest_date}`,
@@ -399,11 +381,7 @@ batchesRouter.delete('/:id', async (req, res) => {
         [batch.plot_id, req.user.id]
       );
 
-      // ลบ crop_cycles ที่ยัง active ของแปลงนี้ถ้ามี
-      await pool.query(
-        `DELETE FROM crop_cycles WHERE plot_id = ? AND user_id = ? AND status = 'active'`,
-        [batch.plot_id, req.user.id]
-      ).catch(() => {});
+
     }
 
     // 2. ลบ crop_activities ที่เกี่ยวข้องกับรอบการปลูกนี้

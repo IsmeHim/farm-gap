@@ -259,20 +259,6 @@ harvestRouter.post('/smart-record', async (req, res) => {
          WHERE id = ?`,
         [req.user.email, targetPlotId]
       );
-
-      // อัปเดตข้อมูลผลผลิตใน crop_cycles (ถ้ามี)
-      await pool.query(
-        `UPDATE crop_cycles SET 
-          status = 'harvested',
-          harvest_date = ?,
-          harvest_quantity = ?,
-          harvest_unit = 'กก.',
-          quality_grade = ?,
-          lot_code = ?
-         WHERE plot_id = ? AND user_id = ? AND status = 'active'
-         ORDER BY id DESC LIMIT 1`,
-        [hDate, weightKg, quality_grade, lotCode, targetPlotId, req.user.id]
-      ).catch(() => {});
     }
 
     const [hRow] = await pool.query('SELECT * FROM harvest_logs WHERE id = ?', [hResult.insertId]);

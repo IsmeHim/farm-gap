@@ -401,7 +401,7 @@ export default function Report() {
                         <td className="py-2 px-2.5 font-mono text-[10px] break-words">{p.planting_date ? format(new Date(p.planting_date), 'dd/MM/yyyy') : '-'}</td>
                         <td className="py-2 px-2.5 break-words">{p.water_source || '-'}</td>
                         <td className="py-2 px-2.5 text-slate-700 break-words leading-tight">
-                          <div className="font-medium text-slate-900 leading-snug text-[10.5px]">{p.soil_recipe || p.soil_notes || p.soil_test_result || 'ดินผสมอินทรีย์ 8 กระบะปูน ไร้สารเคมี'}</div>
+                          <div className="font-medium text-slate-900 leading-snug text-[10.5px]">{p.soil_recipe || p.soil_test_result || 'ดินผสมอินทรีย์ 8 กระบะปูน ไร้สารเคมี'}</div>
                           {p.soil_test_date && (
                             <div className="text-[9.5px] text-slate-400">
                               (ตรวจ: {format(new Date(p.soil_test_date), 'dd/MM/yy')})

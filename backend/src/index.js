@@ -28,7 +28,6 @@ import { waterRouter, processAutoWaterRoutineForAllUsers } from './routes/water.
 import { harvestRouter } from './routes/harvest.js';
 import { uploadRouter } from './routes/upload.js';
 import { salesRouter } from './routes/sales.js';
-import { diaryRouter } from './routes/diary.js';
 import { cropsRouter } from './routes/crops.js';
 import { batchesRouter } from './routes/batches.js';
 import { pestsRouter } from './routes/pests.js';
@@ -69,7 +68,6 @@ app.use('/api/orders', ordersRouter);
 app.use('/api/sales', salesRouter);
 app.use('/api/line', lineRouter);
 app.use('/api/ai', aiRouter);
-app.use('/api/diary', diaryRouter);
 app.use('/api/crops', cropsRouter);
 app.use('/api/batches', batchesRouter);
 
