@@ -229,10 +229,12 @@ export default function Plots() {
 
   const openModalWithPlot = (plotId) => {
     const found = plots.find(p => p.id === plotId);
+    const chosenCropId = found?.seed_crop_id || (crops[0]?.id || '');
+    const chosenCrop = crops.find(c => String(c.id) === String(chosenCropId));
     setForm(prev => ({
       ...prev,
       plot_id: plotId,
-      crop_id: found?.seed_crop_id || prev.crop_id || (crops[0]?.id || ''),
+      crop_id: chosenCropId,
       initial_count: '',
       planting_unit: 'ต้น',
       start_date: new Date().toISOString().split('T')[0],
@@ -242,7 +244,7 @@ export default function Plots() {
       seed_prep_date: found?.seed_prep_date
         ? new Date(found.seed_prep_date).toISOString().split('T')[0]
         : '',
-      notes: found?.seed_notes || '',
+      notes: found?.seed_notes || chosenCrop?.notes || '',
       soil_recipe: found?.soil_recipe || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)'
     }));
     setShowNewModal(true);
@@ -417,14 +419,16 @@ export default function Plots() {
   };
 
   const handleOpenSeedModal = (plot) => {
+    const defaultCropId = plot.seed_crop_id || (crops[0]?.id || '');
+    const matchedCrop = crops.find(c => String(c.id) === String(defaultCropId));
     setSeedForm({
       plot_id: plot.id,
       plot_name: plot.name,
-      seed_crop_id: plot.seed_crop_id || (crops[0]?.id || ''),
+      seed_crop_id: defaultCropId,
       seed_prep_date: plot.seed_prep_date
         ? new Date(plot.seed_prep_date).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0],
-      seed_notes: plot.seed_notes || ''
+      seed_notes: plot.seed_notes || matchedCrop?.notes || ''
     });
     setShowSeedModal(true);
   };
@@ -525,13 +529,12 @@ export default function Plots() {
             onClick={() => {
               const emptyPlot = plots.find(p => p.status === 'empty' || !p.crop_name || p.crop_name === '-');
               if (emptyPlot) {
-                setForm(prev => ({
-                  ...prev,
-                  plot_id: emptyPlot.id,
-                  soil_recipe: emptyPlot.soil_recipe || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)'
-                }));
+                openModalWithPlot(emptyPlot.id);
+              } else if (plots.length > 0) {
+                openModalWithPlot(plots[0].id);
+              } else {
+                setShowNewModal(true);
               }
-              setShowNewModal(true);
             }}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-emerald-600/20 transition cursor-pointer active:scale-95"
           >
@@ -1176,7 +1179,15 @@ export default function Plots() {
                     <select
                       required
                       value={form.crop_id}
-                      onChange={(e) => setForm({ ...form, crop_id: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const cropObj = crops.find(c => String(c.id) === String(val));
+                        setForm(prev => ({
+                          ...prev,
+                          crop_id: val,
+                          notes: cropObj?.notes || ''
+                        }));
+                      }}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"
                     >
                       <option value="">-- เลือกชนิดผัก --</option>
@@ -1317,66 +1328,22 @@ export default function Plots() {
                         </span>
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                          วิธีแช่/เพาะกล้า/ที่มาเมล็ด
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[11px] font-bold text-slate-700">
+                            วิธีแช่/เพาะกล้า/ที่มาเมล็ด
+                          </label>
+                          <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                            ✨ ดึงข้อมูลจากคลังผักอัตโนมัติ
+                          </span>
+                        </div>
                         <textarea
                           rows={2}
-                          placeholder="เช่น แช่เมล็ดผักบุ้ง 3 ขีดในน้ำอุ่น 3 ชม. บ่มผ้า 1 คืนก่อนหว่าน, หรือเพาะกล่องทิชชู 7 วัน"
+                          placeholder="วิธีเพาะ/เทคนิคการปลูกจากคลังผักจะแสดงที่นี่อัตโนมัติ (แก้ไขได้)"
                           value={form.notes}
                           onChange={(e) => setForm({ ...form, notes: e.target.value })}
                           className="w-full px-3 py-2 rounded-xl border border-emerald-200 bg-white text-slate-900 font-medium placeholder:text-slate-400 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-xs leading-relaxed"
                         />
                       </div>
-                    </div>
-
-                    {/* Quick presets for seed notes */}
-                    <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-emerald-200/50">
-                      <span className="text-[10.5px] text-slate-500 font-bold">ตัวอย่างคลิกใส่:</span>
-                      <button
-                        type="button"
-                        onClick={() => setForm(prev => ({
-                          ...prev,
-                          notes: 'แช่เมล็ดในน้ำอุ่น 3 ชั่วโมง เทน้ำออกแล้วบ่มผ้าหมาด 1 คืนก่อนหว่าน',
-                          seed_prep_date: prev.seed_prep_date || new Date().toISOString().split('T')[0]
-                        }))}
-                        className="text-[10.5px] px-2 py-0.5 rounded-md bg-white hover:bg-emerald-100 text-slate-700 hover:text-emerald-900 font-medium border border-emerald-200 cursor-pointer active:scale-95"
-                      >
-                        แช่น้ำอุ่น 3 ชม. บ่มผ้า 1 คืน (ผักบุ้ง)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setForm(prev => ({
-                          ...prev,
-                          notes: 'เพาะเมล็ดในกล่องทิชชู 7 วัน ก่อนย้ายลงถาดหลุม',
-                          seed_prep_date: prev.seed_prep_date || new Date().toISOString().split('T')[0]
-                        }))}
-                        className="text-[10.5px] px-2 py-0.5 rounded-md bg-white hover:bg-emerald-100 text-slate-700 hover:text-emerald-900 font-medium border border-emerald-200 cursor-pointer active:scale-95"
-                      >
-                        เพาะกล่องทิชชู 7 วัน (ผักสลัด)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setForm(prev => ({
-                          ...prev,
-                          notes: 'เพาะกล้าในถาดหลุม 15 วัน ก่อนย้ายลงแคร่ปลูก',
-                          seed_prep_date: prev.seed_prep_date || new Date().toISOString().split('T')[0]
-                        }))}
-                        className="text-[10.5px] px-2 py-0.5 rounded-md bg-white hover:bg-emerald-100 text-slate-700 hover:text-emerald-900 font-medium border border-emerald-200 cursor-pointer active:scale-95"
-                      >
-                        เพาะถาดหลุม 15 วัน
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setForm(prev => ({
-                          ...prev,
-                          notes: 'หว่านเมล็ดลงแคร่ปลูกโดยตรง ไม่ต้องแช่น้ำ',
-                          seed_prep_date: ''
-                        }))}
-                        className="text-[10.5px] px-2 py-0.5 rounded-md bg-white hover:bg-emerald-100 text-slate-700 hover:text-emerald-900 font-medium border border-emerald-200 cursor-pointer active:scale-95"
-                      >
-                        หว่านลงแปลงโดยตรง
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -1574,7 +1541,15 @@ export default function Plots() {
                     <select
                       required
                       value={editForm.crop_id}
-                      onChange={(e) => setEditForm({ ...editForm, crop_id: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const cropObj = crops.find(c => String(c.id) === String(val));
+                        setEditForm(prev => ({
+                          ...prev,
+                          crop_id: val,
+                          notes: cropObj?.notes || prev.notes
+                        }));
+                      }}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"
                     >
                       {crops.map((c) => (
@@ -1713,55 +1688,22 @@ export default function Plots() {
                         </span>
                       </div>
                       <div className="sm:col-span-2">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                          วิธีแช่/เพาะกล้า/ที่มาเมล็ด
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[11px] font-bold text-slate-700">
+                            วิธีแช่/เพาะกล้า/ที่มาเมล็ด
+                          </label>
+                          <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                            ✨ ดึงข้อมูลจากคลังผักอัตโนมัติ
+                          </span>
+                        </div>
                         <textarea
                           rows={2}
                           value={editForm.notes}
                           onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-                          placeholder="เช่น แช่เมล็ดผักบุ้ง 3 ขีดในน้ำอุ่น 3 ชม. บ่มผ้า 1 คืนก่อนหว่าน, หรือเพาะกล่องทิชชู 7 วัน"
+                          placeholder="วิธีเพาะ/เทคนิคการปลูกจากคลังผักจะแสดงที่นี่อัตโนมัติ (แก้ไขได้)"
                           className="w-full px-3 py-2 rounded-xl border border-emerald-200 bg-white text-slate-900 font-medium placeholder:text-slate-400 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-xs leading-relaxed"
                         />
                       </div>
-                    </div>
-
-                    {/* Quick presets for seed notes */}
-                    <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-emerald-200/50">
-                      <span className="text-[10.5px] text-slate-500 font-bold">ตัวอย่างคลิกใส่:</span>
-                      <button
-                        type="button"
-                        onClick={() => setEditForm(prev => ({
-                          ...prev,
-                          notes: 'แช่เมล็ดในน้ำอุ่น 3 ชั่วโมง เทน้ำออกแล้วบ่มผ้าหมาด 1 คืนก่อนหว่าน',
-                          seed_prep_date: prev.seed_prep_date || new Date().toISOString().split('T')[0]
-                        }))}
-                        className="text-[10.5px] px-2 py-0.5 rounded-md bg-white hover:bg-emerald-100 text-slate-700 hover:text-emerald-900 font-medium border border-emerald-200 cursor-pointer active:scale-95"
-                      >
-                        แช่น้ำอุ่น 3 ชม. บ่มผ้า 1 คืน (ผักบุ้ง)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditForm(prev => ({
-                          ...prev,
-                          notes: 'เพาะเมล็ดในกล่องทิชชู 7 วัน ก่อนย้ายลงถาดหลุม',
-                          seed_prep_date: prev.seed_prep_date || new Date().toISOString().split('T')[0]
-                        }))}
-                        className="text-[10.5px] px-2 py-0.5 rounded-md bg-white hover:bg-emerald-100 text-slate-700 hover:text-emerald-900 font-medium border border-emerald-200 cursor-pointer active:scale-95"
-                      >
-                        เพาะกล่องทิชชู 7 วัน (ผักสลัด)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditForm(prev => ({
-                          ...prev,
-                          notes: 'เพาะกล้าในถาดหลุม 15 วัน ก่อนย้ายลงแคร่ปลูก',
-                          seed_prep_date: prev.seed_prep_date || new Date().toISOString().split('T')[0]
-                        }))}
-                        className="text-[10.5px] px-2 py-0.5 rounded-md bg-white hover:bg-emerald-100 text-slate-700 hover:text-emerald-900 font-medium border border-emerald-200 cursor-pointer active:scale-95"
-                      >
-                        เพาะถาดหลุม 15 วัน
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -1943,7 +1885,15 @@ export default function Plots() {
                   </label>
                   <select
                     value={seedForm.seed_crop_id}
-                    onChange={(e) => setSeedForm({ ...seedForm, seed_crop_id: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const cropObj = crops.find(c => String(c.id) === String(val));
+                      setSeedForm(prev => ({
+                        ...prev,
+                        seed_crop_id: val,
+                        seed_notes: cropObj?.notes || ''
+                      }));
+                    }}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm cursor-pointer"
                   >
                     <option value="">-- ไม่ระบุ / เลือกภายหลัง --</option>
@@ -1982,54 +1932,20 @@ export default function Plots() {
                     <label className="block text-xs font-bold text-slate-800">
                       รายละเอียดการแช่เมล็ด / การเพาะกล้า
                     </label>
+                    <span className="text-[10px] text-teal-700 font-semibold bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200/60">
+                      ✨ ดึงข้อมูลจากคลังผักอัตโนมัติ
+                    </span>
                   </div>
                   <textarea
-                    rows={4}
+                    rows={3}
                     value={seedForm.seed_notes}
                     onChange={(e) => setSeedForm({ ...seedForm, seed_notes: e.target.value })}
-                    placeholder="เช่น แช่เมล็ดผักบุ้ง 3 ขีด ในน้ำอุ่น 3 ชั่วโมง แล้วเทน้ำออก บ่มในผ้าหมาด 1 คืนก่อนนำมาหยอดลงแปลง"
+                    placeholder="วิธีเพาะ/เทคนิคการปลูกจากคลังผักจะแสดงที่นี่อัตโนมัติ (แก้ไขได้)"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-medium placeholder:text-slate-400 focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-xs sm:text-sm leading-relaxed"
                   />
                   <p className="text-[11px] text-slate-500 mt-1.5">
                     💡 เกษตรกรสามารถจดบันทึกปริมาณเมล็ด อุณหภูมิน้ำ หรือระยะเวลาบ่มผ้าไว้ก่อน เมื่อลงแปลงข้อมูลนี้จะถูกเก็บเป็นประวัติรอบปลูก GAP อัตโนมัติ
                   </p>
-                </div>
-
-                {/* เทมเพลตแนะนำ / Quick Presets */}
-                <div className="bg-teal-50/70 border border-teal-200/80 rounded-2xl p-3.5 space-y-2">
-                  <span className="text-[11px] font-bold text-teal-900 block">
-                    ⚡ เลือกวิธีเพาะยอดนิยม (คลิกเพื่อแทนที่ข้อความ):
-                  </span>
-                  <div className="flex flex-col gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setSeedForm({ ...seedForm, seed_notes: 'แช่เมล็ดในน้ำอุ่น 3 ชั่วโมง เทน้ำออก ห่อผ้าหมาดบ่มไว้ 1 คืนก่อนหยอดลงแปลง' })}
-                      className="text-[11px] font-semibold bg-white hover:bg-teal-100 text-teal-900 border border-teal-300 px-2.5 py-1.5 rounded-lg transition cursor-pointer text-left"
-                    >
-                      🌱 ผักบุ้ง / เมล็ดเปลือกหนา: แช่น้ำอุ่น 3 ชม. + บ่มผ้าหมาด 1 คืน
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSeedForm({ ...seedForm, seed_notes: 'เพาะในกล่องทิชชูชื้นแช่ตู้เย็น 24 ชม. แล้วย้ายลงถาดหลุมขุยมะพร้าว 14 วันก่อนลงแปลง' })}
-                      className="text-[11px] font-semibold bg-white hover:bg-teal-100 text-teal-900 border border-teal-300 px-2.5 py-1.5 rounded-lg transition cursor-pointer text-left"
-                    >
-                      🥗 ผักสลัด / กรีนโอ๊ค: เพาะกล่องทิชชู + ถาดหลุม 14 วัน
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSeedForm({ ...seedForm, seed_notes: 'เพาะลงถาดหลุม 104 หลุม ใช้วัสดุเพาะพีทมอส รอต้นกล้าอายุ 15-20 วัน มีใบจริง 3-4 ใบก่อนย้ายปลูก' })}
-                      className="text-[11px] font-semibold bg-white hover:bg-teal-100 text-teal-900 border border-teal-300 px-2.5 py-1.5 rounded-lg transition cursor-pointer text-left"
-                    >
-                      🥦 คะน้า / เคล / กะหล่ำ: ถาดหลุมพีทมอส 15-20 วัน
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSeedForm({ ...seedForm, seed_notes: 'แช่น้ำสะอาด 4 ชั่วโมง หว่านลงกระบะเพาะกล้า รดน้ำชุ่มเช้า-เย็น รอ 7 วัน' })}
-                      className="text-[11px] font-semibold bg-white hover:bg-teal-100 text-teal-900 border border-teal-300 px-2.5 py-1.5 rounded-lg transition cursor-pointer text-left"
-                    >
-                      🥬 กวางตุ้ง / ผักกาด: แช่น้ำ 4 ชม. + กระบะเพาะ 7 วัน
-                    </button>
-                  </div>
                 </div>
               </div>
 
