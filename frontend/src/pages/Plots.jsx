@@ -706,7 +706,7 @@ export default function Plots() {
                         const survivalRate = Math.max(0, Math.min(100, Math.round((aliveAndHarvested / Number(init)) * 1000) / 10));
 
                         return (
-                          <div className="mt-3 pt-2.5 border-t border-emerald-200/70 bg-white/70 -mx-1 px-3 py-2 rounded-xl border border-emerald-100 shadow-2xs">
+                          <div className="mt-3 pt-2.5 border-t border-emerald-200/70 bg-white/70 -mx-1 px-3 py-2 rounded-xl border shadow-2xs">
                             <div className="flex items-center justify-between text-[11px] mb-1">
                               <span className="font-bold text-slate-700 flex items-center gap-1">
                                 <Sprout className="w-3.5 h-3.5 text-emerald-600" />
@@ -760,8 +760,8 @@ export default function Plots() {
                             <div
                               className={`h-full rounded-full transition-all duration-500 ${
                                 isHarvestReady
-                                  ? 'bg-gradient-to-r from-amber-400 to-amber-500 animate-pulse shadow-xs'
-                                  : 'bg-gradient-to-r from-emerald-500 to-teal-500 shadow-xs'
+                                  ? 'bg-linear-to-r from-amber-400 to-amber-500 animate-pulse shadow-xs'
+                                  : 'bg-linear-to-r from-emerald-500 to-teal-500 shadow-xs'
                               }`}
                               style={{ width: `${progressInfo.percent}%` }}
                             />
@@ -770,7 +770,7 @@ export default function Plots() {
                       )}
                     </div>
                   ) : (
-                    <div className="mt-3 bg-gradient-to-b from-slate-50/90 to-emerald-50/30 rounded-2xl p-3 border border-slate-200/80 space-y-2.5">
+                    <div className="mt-3 bg-linear-to-b from-slate-50/90 to-emerald-50/30 rounded-2xl p-3 border border-slate-200/80 space-y-2.5">
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
                           <Sprout className="w-3.5 h-3.5 text-emerald-600" />
@@ -877,7 +877,7 @@ export default function Plots() {
                   {isEmpty ? (
                     <button
                       onClick={() => openModalWithPlot(p.id)}
-                      className="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs cursor-pointer transition active:scale-95 whitespace-nowrap min-h-[36px]"
+                      className="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs cursor-pointer transition active:scale-95 whitespace-nowrap min-h-9"
                     >
                       <Plus className="w-4 h-4" />
                       <span>ลงปลูกผักในแปลงนี้</span>
@@ -885,7 +885,7 @@ export default function Plots() {
                   ) : isHarvestReady ? (
                     <button
                       onClick={() => navigate(`/harvest?plot_id=${p.id}&smart=true`)}
-                      className="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs shadow-sm hover:shadow transition cursor-pointer active:scale-95 border border-amber-300 whitespace-nowrap min-h-[36px]"
+                      className="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs shadow-sm hover:shadow transition cursor-pointer active:scale-95 border border-amber-300 whitespace-nowrap min-h-9"
                     >
                       <ShoppingBag className="w-3.5 h-3.5 text-slate-950" />
                       <span>🧺 เก็บเกี่ยวเข้าคลัง</span>
@@ -895,7 +895,7 @@ export default function Plots() {
                       <button
                         type="button"
                         onClick={() => handleOpenEditBatch(currentBatch, p)}
-                        className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 text-xs font-bold border border-slate-200 transition cursor-pointer active:scale-95 whitespace-nowrap min-h-[36px]"
+                        className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 text-xs font-bold border border-slate-200 transition cursor-pointer active:scale-95 whitespace-nowrap min-h-9"
                         title="แก้ไขข้อมูลรอบการปลูกนี้"
                       >
                         <Edit3 className="w-3.5 h-3.5 text-emerald-600" />
@@ -906,7 +906,7 @@ export default function Plots() {
                         type="button"
                         onClick={() => handleCancelBatch(currentBatch, p)}
                         disabled={cancellingBatchId === (currentBatch?.id || p.id)}
-                        className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 text-xs font-bold border border-slate-200 transition cursor-pointer active:scale-95 whitespace-nowrap disabled:opacity-50 min-h-[36px]"
+                        className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 text-xs font-bold border border-slate-200 transition cursor-pointer active:scale-95 whitespace-nowrap disabled:opacity-50 min-h-9"
                         title="ยกเลิกรอบปลูกและรีเซ็ตแปลงกลับเป็นว่าง"
                       >
                         <RotateCcw className="w-3.5 h-3.5 text-rose-500" />
@@ -916,7 +916,7 @@ export default function Plots() {
                   ) : isGrowing ? (
                     <button
                       onClick={() => navigate(`/harvest?plot_id=${p.id}&smart=true`)}
-                      className="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs hover:shadow transition cursor-pointer active:scale-95 whitespace-nowrap min-h-[36px]"
+                      className="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs hover:shadow transition cursor-pointer active:scale-95 whitespace-nowrap min-h-9"
                     >
                       <ShoppingBag className="w-3.5 h-3.5" />
                       <span>เก็บเกี่ยวเข้าคลัง</span>
@@ -933,7 +933,7 @@ export default function Plots() {
           <button
             type="button"
             onClick={handleOpenAddPlotModal}
-            className="border-2 border-dashed border-slate-300 hover:border-emerald-500 hover:bg-emerald-50/40 rounded-3xl p-6 flex flex-col items-center justify-center text-center transition group cursor-pointer min-h-[240px]"
+            className="border-2 border-dashed border-slate-300 hover:border-emerald-500 hover:bg-emerald-50/40 rounded-3xl p-6 flex flex-col items-center justify-center text-center transition group cursor-pointer min-h-60"
           >
             <div className="w-12 h-12 rounded-2xl bg-slate-100 group-hover:bg-emerald-100 text-slate-500 group-hover:text-emerald-700 flex items-center justify-center transition shadow-xs">
               <Plus className="w-6 h-6" />
@@ -941,7 +941,7 @@ export default function Plots() {
             <p className="mt-3 font-bold text-slate-800 text-sm group-hover:text-emerald-800">
               เพิ่มแปลง / แคร่ปลูกใหม่
             </p>
-            <p className="text-[11px] text-slate-400 mt-1 max-w-[200px]">
+            <p className="text-[11px] text-slate-400 mt-1 max-w-50 text-center">
               สร้างแคร่ที่ {plots.length > 0 ? Math.max(...plots.map(p => Number(p.plot_number || p.id) || 0)) + 1 : 1} รองรับการขยายฟาร์มตามมาตรฐาน GAP
             </p>
           </button>
@@ -964,7 +964,7 @@ export default function Plots() {
                 <th className="py-3 px-4 font-semibold">แปลงปลูก</th>
                 <th className="py-3 px-4 font-semibold">วันที่เริ่มปลูก</th>
                 <th className="py-3 px-4 font-semibold">วันเก็บเกี่ยว</th>
-                <th className="py-3 px-4 font-semibold min-w-[130px]">ความคืบหน้า</th>
+                <th className="py-3 px-4 font-semibold min-w-32.5">ความคืบหน้า</th>
                 <th className="py-3 px-4 font-semibold">สถานะ</th>
                 <th className="py-3 px-4 font-semibold">ระบบรดน้ำ</th>
                 <th className="py-3 px-4 font-semibold text-right">จัดการ</th>
@@ -1236,7 +1236,7 @@ export default function Plots() {
                   {/* ระบบรดน้ำประจำวัน */}
                   <div>
                     <label className="block text-xs font-bold text-slate-800 mb-1.5">ระบบรดน้ำประจำวัน</label>
-                    <div className="h-[42px] px-3.5 flex items-center rounded-xl bg-slate-50 border border-slate-200">
+                    <div className="h-10.5 px-3.5 flex items-center rounded-xl bg-slate-50 border border-slate-200">
                       <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
                         <input
                           type="checkbox"
@@ -1252,7 +1252,7 @@ export default function Plots() {
                   {/* สูตรดินสำหรับรอบการปลูกนี้ */}
                   <div className="md:col-span-2 bg-amber-50/50 p-3.5 rounded-2xl border border-amber-200/70 space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                      <label className="block text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                      <label className="block text-xs font-bold text-amber-950 items-center gap-1.5">
                         <Sparkles className="w-3.5 h-3.5 text-amber-600" />
                         <span>สูตรดิน & วันที่เตรียมแคร่ (GAP ข้อ 2)</span>
                       </label>
@@ -1267,7 +1267,7 @@ export default function Plots() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="sm:col-span-1">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center gap-1">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1 items-center gap-1">
                           <Calendar className="w-3 h-3 text-amber-600" />
                           <span>วันที่ผสมดิน</span>
                         </label>
@@ -1295,14 +1295,14 @@ export default function Plots() {
 
                   {/* ที่มาเมล็ดพันธุ์ & บันทึกต้นน้ำ (การแช่/เพาะเมล็ด) */}
                   <div className="md:col-span-2 bg-emerald-50/50 p-3.5 rounded-2xl border border-emerald-200/70 space-y-3">
-                    <label className="block text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                    <label className="block text-xs font-bold text-emerald-950 items-center gap-1.5">
                       <Leaf className="w-3.5 h-3.5 text-emerald-600" />
                       <span>ที่มาเมล็ดพันธุ์ & บันทึกต้นน้ำ (การแช่/เพาะเมล็ด - ทางเลือก)</span>
                     </label>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="sm:col-span-1">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center gap-1">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1 items-center gap-1">
                           <Calendar className="w-3 h-3 text-emerald-600" />
                           <span>วันที่เริ่มแช่/เพาะเมล็ด</span>
                         </label>
@@ -1632,7 +1632,7 @@ export default function Plots() {
 
                   <div className="md:col-span-2">
                     <label className="block text-xs font-bold text-slate-800 mb-1.5">ระบบรดน้ำประจำวัน</label>
-                    <div className="h-[42px] px-3.5 flex items-center rounded-xl bg-slate-50 border border-slate-200">
+                    <div className="h-10.5 px-3.5 flex items-center rounded-xl bg-slate-50 border border-slate-200">
                       <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
                         <input
                           type="checkbox"
@@ -1648,7 +1648,7 @@ export default function Plots() {
                   {/* สูตรดินสำหรับรอบการปลูกนี้ */}
                   <div className="md:col-span-2 bg-amber-50/50 p-3.5 rounded-2xl border border-amber-200/70 space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                      <label className="block text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                      <label className="block text-xs font-bold text-amber-950 items-center gap-1.5">
                         <Sparkles className="w-3.5 h-3.5 text-amber-600" />
                         <span>สูตรดิน & วันที่เตรียมแคร่ (GAP ข้อ 2)</span>
                       </label>
@@ -1663,7 +1663,7 @@ export default function Plots() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="sm:col-span-1">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center gap-1">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1 items-center gap-1">
                           <Calendar className="w-3 h-3 text-amber-600" />
                           <span>วันที่ผสมดิน</span>
                         </label>
@@ -1691,14 +1691,14 @@ export default function Plots() {
 
                   {/* ที่มาเมล็ดพันธุ์ & บันทึกต้นน้ำ (การแช่/เพาะเมล็ด) */}
                   <div className="md:col-span-2 bg-emerald-50/50 p-3.5 rounded-2xl border border-emerald-200/70 space-y-3">
-                    <label className="block text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                    <label className="block text-xs font-bold text-emerald-950 items-center gap-1.5">
                       <Leaf className="w-3.5 h-3.5 text-emerald-600" />
                       <span>ที่มาเมล็ดพันธุ์ & บันทึกต้นน้ำ (การแช่/เพาะเมล็ด - ทางเลือก)</span>
                     </label>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="sm:col-span-1">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center gap-1">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1 items-center gap-1">
                           <Calendar className="w-3 h-3 text-emerald-600" />
                           <span>วันที่เริ่มแช่/เพาะเมล็ด</span>
                         </label>
@@ -1820,7 +1820,7 @@ export default function Plots() {
             <form onSubmit={handleSaveSoil} className="flex flex-col flex-1 min-h-0 overflow-hidden">
               <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5 flex items-center gap-1.5">
+                  <label className="text-xs font-bold text-slate-800 mb-1.5 flex items-center gap-1.5">
                     <Calendar className="w-4 h-4 text-amber-600" />
                     <span>วันที่ผสมดิน / เตรียมแคร่</span>
                   </label>
@@ -1937,7 +1937,7 @@ export default function Plots() {
               <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
                 {/* ชนิดผักที่จะปลูก */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5 flex items-center gap-1.5">
+                  <label className="text-xs font-bold text-slate-800 mb-1.5 flex items-center gap-1.5">
                     <Sprout className="w-4 h-4 text-teal-600" />
                     <span>ชนิดผักที่ต้องการเพาะเมล็ด / ปลูก</span>
                   </label>
@@ -1960,7 +1960,7 @@ export default function Plots() {
 
                 {/* วันที่เริ่มแช่เมล็ด / เพาะกล้า */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5 flex items-center gap-1.5">
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5 items-center gap-1.5">
                     <Calendar className="w-4 h-4 text-teal-600" />
                     <span>วันที่เริ่มแช่เมล็ด / เพาะกล้า</span>
                   </label>
