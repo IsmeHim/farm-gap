@@ -9,7 +9,7 @@ export async function replyWelcome(replyToken) {
       type: 'bubble',
       hero: {
         type: 'image',
-        url: 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?q=80&w=600&auto=format&fit=crop',
+        url: 'https://images.unsplash.com/photo-1576045057995-568f588f82fb?q=80&w=880&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
         size: 'full',
         aspectRatio: '20:13',
         aspectMode: 'cover',

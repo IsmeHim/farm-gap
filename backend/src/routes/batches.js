@@ -5,8 +5,10 @@ import { authRequired } from '../middleware/auth.js';
 export const batchesRouter = Router();
 batchesRouter.use(authRequired);
 
-// Ensure soil_recipe column exists on planting_batches
+// Ensure soil_recipe, soil_prep_date, seed_prep_date columns exist on planting_batches
 pool.query('ALTER TABLE planting_batches ADD COLUMN soil_recipe TEXT NULL AFTER notes').catch(() => {});
+pool.query('ALTER TABLE planting_batches ADD COLUMN soil_prep_date DATE NULL AFTER soil_recipe').catch(() => {});
+pool.query('ALTER TABLE planting_batches ADD COLUMN seed_prep_date DATE NULL AFTER notes').catch(() => {});
 
 // GET /api/batches - ดึงรายการรอบการปลูกทั้งหมด
 batchesRouter.get('/', async (req, res) => {
@@ -15,6 +17,8 @@ batchesRouter.get('/', async (req, res) => {
     let sql = `
       SELECT b.*, 
              COALESCE(NULLIF(b.soil_recipe, ''), p.soil_recipe) AS soil_recipe,
+             COALESCE(b.soil_prep_date, p.soil_prep_date) AS soil_prep_date,
+             p.soil_prep_date AS plot_soil_prep_date,
              p.name AS plot_name, p.dimension AS plot_dimension,
              c.name AS crop_name, c.category AS crop_category, c.growth_days, c.default_bag_size, c.default_price
       FROM planting_batches b
@@ -47,6 +51,8 @@ batchesRouter.get('/:id', async (req, res) => {
     const [rows] = await pool.query(
       `SELECT b.*, 
               COALESCE(NULLIF(b.soil_recipe, ''), p.soil_recipe) AS soil_recipe,
+              COALESCE(b.soil_prep_date, p.soil_prep_date) AS soil_prep_date,
+              p.soil_prep_date AS plot_soil_prep_date,
               p.name AS plot_name, p.dimension AS plot_dimension,
               c.name AS crop_name, c.category AS crop_category, c.growth_days, c.default_bag_size, c.default_price
        FROM planting_batches b
@@ -71,6 +77,8 @@ batchesRouter.post('/', async (req, res) => {
       initial_count = null,
       planting_unit = 'ต้น',
       start_date = new Date().toISOString().split('T')[0],
+      soil_prep_date = null,
+      seed_prep_date = null,
       auto_water = true,
       notes = '',
       soil_recipe = ''
@@ -95,6 +103,8 @@ batchesRouter.post('/', async (req, res) => {
 
     // สูตรดินสำหรับรอบนี้ (ถ้าไม่กรอกให้ใช้ของแปลงเดิม)
     const effectiveSoilRecipe = (soil_recipe || '').trim() || plot.soil_recipe || 'ดินผสม 8 กระบะปูน (กากยางพารา 4 กระบะ + แกลบดำ/แกลบดิบ 2 กระบะ + มูลวัวหมัก 2 กระบะ)';
+    const effectiveSoilPrepDate = soil_prep_date || plot.soil_prep_date || null;
+    const effectiveSeedPrepDate = seed_prep_date || null;
 
     // คำนวณวันคาดการณ์เก็บเกี่ยว
     const startDateObj = new Date(start_date);
@@ -108,9 +118,9 @@ batchesRouter.post('/', async (req, res) => {
 
     // 3. บันทึกลง planting_batches พร้อม initial_count, remaining_count และ soil_recipe ของรอบนี้
     const [ins] = await pool.query(
-      `INSERT INTO planting_batches (user_id, batch_code, plot_id, crop_id, initial_count, remaining_count, planting_unit, total_damaged_count, total_harvested_count, start_date, expected_harvest_date, status, auto_water, water_schedule, notes, soil_recipe)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, 'growing', ?, 'เช้า-เย็น (น้ำสะอาดมาตรฐาน GAP)', ?, ?)`,
-      [req.user.id, batch_code, plot_id, crop_id, initCount, initCount, unit, start_date, expected_harvest_date, auto_water ? 1 : 0, notes, effectiveSoilRecipe]
+      `INSERT INTO planting_batches (user_id, batch_code, plot_id, crop_id, initial_count, remaining_count, planting_unit, total_damaged_count, total_harvested_count, start_date, expected_harvest_date, status, auto_water, water_schedule, notes, soil_recipe, soil_prep_date, seed_prep_date)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, 'growing', ?, 'เช้า-เย็น (น้ำสะอาดมาตรฐาน GAP)', ?, ?, ?, ?)`,
+      [req.user.id, batch_code, plot_id, crop_id, initCount, initCount, unit, start_date, expected_harvest_date, auto_water ? 1 : 0, notes, effectiveSoilRecipe, effectiveSoilPrepDate, effectiveSeedPrepDate]
     );
     const batchId = ins.insertId;
 
@@ -123,9 +133,13 @@ batchesRouter.post('/', async (req, res) => {
            expected_harvest_date = ?,
            current_batch_id = ?,
            soil_recipe = ?,
+           soil_prep_date = COALESCE(?, soil_prep_date),
+           seed_prep_date = NULL,
+           seed_notes = NULL,
+           seed_crop_id = NULL,
            updated_at = NOW()
        WHERE id = ? AND user_id = ?`,
-      [crop.name, start_date, expected_harvest_date, batchId, effectiveSoilRecipe, plot_id, req.user.id]
+      [crop.name, start_date, expected_harvest_date, batchId, effectiveSoilRecipe, effectiveSoilPrepDate, plot_id, req.user.id]
     );
 
     // Sync with crop_cycles for Crop Diary Timeline
@@ -183,6 +197,8 @@ batchesRouter.put('/:id', async (req, res) => {
       auto_water,
       expected_harvest_date,
       soil_recipe,
+      soil_prep_date,
+      seed_prep_date,
       initial_count,
       planting_unit,
     } = req.body;
@@ -227,6 +243,8 @@ batchesRouter.put('/:id', async (req, res) => {
     const effectiveAutoWater = auto_water !== undefined ? (auto_water ? 1 : 0) : currentBatch.auto_water;
     const effectiveNotes = notes !== undefined ? notes : currentBatch.notes;
     const effectiveSoilRecipe = soil_recipe !== undefined ? soil_recipe : currentBatch.soil_recipe;
+    const effectiveSoilPrepDate = soil_prep_date !== undefined ? (soil_prep_date || null) : currentBatch.soil_prep_date;
+    const effectiveSeedPrepDate = seed_prep_date !== undefined ? (seed_prep_date || null) : currentBatch.seed_prep_date;
 
     // คำนวณจำนวนต้นใหม่หากมีการส่งมา
     let effectiveInitCount = currentBatch.initial_count;
@@ -258,6 +276,8 @@ batchesRouter.put('/:id', async (req, res) => {
            auto_water = ?,
            notes = ?,
            soil_recipe = ?,
+           soil_prep_date = ?,
+           seed_prep_date = ?,
            initial_count = ?,
            remaining_count = ?,
            planting_unit = ?,
@@ -270,6 +290,8 @@ batchesRouter.put('/:id', async (req, res) => {
         effectiveAutoWater,
         effectiveNotes,
         effectiveSoilRecipe,
+        effectiveSoilPrepDate,
+        effectiveSeedPrepDate,
         effectiveInitCount,
         effectiveRemainingCount,
         effectivePlantingUnit,
@@ -286,6 +308,7 @@ batchesRouter.put('/:id', async (req, res) => {
              planting_date = ?,
              expected_harvest_date = ?,
              soil_recipe = COALESCE(?, soil_recipe),
+             soil_prep_date = COALESCE(?, soil_prep_date),
              updated_at = NOW()
          WHERE id = ? AND user_id = ?`,
         [
@@ -293,6 +316,7 @@ batchesRouter.put('/:id', async (req, res) => {
           effectiveStartDate,
           effectiveExpectedDate,
           effectiveSoilRecipe,
+          effectiveSoilPrepDate,
           currentBatch.plot_id,
           req.user.id
         ]
@@ -367,6 +391,9 @@ batchesRouter.delete('/:id', async (req, res) => {
              planting_date = NULL,
              expected_harvest_date = NULL,
              current_batch_id = NULL,
+             seed_prep_date = NULL,
+             seed_notes = NULL,
+             seed_crop_id = NULL,
              updated_at = NOW()
          WHERE id = ? AND user_id = ?`,
         [batch.plot_id, req.user.id]

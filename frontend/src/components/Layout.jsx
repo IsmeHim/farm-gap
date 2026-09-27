@@ -3,7 +3,6 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth.jsx';
 import {
   BadgeCheck,
-  BookOpen,
   Bug,
   Droplets,
   ExternalLink,
@@ -27,22 +26,46 @@ import {
   X,
 } from 'lucide-react';
 
-const items = [
-  { to: '/', icon: LayoutDashboard, label: 'แดชบอร์ด', end: true },
-  { to: '/plots', icon: Map, label: 'แปลงปลูก' },
-  { to: '/crops', icon: Sprout, label: 'คลังชนิดผัก' },
-  { to: '/diary', icon: BookOpen, label: 'ไดอารี่รอบปลูก' },
-  { to: '/water', icon: Droplets, label: 'น้ำ' },
-  { to: '/chemicals', icon: FlaskConical, label: 'ปุ๋ย/สารเคมี' },
-  { to: '/pests', icon: Bug, label: 'ศัตรูพืช/ความเสียหาย' },
-  { to: '/harvest', icon: Leaf, label: 'เก็บผลผลิต' },
-  { to: '/products', icon: ShoppingBag, label: 'สินค้า' },
-  { to: '/orders', icon: ReceiptText, label: 'คำสั่งซื้อ (LINE)' },
-  { to: '/sales-report', icon: TrendingUp, label: 'รายงานรายได้ (Export)' },
-  { to: '/storage', icon: Package, label: 'ขนส่ง/เก็บ' },
-  { to: '/costs', icon: Wallet, label: 'ต้นทุน' },
-  { to: '/report', icon: FileText, label: 'รายงาน GAP' },
-  { to: '/profile', icon: UserCog, label: 'ตั้งค่าฟาร์ม & บัญชี' },
+const menuGroups = [
+  {
+    group: null,
+    items: [
+      { to: '/', icon: LayoutDashboard, label: 'แดชบอร์ดภาพรวม', end: true },
+    ]
+  },
+  {
+    group: '1. การเพาะปลูก',
+    items: [
+      { to: '/plots', icon: Map, label: 'แปลงปลูก & รอบการผลิต' },
+      { to: '/crops', icon: Sprout, label: 'คลังชนิดผัก' },
+    ]
+  },
+  {
+    group: '2. การดูแลแปลงประจำวัน',
+    items: [
+      { to: '/water', icon: Droplets, label: 'ระบบน้ำ & บันทึกรดน้ำ' },
+      { to: '/chemicals', icon: FlaskConical, label: 'ปุ๋ย & สารบำรุง' },
+      { to: '/pests', icon: Bug, label: 'ศัตรูพืช & โรคพืช' },
+    ]
+  },
+  {
+    group: '3. ผลผลิต & การขาย',
+    items: [
+      { to: '/harvest', icon: Leaf, label: 'เก็บเกี่ยวผลผลิต' },
+      { to: '/storage', icon: Package, label: 'พักผลผลิต & ห้องเย็น' },
+      { to: '/products', icon: ShoppingBag, label: 'คลังสินค้าหน้าร้าน' },
+      { to: '/orders', icon: ReceiptText, label: 'คำสั่งซื้อจาก LINE' },
+    ]
+  },
+  {
+    group: '4. การเงิน & มาตรฐาน GAP',
+    items: [
+      { to: '/costs', icon: Wallet, label: 'บันทึกต้นทุนฟาร์ม' },
+      { to: '/sales-report', icon: TrendingUp, label: 'รายงานยอดขาย' },
+      { to: '/report', icon: FileText, label: 'สมุดบันทึก GAP' },
+      { to: '/profile', icon: UserCog, label: 'ตั้งค่าฟาร์ม & บัญชี' },
+    ]
+  },
 ];
 
 function BrandMark({ compact = false }) {
@@ -97,18 +120,33 @@ export default function Layout() {
             </button>
           </div>
 
-          <nav className="flex-1 space-y-1 overflow-y-auto pr-1">
-            {items.map(it => (
-              <NavLink
-                key={it.to}
-                to={it.to}
-                end={it.end}
-                onClick={() => setSidebarOpen(false)}
-                className={({ isActive }) => `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${isActive ? 'bg-[#173f2a] text-white shadow-lg shadow-emerald-900/10' : 'text-slate-700 hover:bg-emerald-50 hover:text-[#173f2a]'}`}
-              >
-                <it.icon className="w-4 h-4" />
-                <span>{it.label}</span>
-              </NavLink>
+          <nav className="flex-1 space-y-3 overflow-y-auto pr-1">
+            {menuGroups.map((grp, gIdx) => (
+              <div key={gIdx} className="space-y-1">
+                {grp.group && (
+                  <div className="px-3 pt-2 pb-0.5 text-[10.5px] font-black uppercase tracking-wider text-emerald-900/60 flex items-center gap-1.5">
+                    <span>{grp.group}</span>
+                  </div>
+                )}
+                {grp.items.map((it) => (
+                  <NavLink
+                    key={it.to}
+                    to={it.to}
+                    end={it.end}
+                    onClick={() => setSidebarOpen(false)}
+                    className={({ isActive }) =>
+                      `flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition ${
+                        isActive
+                          ? 'bg-[#173f2a] text-white shadow-md shadow-emerald-900/15'
+                          : 'text-slate-700 hover:bg-emerald-50 hover:text-[#173f2a]'
+                      }`
+                    }
+                  >
+                    <it.icon className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{it.label}</span>
+                  </NavLink>
+                ))}
+              </div>
             ))}
           </nav>
 

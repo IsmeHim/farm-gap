@@ -6,6 +6,12 @@ import { authRequired } from '../middleware/auth.js';
 export const plotsRouter = Router();
 plotsRouter.use(authRequired);
 
+// Ensure soil_prep_date, seed_prep_date, seed_notes, seed_crop_id columns exist on plots
+pool.query('ALTER TABLE plots ADD COLUMN soil_prep_date DATE NULL AFTER soil_recipe').catch(() => {});
+pool.query('ALTER TABLE plots ADD COLUMN seed_prep_date DATE NULL AFTER soil_prep_date').catch(() => {});
+pool.query('ALTER TABLE plots ADD COLUMN seed_notes TEXT NULL AFTER seed_prep_date').catch(() => {});
+pool.query('ALTER TABLE plots ADD COLUMN seed_crop_id INT NULL AFTER seed_notes').catch(() => {});
+
 // รายการรอบการปลูกทั้งหมด (All Crop Cycles History)
 plotsRouter.get('/cycles', async (req, res) => {
   try {
@@ -159,6 +165,7 @@ plotsRouter.get('/', async (req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT p.*,
+              sc.name AS seed_crop_name,
               COALESCE(b.id, ab.id) AS batch_id,
               COALESCE(b.batch_code, ab.batch_code) AS batch_code,
               COALESCE(b.initial_count, ab.initial_count) AS initial_count,
@@ -168,6 +175,7 @@ plotsRouter.get('/', async (req, res) => {
               COALESCE(b.total_harvested_count, ab.total_harvested_count, 0) AS total_harvested_count,
               COALESCE(b.notes, ab.notes) AS batch_notes
        FROM plots p
+       LEFT JOIN crops sc ON sc.id = p.seed_crop_id
        LEFT JOIN planting_batches b ON b.id = p.current_batch_id
        LEFT JOIN (
          SELECT b1.*
@@ -307,6 +315,9 @@ plotsRouter.post('/:id/reset', async (req, res) => {
            planting_date = NULL,
            expected_harvest_date = NULL,
            current_batch_id = NULL,
+           seed_prep_date = NULL,
+           seed_notes = NULL,
+           seed_crop_id = NULL,
            updated_at = NOW()
        WHERE id = ? AND user_id = ?`,
       [req.params.id, req.user.id]
@@ -352,6 +363,10 @@ plotsRouter.use('/', crudRouter('plots', [
   'field_safety_status',
   'soil_notes',
   'soil_recipe',
+  'soil_prep_date',
+  'seed_prep_date',
+  'seed_notes',
+  'seed_crop_id',
   'dimension',
   'plot_number',
   'status',

@@ -54,7 +54,7 @@ export function crudRouter(table, fields) {
     if (!oldRows[0]) return res.status(404).json({ error: 'not found' });
 
     const sets = [...fields.map(f => `\`${f}\`=?`), '`updated_by`=?', '`updated_at`=CURRENT_TIMESTAMP'].join(',');
-    const vals = [...fields.map(f => req.body[f] ?? null), req.user.email, req.params.id, req.user.id];
+    const vals = [...fields.map(f => req.body[f] !== undefined ? req.body[f] : oldRows[0][f]), req.user.email, req.params.id, req.user.id];
     await pool.query(`UPDATE \`${table}\` SET ${sets} WHERE id=? AND user_id=?`, vals);
 
     const [newRows] = await pool.query(`SELECT * FROM \`${table}\` WHERE id=?`, [req.params.id]);

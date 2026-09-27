@@ -5,7 +5,6 @@ import Layout from './components/Layout.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Plots from './pages/Plots.jsx';
 import Crops from './pages/Crops.jsx';
-import CropDiary from './pages/CropDiary.jsx';
 import Water from './pages/Water.jsx';
 import Chemicals from './pages/Chemicals.jsx';
 import Pests from './pages/Pests.jsx';
@@ -45,7 +44,7 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="plots" element={<Plots />} />
         <Route path="crops" element={<Crops />} />
-        <Route path="diary" element={<CropDiary />} />
+        <Route path="diary" element={<Navigate to="/plots" replace />} />
         <Route path="water" element={<Water />} />
         <Route path="chemicals" element={<Chemicals />} />
         <Route path="pests" element={<Pests />} />
