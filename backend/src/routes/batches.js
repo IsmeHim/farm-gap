@@ -5,10 +5,12 @@ import { authRequired } from '../middleware/auth.js';
 export const batchesRouter = Router();
 batchesRouter.use(authRequired);
 
-// Ensure soil_recipe, soil_prep_date, seed_prep_date columns exist on planting_batches
+// Ensure soil_recipe, soil_prep_date, seed_prep_date columns exist on planting_batches and batch_id on crop_activities
 pool.query('ALTER TABLE planting_batches ADD COLUMN soil_recipe TEXT NULL AFTER notes').catch(() => {});
 pool.query('ALTER TABLE planting_batches ADD COLUMN soil_prep_date DATE NULL AFTER soil_recipe').catch(() => {});
 pool.query('ALTER TABLE planting_batches ADD COLUMN seed_prep_date DATE NULL AFTER notes').catch(() => {});
+pool.query('ALTER TABLE crop_activities ADD COLUMN batch_id INT NULL AFTER plot_id').catch(() => {});
+pool.query('ALTER TABLE planting_batches ADD COLUMN updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP').catch(() => {});
 
 // GET /api/batches - ดึงรายการรอบการปลูกทั้งหมด
 batchesRouter.get('/', async (req, res) => {
@@ -101,14 +103,40 @@ batchesRouter.post('/', async (req, res) => {
     if (!crops[0]) return res.status(404).json({ error: 'ไม่พบชนิดผักที่เลือก' });
     const crop = crops[0];
 
+    // 1. ตรวจสอบกิจกรรมเพาะกล้าล่าสุด หรือ seed_prep_date ของแปลง
+    const [preActivities] = await pool.query(
+      `SELECT MIN(activity_date) AS earliest_seed_date
+       FROM crop_activities
+       WHERE plot_id = ? AND user_id = ? AND stage IN ('seeding', 'nursery')`,
+      [plot_id, req.user.id]
+    );
+    const earliestSeedActDate = preActivities[0]?.earliest_seed_date;
+    const effectiveSeedPrepDate = seed_prep_date || plot.seed_prep_date || earliestSeedActDate || null;
+
     // สูตรดินสำหรับรอบนี้ (ถ้าไม่กรอกให้ใช้ของแปลงเดิม)
     const effectiveSoilRecipe = (soil_recipe || '').trim() || plot.soil_recipe || 'ดินผสม 8 กระบะปูน (กากยางพารา 4 กระบะ + แกลบดำ/แกลบดิบ 2 กระบะ + มูลวัวหมัก 2 กระบะ)';
     const effectiveSoilPrepDate = soil_prep_date || plot.soil_prep_date || null;
-    const effectiveSeedPrepDate = seed_prep_date || null;
 
-    // คำนวณวันคาดการณ์เก็บเกี่ยว
+    // คำนวณวันคาดการณ์เก็บเกี่ยว โดยคำนึงถึงวันที่เริ่มเพาะเมล็ดเป็นหลัก
+    const growthDays = Number(crop.growth_days || 30);
     const startDateObj = new Date(start_date);
-    const expectedDateObj = new Date(startDateObj.getTime() + (crop.growth_days || 30) * 24 * 60 * 60 * 1000);
+    let expectedDateObj;
+
+    if (effectiveSeedPrepDate) {
+      const seedDateObj = new Date(effectiveSeedPrepDate);
+      if (!isNaN(seedDateObj.getTime()) && seedDateObj <= startDateObj) {
+        // นับรอบอายุทั้งหมดตั้งแต่วันเพาะเมล็ด: วันเก็บเกี่ยว = วันเพาะเมล็ด + growthDays
+        expectedDateObj = new Date(seedDateObj.getTime() + growthDays * 24 * 60 * 60 * 1000);
+        // วันเก็บเกี่ยวไม่ควรเร็วกว่าวันที่ย้ายลงแปลง
+        if (expectedDateObj < startDateObj) {
+          expectedDateObj = startDateObj;
+        }
+      } else {
+        expectedDateObj = new Date(startDateObj.getTime() + growthDays * 24 * 60 * 60 * 1000);
+      }
+    } else {
+      expectedDateObj = new Date(startDateObj.getTime() + growthDays * 24 * 60 * 60 * 1000);
+    }
     const expected_harvest_date = expectedDateObj.toISOString().split('T')[0];
 
     // สร้าง Batch Code เช่น BATCH-260919-P1-123
@@ -124,7 +152,15 @@ batchesRouter.post('/', async (req, res) => {
     );
     const batchId = ins.insertId;
 
-    // 4. อัปเดตสถานะของแปลงเป็น 'growing' พร้อมปรับปรุง soil_recipe ล่าสุด
+    // 4. เชื่อมโยงกิจกรรมต้นกล้าที่เคยบันทึกไว้ในแปลงนี้ เข้ากับรอบการปลูกนี้ทันที
+    await pool.query(
+      `UPDATE crop_activities 
+       SET batch_id = ? 
+       WHERE plot_id = ? AND user_id = ? AND (batch_id IS NULL OR batch_id = 0)`,
+      [batchId, plot_id, req.user.id]
+    );
+
+    // 5. อัปเดตสถานะของแปลงเป็น 'growing' พร้อมปรับปรุง soil_recipe ล่าสุด และคง seed_prep_date ไว้
     await pool.query(
       `UPDATE plots 
        SET status = 'growing',
@@ -134,25 +170,25 @@ batchesRouter.post('/', async (req, res) => {
            current_batch_id = ?,
            soil_recipe = ?,
            soil_prep_date = COALESCE(?, soil_prep_date),
-           seed_prep_date = NULL,
-           seed_notes = NULL,
-           seed_crop_id = NULL,
+           seed_prep_date = ?,
+           seed_crop_id = ?,
            updated_at = NOW()
        WHERE id = ? AND user_id = ?`,
-      [crop.name, start_date, expected_harvest_date, batchId, effectiveSoilRecipe, effectiveSoilPrepDate, plot_id, req.user.id]
+      [crop.name, start_date, expected_harvest_date, batchId, effectiveSoilRecipe, effectiveSoilPrepDate, effectiveSeedPrepDate, crop_id, plot_id, req.user.id]
     );
 
-    // 5. บันทึกลง crop_activities ให้สอดคล้องกับ Timeline ต้นน้ำ GAP
+    // 6. บันทึกลง crop_activities ให้สอดคล้องกับ Timeline ต้นน้ำ GAP
     const countInfo = initCount ? ` จำนวน ${initCount.toLocaleString()} ${unit}` : '';
     await pool.query(
-      `INSERT INTO crop_activities (user_id, plot_id, activity_date, stage, title, details, materials_used, operator_name)
-       VALUES (?, ?, ?, 'planting', ?, ?, ?, ?)`,
+      `INSERT INTO crop_activities (user_id, plot_id, batch_id, activity_date, stage, title, details, materials_used, operator_name)
+       VALUES (?, ?, ?, ?, 'planting', ?, ?, ?, ?)`,
       [
         req.user.id,
         plot_id,
+        batchId,
         start_date,
-        `เริ่มรอบการปลูก ${crop.name}${countInfo} (${batch_code})`,
-        notes || `เริ่มลงแปลง/เพาะกล้า${countInfo} คาดเก็บเกี่ยว ${expected_harvest_date}`,
+        `ย้ายกล้าลงแปลง ${crop.name}${countInfo} (${batch_code})`,
+        notes || `ย้ายต้นกล้าลงแปลงปลูก${countInfo} คาดเก็บเกี่ยว ${expected_harvest_date}`,
         effectiveSoilRecipe ? `สูตรดิน: ${effectiveSoilRecipe}` : null,
         req.user.display_name || 'เจ้าของฟาร์ม'
       ]
@@ -165,6 +201,7 @@ batchesRouter.post('/', async (req, res) => {
       message: `เริ่มรอบการปลูก ${crop.name}${countInfo} ใน ${plot.name} เรียบร้อยแล้ว!`
     });
   } catch (err) {
+    console.error('Failed to start planting batch:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -211,22 +248,23 @@ batchesRouter.put('/:id', async (req, res) => {
       growthDays = Number(crops[0].growth_days) || 30;
     }
 
-    // 3. จัดการวันที่เริ่มปลูก และคำนวณวันคาดการณ์เก็บเกี่ยวใหม่
-    const effectiveStartDate = start_date || currentBatch.start_date;
-    let effectiveExpectedDate = expected_harvest_date;
-    if (!effectiveExpectedDate) {
-      const startDateObj = new Date(effectiveStartDate);
-      const expectedDateObj = new Date(startDateObj.getTime() + growthDays * 24 * 60 * 60 * 1000);
-      effectiveExpectedDate = !isNaN(expectedDateObj.getTime())
-        ? expectedDateObj.toISOString().split('T')[0]
-        : currentBatch.expected_harvest_date;
-    }
-
     const effectiveAutoWater = auto_water !== undefined ? (auto_water ? 1 : 0) : currentBatch.auto_water;
     const effectiveNotes = notes !== undefined ? notes : currentBatch.notes;
     const effectiveSoilRecipe = soil_recipe !== undefined ? soil_recipe : currentBatch.soil_recipe;
     const effectiveSoilPrepDate = soil_prep_date !== undefined ? (soil_prep_date || null) : currentBatch.soil_prep_date;
     const effectiveSeedPrepDate = seed_prep_date !== undefined ? (seed_prep_date || null) : currentBatch.seed_prep_date;
+
+    // 3. จัดการวันที่เริ่มปลูก และคำนวณวันคาดการณ์เก็บเกี่ยวใหม่
+    const effectiveStartDate = start_date || currentBatch.start_date;
+    let effectiveExpectedDate = expected_harvest_date;
+    if (!effectiveExpectedDate) {
+      const baseDate = effectiveSeedPrepDate || effectiveStartDate;
+      const baseDateObj = new Date(baseDate);
+      const expectedDateObj = new Date(baseDateObj.getTime() + growthDays * 24 * 60 * 60 * 1000);
+      effectiveExpectedDate = !isNaN(expectedDateObj.getTime())
+        ? expectedDateObj.toISOString().split('T')[0]
+        : currentBatch.expected_harvest_date;
+    }
 
     // คำนวณจำนวนต้นใหม่หากมีการส่งมา
     let effectiveInitCount = currentBatch.initial_count;

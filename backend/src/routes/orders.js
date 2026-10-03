@@ -5,6 +5,31 @@ import { notifyAdminNewOrder, notifyCustomerOrderStatus } from './line.js';
 
 export const ordersRouter = Router();
 
+// Ensure harvest_date and lot_code columns exist on order_items
+pool.query('ALTER TABLE order_items ADD COLUMN harvest_date DATE NULL AFTER subtotal').catch(() => {});
+pool.query('ALTER TABLE order_items ADD COLUMN lot_code VARCHAR(100) NULL AFTER harvest_date').catch(() => {});
+
+export const orderItemsSelectSql = `
+  SELECT oi.*, p.name AS product_name, p.unit, p.image_url,
+         COALESCE(oi.harvest_date, h.harvest_date) AS harvest_date,
+         COALESCE(oi.lot_code, h.lot_code) AS lot_code,
+         pl.name AS plot_name
+  FROM order_items oi 
+  JOIN products p ON oi.product_id = p.id 
+  LEFT JOIN (
+    SELECT h1.product_id, h1.harvest_date, h1.lot_code, h1.plot_id
+    FROM harvest_logs h1
+    INNER JOIN (
+      SELECT product_id, MAX(id) AS max_id
+      FROM harvest_logs
+      WHERE product_id IS NOT NULL
+      GROUP BY product_id
+    ) h2 ON h1.id = h2.max_id
+  ) h ON h.product_id = p.id
+  LEFT JOIN plots pl ON pl.id = h.plot_id
+  WHERE oi.order_id = ?
+`;
+
 // สร้างรหัสออเดอร์แบบสุ่มไม่ซ้ำ เช่น ORD-20260722-XXXX
 function generateOrderCode() {
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -87,11 +112,18 @@ ordersRouter.post('/', async (req, res) => {
 
     const orderId = orderResult.insertId;
 
-    // 4. บันทึกรายการผักลงในตาราง order_items
+    // 4. บันทึกรายการผักลงในตาราง order_items (พร้อมบันทึก harvest_date และ lot_code)
     for (const orderItem of orderItemsToInsert) {
+      const [hRows] = await connection.query(
+        'SELECT harvest_date, lot_code FROM harvest_logs WHERE product_id = ? ORDER BY id DESC LIMIT 1',
+        [orderItem.product_id]
+      );
+      const hDate = hRows[0]?.harvest_date || null;
+      const hLot = hRows[0]?.lot_code || null;
+
       await connection.query(
-        'INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal) VALUES (?, ?, ?, ?, ?)',
-        [orderId, orderItem.product_id, orderItem.quantity, orderItem.unit_price, orderItem.subtotal]
+        'INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal, harvest_date, lot_code) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [orderId, orderItem.product_id, orderItem.quantity, orderItem.unit_price, orderItem.subtotal, hDate, hLot]
       );
     }
 
@@ -99,13 +131,7 @@ ordersRouter.post('/', async (req, res) => {
 
     // ดึงออเดอร์ที่สร้างสำเร็จพร้อมรายการสินค้า
     const [newOrderRows] = await pool.query('SELECT * FROM orders WHERE id = ?', [orderId]);
-    const [newItemsRows] = await pool.query(
-      `SELECT oi.*, p.name AS product_name, p.unit, p.image_url 
-       FROM order_items oi 
-       JOIN products p ON oi.product_id = p.id 
-       WHERE oi.order_id = ?`,
-      [orderId]
-    );
+    const [newItemsRows] = await pool.query(orderItemsSelectSql, [orderId]);
 
     const fullOrder = {
       ...newOrderRows[0],
@@ -204,13 +230,7 @@ ordersRouter.get('/:id', async (req, res) => {
     );
     if (orderRows.length === 0) return res.status(404).json({ error: 'Order not found' });
 
-    const [itemRows] = await pool.query(
-      `SELECT oi.*, p.name AS product_name, p.unit, p.image_url 
-       FROM order_items oi 
-       JOIN products p ON oi.product_id = p.id 
-       WHERE oi.order_id = ?`,
-      [req.params.id]
-    );
+    const [itemRows] = await pool.query(orderItemsSelectSql, [req.params.id]);
 
     res.json({
       ...orderRows[0],
@@ -377,13 +397,7 @@ ordersRouter.post('/:id/slip', async (req, res) => {
     );
 
     if (updated[0]) {
-      const [itemsRows] = await pool.query(
-        `SELECT oi.*, p.name AS product_name, p.unit 
-         FROM order_items oi 
-         JOIN products p ON oi.product_id = p.id 
-         WHERE oi.order_id = ?`,
-        [req.params.id]
-      );
+      const [itemsRows] = await pool.query(orderItemsSelectSql, [req.params.id]);
       updated[0].items = itemsRows;
       notifyAdminNewOrder(updated[0], 'ORDER_COMPLETED').catch(e => console.error('notifyAdmin slip error:', e.message));
     }

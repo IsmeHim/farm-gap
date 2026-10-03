@@ -65,13 +65,27 @@ const formatThaiDate = (dateStr) => {
   return `${day}/${month}/${year}`;
 };
 
-const getDaysPlanted = (dateStr) => {
-  if (!dateStr) return 0;
+const parseDateMidnight = (dateStr) => {
+  if (!dateStr) return null;
+  const cleanStr = String(dateStr).split('T')[0];
+  const parts = cleanStr.split('-');
+  if (parts.length === 3) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    return new Date(y, m, d);
+  }
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return 0;
+  return isNaN(d.getTime()) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+};
+
+const getDaysPlanted = (dateStr) => {
+  const dZero = parseDateMidnight(dateStr);
+  if (!dZero) return 0;
   const now = new Date();
-  const diff = now.getTime() - d.getTime();
-  return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+  const nowZero = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = nowZero.getTime() - dZero.getTime();
+  return Math.max(0, Math.round(diff / (1000 * 60 * 60 * 24)));
 };
 
 export default function Dashboard() {
@@ -188,6 +202,14 @@ export default function Dashboard() {
   }, [plotsList, batchesList]);
 
   const growingPlotsCount = Math.max(0, activePlots.length - readyPlotsCount);
+  const seedingPlotsCount = useMemo(() => {
+    return plotsList.filter(p => {
+      const hasCrop = (p.status === 'growing' || p.status === 'harvest_ready' || p.status === 'active') &&
+        p.crop_name && p.crop_name !== '-';
+      if (hasCrop) return false;
+      return (p.activities && p.activities.length > 0) || Boolean(p.seed_prep_date) || Boolean(p.seed_crop_id);
+    }).length;
+  }, [plotsList]);
   const isAllWatered = activePlots.length > 0 && (todayWater.wateredPlotIds || []).length >= activePlots.length;
 
   const cards = [
@@ -202,10 +224,18 @@ export default function Dashboard() {
     {
       label: 'แปลงปลูก',
       value: `${activePlots.length}/${stats.plots} แปลง`,
-      detail: readyPlotsCount > 0 ? `พร้อมเก็บ ${readyPlotsCount} แปลง` : `กำลังปลูก ${growingPlotsCount} แปลง`,
+      detail: readyPlotsCount > 0
+        ? `พร้อมเก็บ ${readyPlotsCount} แปลง`
+        : seedingPlotsCount > 0
+        ? `เพาะกล้า ${seedingPlotsCount} แปลง`
+        : `กำลังปลูก ${growingPlotsCount} แปลง`,
       icon: Map,
       accent: 'bg-emerald-100 text-emerald-800',
-      badgeClass: readyPlotsCount > 0 ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200/60',
+      badgeClass: readyPlotsCount > 0
+        ? 'bg-amber-50 text-amber-800 border border-amber-200'
+        : seedingPlotsCount > 0
+        ? 'bg-teal-50 text-teal-800 border border-teal-200'
+        : 'bg-emerald-50 text-emerald-800 border border-emerald-200/60',
     },
     {
       label: 'ผลผลิตรวม',
@@ -429,25 +459,49 @@ export default function Dashboard() {
             );
 
             const startDate = batch?.start_date || plot.planting_date;
-            const expectedDate = batch?.expected_harvest_date || plot.expected_harvest_date;
-            const growthDays = batch?.growth_days || 30;
+            const growthDays = Number(batch?.growth_days || plot.growth_days || 30);
             const autoWater = batch?.auto_water !== undefined ? Boolean(batch.auto_water) : true;
 
             const daysPlanted = startDate ? getDaysPlanted(startDate) : 0;
-            const isReady = plot.status === 'harvest_ready' || batch?.status === 'harvest_ready' || (expectedDate && new Date(expectedDate) <= new Date());
-            const isGrowing = !isReady && hasCrop;
-            const isEmpty = !isReady && !isGrowing;
+            const batchSeedDate = batch?.seed_prep_date || plot?.batch_seed_prep_date || plot?.seed_prep_date || plot?.activities?.find(a => a.stage === 'seeding')?.activity_date;
+            const plantAge = batchSeedDate ? Math.max(daysPlanted, getDaysPlanted(batchSeedDate)) : daysPlanted;
 
-            const progress = isReady ? 100 : Math.min(100, Math.max(0, Math.round((daysPlanted / (growthDays || 30)) * 100)));
+            // วันคาดการณ์เก็บเกี่ยวที่แท้จริง
+            let effectiveExpectedDate = batch?.expected_harvest_date || plot?.expected_harvest_date;
+            if (batchSeedDate) {
+              const seedMidnight = parseDateMidnight(batchSeedDate);
+              if (seedMidnight) {
+                effectiveExpectedDate = new Date(seedMidnight.getTime() + growthDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+              }
+            }
+            const daysLeft = Math.max(0, growthDays - plantAge);
+
+            const isReady = plot.status === 'harvest_ready' || batch?.status === 'harvest_ready' || daysLeft === 0 || (effectiveExpectedDate && parseDateMidnight(effectiveExpectedDate) <= new Date());
+            const progress = isReady ? 100 : Math.min(100, Math.max(0, Math.round((plantAge / growthDays) * 100)));
+            const isPlotReady = isReady || progress >= 100;
+            const isGrowing = !isPlotReady && hasCrop;
+
+            // ตรวจสอบสถานะการเพาะเมล็ด / อนุบาลต้นกล้าก่อนลงแปลง
+            const hasActivities = plot.activities && plot.activities.length > 0;
+            const isNursery = !isPlotReady && !isGrowing && (hasActivities || Boolean(plot.seed_prep_date) || Boolean(plot.seed_crop_id));
+            const isEmpty = !isPlotReady && !isGrowing && !isNursery;
+
+            // ดึงข้อมูลกิจกรรมต้นกล้าล่าสุด
+            const latestAct = hasActivities ? plot.activities[plot.activities.length - 1] : null;
+            const seedDate = latestAct?.activity_date || plot.seed_prep_date;
+            const seedDays = seedDate ? getDaysPlanted(seedDate) : 0;
+            const isTrayNursery = latestAct?.stage === 'nursery';
 
             return (
               <div
                 key={plot.id}
                 className={`bg-white rounded-2xl border transition-all hover:shadow-md relative overflow-hidden flex flex-col justify-between p-5 ${
-                  isReady
+                  isPlotReady
                     ? 'border-2 border-amber-300 ring-2 ring-amber-400/20 shadow-xs'
                     : isGrowing
                     ? 'border border-emerald-200 shadow-xs'
+                    : isNursery
+                    ? 'border-2 border-teal-300/80 bg-teal-50/20 shadow-xs'
                     : 'border border-slate-200 bg-slate-50/40'
                 }`}
               >
@@ -462,20 +516,28 @@ export default function Dashboard() {
                     </div>
                     <span
                       className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
-                        isReady
+                        isPlotReady
                           ? 'bg-amber-100 text-amber-800 border border-amber-200'
                           : isGrowing
                           ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1'
+                          : isNursery
+                          ? 'bg-teal-50 text-teal-800 border border-teal-300 flex items-center gap-1 font-bold'
                           : 'bg-slate-100 text-slate-600'
                       }`}
                     >
-                      {isReady ? '🔔 พร้อมเก็บเกี่ยว' : isGrowing ? '🌱 กำลังปลูก' : 'ว่าง / พักแปลง'}
+                      {isPlotReady
+                        ? '🔔 พร้อมเก็บเกี่ยว'
+                        : isGrowing
+                        ? '🌱 กำลังปลูก'
+                        : isNursery
+                        ? (isTrayNursery ? '🪴 กำลังอนุบาลกล้า' : '🌱 กำลังเพาะเมล็ด')
+                        : 'ว่าง / พักแปลง'}
                     </span>
                   </div>
 
                   {/* Middle: Crop Info or Empty State */}
-                  {isGrowing || isReady ? (
-                    <div className="mt-3 bg-emerald-50/50 rounded-xl p-3.5 border border-emerald-100">
+                  {isGrowing || isPlotReady ? (
+                    <div className={`mt-3 rounded-xl p-3.5 border ${isPlotReady ? 'bg-amber-50/40 border-amber-200/80' : 'bg-emerald-50/50 border-emerald-100'}`}>
                       <div className="flex items-center justify-between">
                         <span className="text-sm sm:text-base font-bold text-emerald-950 truncate max-w-[190px]" title={cropName}>
                           {cropName}
@@ -483,16 +545,29 @@ export default function Dashboard() {
                         <span className="text-xs text-emerald-700 font-medium whitespace-nowrap">{cropCategory}</span>
                       </div>
                       <div className="mt-2 text-xs text-slate-600 space-y-1">
+                        {batchSeedDate && (
+                          <div className="flex justify-between items-center text-teal-900 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                            <span className="font-semibold">🌱 เริ่มเพาะเมล็ด:</span>
+                            <span className="font-bold text-teal-800">
+                              {formatThaiDate(batchSeedDate)} (อายุรวม {plantAge} วัน)
+                            </span>
+                          </div>
+                        )}
                         <div className="flex justify-between">
-                          <span>วันที่ปลูก:</span>
+                          <span>ย้ายลงแปลง:</span>
                           <span className="font-medium text-slate-800">
-                            {formatThaiDate(startDate)} ({daysPlanted} วัน)
+                            {formatThaiDate(startDate)} (ในแปลง {daysPlanted} วัน)
                           </span>
                         </div>
                         <div className="flex justify-between">
                           <span>คาดการณ์เก็บเกี่ยว:</span>
                           <span className="font-medium text-slate-800">
-                            {formatThaiDate(expectedDate)}
+                            {formatThaiDate(effectiveExpectedDate)}
+                            {daysLeft !== undefined && (
+                              <span className="text-emerald-600 font-normal ml-1">
+                                ({daysLeft > 0 ? `อีก ${daysLeft} วัน` : 'ครบกำหนด'})
+                              </span>
+                            )}
                           </span>
                         </div>
                       </div>
@@ -500,17 +575,65 @@ export default function Dashboard() {
                       {/* Progress Bar */}
                       <div className="mt-3">
                         <div className="flex justify-between text-[11px] text-slate-500 mb-1">
-                          <span>ความคืบหน้ารอบปลูก</span>
-                          <span className="font-bold text-emerald-700">
+                          <span>ความคืบหน้ารอบปลูก (อายุ {plantAge}/{growthDays} วัน)</span>
+                          <span className={`font-bold ${isPlotReady ? 'text-amber-800' : 'text-emerald-700'}`}>
                             {progress}%
                           </span>
                         </div>
                         <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
                           <div
-                            className="bg-emerald-500 h-full rounded-full transition-all"
+                            className={`h-full rounded-full transition-all ${isPlotReady ? 'bg-gradient-to-r from-amber-400 to-amber-500' : 'bg-emerald-500'}`}
                             style={{ width: `${progress}%` }}
                           />
                         </div>
+                      </div>
+                    </div>
+                  ) : isNursery ? (
+                    <div className="mt-3 rounded-xl p-3.5 border bg-teal-50/50 border-teal-200 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm sm:text-base font-bold text-teal-950 truncate max-w-[190px]">
+                          🌱 {plot.seed_crop_name || 'ผักเป้าหมาย'}
+                        </span>
+                        <span className="text-xs text-teal-800 font-bold bg-teal-100/90 px-2 py-0.5 rounded-full border border-teal-200 whitespace-nowrap">
+                          {isTrayNursery ? '🪴 อนุบาลกล้า' : '🌱 เพาะเมล็ด'}
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-600 space-y-1">
+                        {seedDate && (
+                          <div className="flex justify-between">
+                            <span>วันที่เริ่มเพาะ:</span>
+                            <span className="font-semibold text-slate-800">
+                              {formatThaiDate(seedDate)} ({seedDays} วัน)
+                            </span>
+                          </div>
+                        )}
+                        {latestAct ? (
+                          <div className="pt-1.5 border-t border-teal-100">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-teal-900 truncate">
+                                ล่าสุด: {latestAct.title}
+                              </span>
+                              {plot.activities?.length > 1 && (
+                                <span className="text-[10px] text-teal-700 bg-white px-1.5 py-0.5 rounded border border-teal-200 shrink-0 font-medium ml-1">
+                                  {plot.activities.length} กิจกรรม
+                                </span>
+                              )}
+                            </div>
+                            {latestAct.details && (
+                              <p className="text-[10.5px] text-slate-500 line-clamp-1 mt-0.5">
+                                {latestAct.details}
+                              </p>
+                            )}
+                          </div>
+                        ) : plot.seed_notes ? (
+                          <p className="text-[11px] text-slate-600 line-clamp-2 pt-1 border-t border-teal-100 leading-relaxed">
+                            {plot.seed_notes}
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-teal-700 pt-1 border-t border-teal-100">
+                            บันทึกการเตรียมเมล็ดพันธุ์เรียบร้อย
+                          </p>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -539,13 +662,26 @@ export default function Dashboard() {
                     <span>{plot.auto_water_enabled !== 0 ? 'รดน้ำออโต้' : 'เว้นน้ำ'}</span>
                   </button>
 
-                  {isGrowing || isReady ? (
+                  {isGrowing || isPlotReady ? (
                     <button
                       onClick={() => navigate(`/harvest?plot_id=${plot.id}&smart=true`)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
+                      className={`inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl text-xs transition-all active:scale-95 cursor-pointer ${
+                        isPlotReady
+                          ? 'bg-amber-400 hover:bg-amber-500 text-slate-950 font-black shadow-sm hover:shadow border border-amber-300'
+                          : 'bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs'
+                      }`}
                     >
-                      <ShoppingBag className="w-3.5 h-3.5" />
-                      <span>เก็บเกี่ยวเข้าคลัง</span>
+                      <ShoppingBag className={`w-3.5 h-3.5 ${isPlotReady ? 'text-slate-950' : 'text-white'}`} />
+                      <span>{isPlotReady ? '🧺 เก็บเกี่ยวเข้าคลัง' : 'เก็บเกี่ยวเข้าคลัง'}</span>
+                    </button>
+                  ) : isNursery ? (
+                    <button
+                      onClick={() => navigate(`/plots?plot_id=${plot.id}&start=true`)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold transition cursor-pointer shadow-xs active:scale-95"
+                      title="ย้ายต้นกล้าลงแปลงนี้ หรือเริ่มรอบปลูก"
+                    >
+                      <Sprout className="w-3.5 h-3.5 text-teal-200" />
+                      <span>ย้ายกล้าลงแปลง</span>
                     </button>
                   ) : (
                     <button

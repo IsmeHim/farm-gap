@@ -95,8 +95,9 @@ export default function ShippingLabel() {
   }
 
   const items = order.items || [];
+  const primaryLotCode = items.find(it => it.lot_code)?.lot_code || order.order_code || order.id;
   const traceQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-    `${window.location.origin}/trace/${order.order_code || order.id}`
+    `${window.location.origin}/trace/${primaryLotCode}`
   )}`;
 
   return (
@@ -319,8 +320,27 @@ export default function ShippingLabel() {
                         <td className="py-1 px-1 text-center align-middle">
                           <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 border-2 border-slate-400 rounded mx-auto" />
                         </td>
-                        <td className="py-1 px-1 font-bold text-slate-900 align-middle break-words">
-                          {it.product_name || it.name || 'ผักสด GAP'}
+                        <td className="py-1.5 px-1 font-bold text-slate-900 align-middle break-words">
+                          <div className="text-slate-900 leading-snug">{it.product_name || it.name || 'ผักสด GAP'}</div>
+                          {(it.harvest_date || it.lot_code) && (
+                            <div className="text-[10px] font-normal text-slate-600 flex flex-wrap items-center gap-1.5 mt-0.5">
+                              {it.harvest_date && (
+                                <span className="inline-flex items-center px-1.5 py-0.2 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded font-mono text-[9px] font-medium">
+                                  🧺 ตัดเมื่อ: {new Date(it.harvest_date).toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                </span>
+                              )}
+                              {it.lot_code && (
+                                <span className="text-slate-500 font-mono text-[9px]">
+                                  Lot: {it.lot_code}
+                                </span>
+                              )}
+                              {it.plot_name && (
+                                <span className="text-slate-400 text-[9px]">
+                                  ({it.plot_name})
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="py-1 px-1 text-center font-mono font-bold text-slate-800 align-middle whitespace-nowrap">
                           {it.quantity} {it.unit || 'กก.'}

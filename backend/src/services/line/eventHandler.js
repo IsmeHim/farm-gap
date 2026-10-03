@@ -5,7 +5,7 @@ import { pool } from '../../db.js';
 import { client, lineConfig, getChatSession, setChatSession, clearChatSession } from './config.js';
 import { askGemini, isCancelWithGemini } from './ai/gemini.js';
 import { getFarmContext, getOwnerContactInfo } from './ai/farmContext.js';
-import { extractOrderIntent } from './parsers/orderIntent.js';
+import { extractOrderIntent, getProductWeightInKg } from './parsers/orderIntent.js';
 import { parseSmartCustomerContact, detectPaymentMethodWithGemini } from './parsers/addressParser.js';
 import { replyWelcome } from './flex/welcomeCard.js';
 import { replyVegMenu } from './flex/vegMenuCard.js';
@@ -16,6 +16,8 @@ import { replyPaymentMethodSelection } from './flex/paymentSelectionCard.js';
 import { replyOrderStatus, replyOrderHistory } from './flex/orderStatusCard.js';
 import { replyRefundInstructions, replyOwnerContact } from './flex/refundCard.js';
 import { replyMissingContactInfo } from './flex/missingContactCard.js';
+import { replyCartSummary } from './flex/cartSummaryCard.js';
+import { replyProductQuantityCard } from './flex/productQtyCard.js';
 import { sendSmartOrderDraftConfirmation } from './flex/orderDraftCard.js';
 import { createChatOrder, cancelChatOrder } from './orderService.js';
 import { notifyAdminNewOrder } from './notifications/adminNotifier.js';
@@ -99,6 +101,32 @@ export function isMenuInquiry(rawText) {
   }
 
   return false;
+}
+
+// Helper: ส่งการ์ดเลือกจำนวนผักสุดน่ารักสำหรับใส่ตะกร้า (In-Chat Cart)
+export async function replyProductQuantitySelector(replyToken, userId, product) {
+  if (!product || product.stock_quantity <= 0) {
+    return client.replyMessage({
+      replyToken: replyToken,
+      messages: [
+        {
+          type: 'text',
+          text: `ขออภัยครับ ขณะนี้ผัก "${product?.name || 'รายการนี้'}" ในสต็อกหมดชั่วคราวครับ 🌱\nสามารถพิมพ์ "เมนูผัก" เพื่อเลือกดูรายการอื่นๆ ที่พร้อมส่งได้เลยครับ 😊`,
+        },
+      ],
+    });
+  }
+
+  // บันทึกสถานะ SELECTING_QTY เพื่อรองรับการพิมพ์ตัวเลข/จำนวนเองในแชท (เช่น "8", "8 ถุง", "6 กิโล")
+  try {
+    const session = await getChatSession(userId);
+    const draft = session.draft_data || {};
+    draft.selecting_product_id = product.id;
+    draft.selecting_product_name = product.name;
+    await setChatSession(userId, 'SELECTING_QTY', null, draft);
+  } catch (_) {}
+
+  return replyProductQuantityCard(replyToken, userId, product);
 }
 
 // Event parser and router
@@ -219,7 +247,141 @@ export async function handleEvent(event) {
     });
   }
 
-  // 3. Text Message Event
+  // 3. Postback Event (เช่น ลูกค้าแตะเลือกผัก, หยิบใส่ตะกร้า, เช็คเอาท์, ดูตะกร้า)
+  if (event.type === 'postback') {
+    const postbackData = event.postback?.data || '';
+    const params = new URLSearchParams(postbackData);
+    const action = params.get('action');
+
+    // 3.1 แตะเลือกผักจากเมนู -> แสดงปุ่ม Quick Reply ให้เลือกจำนวนเพื่อใส่ตะกร้า
+    if (action === 'select_product') {
+      const productId = params.get('product_id');
+      const [pRows] = await pool.query('SELECT * FROM products WHERE id = ?', [productId]);
+      const product = pRows[0];
+      return replyProductQuantitySelector(event.replyToken, userId, product);
+    }
+
+    // 3.2 หยิบผักและจำนวนที่เลือกลงตะกร้าสะสม (In-Chat Cart Session)
+    if (action === 'add_to_cart') {
+      const productId = params.get('product_id');
+      let addQty = 1;
+
+      if (params.get('qty_kg')) {
+        const kg = parseFloat(params.get('qty_kg')) || 1;
+        addQty = Math.max(1, Math.round(kg / 0.4)); // 4 ขีด = 0.4 กก.
+      } else {
+        addQty = parseInt(params.get('qty'), 10) || 1;
+      }
+
+      const [pRows] = await pool.query('SELECT * FROM products WHERE id = ?', [productId]);
+      const product = pRows[0];
+
+      if (!product || product.stock_quantity <= 0) {
+        return client.replyMessage({
+          replyToken: event.replyToken,
+          messages: [{ type: 'text', text: 'ขออภัยครับ ผักรายการนี้ในสต็อกหมดชั่วคราวครับ 🌱' }],
+        });
+      }
+
+      // ดึงตะกร้าเดิมจาก session
+      const session = await getChatSession(userId);
+      const draft = session.draft_data || {};
+      const cart = Array.isArray(draft.cart) ? draft.cart : [];
+
+      const existingIndex = cart.findIndex(it => Number(it.product_id) === Number(product.id));
+      if (existingIndex >= 0) {
+        cart[existingIndex].quantity += addQty;
+        cart[existingIndex].subtotal = cart[existingIndex].quantity * Number(product.price);
+      } else {
+        cart.push({
+          product_id: product.id,
+          name: product.name,
+          unit: product.unit || 'ถุง',
+          price: Number(product.price),
+          unit_price: Number(product.price),
+          quantity: addQty,
+          stock_quantity: Number(product.stock_quantity),
+          subtotal: addQty * Number(product.price),
+        });
+      }
+
+      draft.cart = cart;
+      await setChatSession(userId, 'SHOPPING_CART', null, draft);
+
+      return replyCartSummary(event.replyToken, cart, {
+        product_id: product.id,
+        name: product.name,
+        addedQty: addQty,
+      });
+    }
+
+    // 3.3 สรุปและยืนยันการสั่งซื้อผักทั้งหมดในตะกร้า (Checkout Cart)
+    if (action === 'checkout_cart') {
+      const session = await getChatSession(userId);
+      const cart = session.draft_data?.cart || [];
+
+      if (cart.length === 0) {
+        return client.replyMessage({
+          replyToken: event.replyToken,
+          messages: [
+            {
+              type: 'text',
+              text: '🧺 ขณะนี้ยังไม่มีสินค้าในตะกร้าของคุณครับ\n\n👉 พิมพ์ "เมนูผัก" เพื่อเลือกชมและแตะสั่งผักสดได้เลยครับ 🌱',
+            },
+          ],
+        });
+      }
+
+      const totalAmount = cart.reduce((sum, it) => sum + Number(it.subtotal || (it.quantity * it.price)), 0);
+      return sendSmartOrderDraftConfirmation(event.replyToken, userId, cart, totalAmount);
+    }
+
+    // 3.4 ล้างตะกร้าสินค้า
+    if (action === 'clear_cart') {
+      const session = await getChatSession(userId);
+      if (session.draft_data) {
+        session.draft_data.cart = [];
+        await setChatSession(userId, 'IDLE', null, session.draft_data);
+      }
+      return client.replyMessage({
+        replyToken: event.replyToken,
+        messages: [
+          {
+            type: 'text',
+            text: '🗑️ ล้างตะกร้าสินค้าเรียบร้อยแล้วครับ หากต้องการสั่งผักใหม่ พิมพ์ "เมนูผัก" เพื่อเลือกผักสดได้ตลอดเวลาครับ 🌱',
+          },
+        ],
+      });
+    }
+
+    // 3.5 ดูตะกร้าปัจจุบัน
+    if (action === 'view_cart') {
+      const session = await getChatSession(userId);
+      const cart = session.draft_data?.cart || [];
+
+      if (cart.length > 0) {
+        return replyCartSummary(event.replyToken, cart);
+      }
+      return client.replyMessage({
+        replyToken: event.replyToken,
+        messages: [
+          {
+            type: 'text',
+            text: '🧺 ขณะนี้ยังไม่มีสินค้าในตะกร้าของคุณครับ\n\n👉 สามารถพิมพ์ "เมนูผัก" เพื่อเลือกชมและแตะสั่งผักสดพร้อมส่งได้เลยครับ 🌱',
+          },
+        ],
+      });
+    }
+
+    // 3.6 แสดงเมนูผัก
+    if (action === 'show_menu') {
+      return replyVegMenu(event.replyToken, userId);
+    }
+
+    return;
+  }
+
+  // 4. Text Message Event
   if (event.type === 'message' && event.message.type === 'text') {
     const text = event.message.text.trim();
     const replyToken = event.replyToken;
@@ -654,7 +816,135 @@ export async function handleEvent(event) {
       }
     }
 
+    // STATE: SELECTING_QTY (Customer is choosing or typing custom quantity for a selected vegetable)
+    if (session.state === 'SELECTING_QTY' && session.draft_data?.selecting_product_id) {
+      // 1. ตรวจสอบว่าแตะปุ่ม "ระบุจำนวนเอง"
+      if (['ระบุจำนวนเอง', 'พิมพ์จำนวนเอง', 'พิมพ์เอง', 'กำหนดเอง', 'ระบุเอง'].includes(lowerTrimText)) {
+        const prodName = session.draft_data?.selecting_product_name || 'ผักสด';
+        return client.replyMessage({
+          replyToken,
+          messages: [
+            {
+              type: 'text',
+              text: `✏️ คุณลูกค้าพิมพ์บอกจำนวน "${prodName}" ที่ต้องการสั่งได้เลยครับ\n\n💡 ตัวอย่างการพิมพ์:\n• "8 ถุง"\n• "6 กิโล"\n• หรือพิมพ์แค่ตัวเลข เช่น "8" หรือ "10" ได้เลยครับ 🌱`,
+            },
+          ],
+        });
+      }
+
+      // 2. ตรวจสอบว่าพิมพ์ตัวเลขหรือจำนวนเข้ามา (เช่น "8", "8 ถุง", "6 กิโล", "6 โล", "5 kg", "เอา 8", "10")
+      const qtyMatch = text.match(/^(?:เอา|สั่ง|ขอ|เพิ่ม|รับ)?\s*([0-9]+(?:\.[0-9]+)?)\s*(กิโลกรัม|กิโล|กีโล|กก\.|ก\.ก\.|กก|โล|kg|ขีด|ถุง|แพ็ค|แพค|ห่อ|ชุด|อัน|ชิ้น)?$/i);
+      if (qtyMatch) {
+        const rawNum = parseFloat(qtyMatch[1]);
+        const rawUnit = qtyMatch[2] ? qtyMatch[2].toLowerCase() : 'ถุง';
+
+        if (rawNum > 0) {
+          const productId = session.draft_data.selecting_product_id;
+          const [prodRows] = await pool.query('SELECT * FROM products WHERE id = ?', [productId]);
+          const product = prodRows[0];
+
+          if (product && product.stock_quantity > 0) {
+            const weightPerBag = getProductWeightInKg(product.name);
+            const isKg = /^(กิโลกรัม|กิโล|กีโล|กก\.|ก\.ก\.|กก|โล|kg)$/i.test(rawUnit);
+            const isKheed = /^ขีด$/i.test(rawUnit);
+
+            let addBags = Math.round(rawNum);
+            let note = null;
+
+            if (isKg) {
+              addBags = Math.max(1, Math.round(rawNum / weightPerBag));
+              const kheedPerBag = Math.round(weightPerBag * 10);
+              note = `คำนวณจาก ${rawNum} กิโลกรัม = ${addBags} ถุง (ถุงละ ${kheedPerBag} ขีด)`;
+            } else if (isKheed) {
+              addBags = Math.max(1, Math.round(rawNum / (weightPerBag * 10)));
+              const kheedPerBag = Math.round(weightPerBag * 10);
+              note = `คำนวณจาก ${rawNum} ขีด = ${addBags} ถุง (ถุงละ ${kheedPerBag} ขีด)`;
+            }
+
+            const draft = session.draft_data || {};
+            const cart = Array.isArray(draft.cart) ? draft.cart : [];
+
+            const existingIndex = cart.findIndex(c => Number(c.product_id) === Number(product.id));
+            if (existingIndex >= 0) {
+              cart[existingIndex].quantity += addBags;
+              cart[existingIndex].subtotal = cart[existingIndex].quantity * Number(product.price);
+            } else {
+              cart.push({
+                product_id: product.id,
+                name: product.name,
+                unit: product.unit || 'ถุง',
+                price: Number(product.price),
+                unit_price: Number(product.price),
+                quantity: addBags,
+                stock_quantity: Number(product.stock_quantity),
+                subtotal: addBags * Number(product.price),
+                conversion_note: note,
+              });
+            }
+
+            draft.cart = cart;
+            draft.selecting_product_id = null;
+            draft.selecting_product_name = null;
+            await setChatSession(userId, 'SHOPPING_CART', null, draft);
+
+            return replyCartSummary(replyToken, cart, {
+              product_id: product.id,
+              name: product.name,
+              addedQty: addBags,
+            });
+          }
+        }
+      }
+    }
+
     // STATE: IDLE (Standard conversation or new order intent)
+    // ตรวจสอบคำสั่งเกี่ยวกับตะกร้าสินค้าในแชท (In-Chat Cart)
+    const isCartInquiry = ['ตะกร้า', 'ดูตะกร้า', 'เช็คตะกร้า', 'เปิดตะกร้า', 'cart', 'ตะกร้าสินค้า', 'ตะกร้าของฉัน'].some(k => lowerTrimText === k || lowerTrimText.startsWith(k));
+    if (isCartInquiry) {
+      const session = await getChatSession(userId);
+      const cart = session.draft_data?.cart || [];
+      if (cart.length > 0) {
+        return replyCartSummary(replyToken, cart);
+      }
+      return client.replyMessage({
+        replyToken,
+        messages: [
+          {
+            type: 'text',
+            text: '🧺 ขณะนี้ยังไม่มีสินค้าในตะกร้าของคุณครับ\n\n👉 สามารถพิมพ์ "เมนูผัก" เพื่อเลือกชมและแตะสั่งผักสดพร้อมส่งได้เลยครับ 🌱',
+          },
+        ],
+      });
+    }
+
+    const isClearCartInquiry = ['ล้างตะกร้า', 'เคลียร์ตะกร้า', 'ลบตะกร้า', 'clear cart'].some(k => lowerTrimText === k || lowerTrimText.startsWith(k));
+    if (isClearCartInquiry) {
+      const session = await getChatSession(userId);
+      if (session.draft_data) {
+        session.draft_data.cart = [];
+        await setChatSession(userId, 'IDLE', null, session.draft_data);
+      }
+      return client.replyMessage({
+        replyToken,
+        messages: [
+          {
+            type: 'text',
+            text: '🗑️ ล้างตะกร้าสินค้าเรียบร้อยแล้วครับ หากต้องการสั่งผักใหม่ พิมพ์ "เมนูผัก" เพื่อเลือกผักสดได้ตลอดเวลาครับ 🌱',
+          },
+        ],
+      });
+    }
+
+    const isCheckoutInquiry = ['สรุปยอด', 'คิดเงิน', 'เช็คบิล', 'สั่งซื้อเลย', 'ยืนยันตะกร้า', 'checkout'].some(k => lowerTrimText === k || lowerTrimText.startsWith(k));
+    if (isCheckoutInquiry) {
+      const session = await getChatSession(userId);
+      const cart = session.draft_data?.cart || [];
+      if (cart.length > 0) {
+        const totalAmount = cart.reduce((sum, it) => sum + Number(it.subtotal || (it.quantity * it.price)), 0);
+        return sendSmartOrderDraftConfirmation(replyToken, userId, cart, totalAmount);
+      }
+    }
+
     if (isMenuInquiry(text)) {
       return replyVegMenu(replyToken, userId);
     }
@@ -762,8 +1052,52 @@ export async function handleEvent(event) {
         });
       }
 
+      // กรณีที่ 1: ลูกค้าแตะปุ่มจากเมนูเดิม หรือพิมพ์ชื่อผักเข้ามา โดยไม่ได้ระบุจำนวน (เช่น "สั่ง ผักคอส สดกรอบ (Cos Lettuce 4 ขีด)" หรือ "สั่ง ผักคอส")
+      // ให้ส่งปุ่ม Quick Reply ถามจำนวนสำหรับผักรายการนั้นทันที เพื่อให้ลูกค้าเลือกจำนวนและใส่ตะกร้า (In-Chat Cart) ได้อย่างราบรื่น
+      if (orderIntent.items.length === 1 && !orderIntent.items[0].has_explicit_qty) {
+        const item = orderIntent.items[0];
+        const [prodRows] = await pool.query('SELECT * FROM products WHERE id = ?', [item.product_id]);
+        const product = prodRows[0];
+        if (product) {
+          return replyProductQuantitySelector(replyToken, userId, product);
+        }
+      }
+
+      // กรณีที่ 2: ลูกค้าระบุจำนวนผักชัดเจน (เช่น "สั่ง ผักคอส 2 ถุง", "เพิ่ม ผักบุ้ง 5 ถุง")
+      // ให้เพิ่มสินค้าเข้าสู่ตะกร้าสินค้าในแชท (In-Chat Cart) และส่งการ์ดสรุปตะกร้าสินค้าให้ทันที
       if (orderIntent.items && orderIntent.items.length > 0) {
-        return sendSmartOrderDraftConfirmation(replyToken, userId, orderIntent.items, orderIntent.totalAmount);
+        const session = await getChatSession(userId);
+        const draft = session.draft_data || {};
+        const cart = Array.isArray(draft.cart) ? draft.cart : [];
+
+        for (const it of orderIntent.items) {
+          const existingIndex = cart.findIndex(c => Number(c.product_id) === Number(it.product_id));
+          if (existingIndex >= 0) {
+            cart[existingIndex].quantity += it.quantity;
+            cart[existingIndex].subtotal = cart[existingIndex].quantity * Number(it.price);
+          } else {
+            cart.push({
+              product_id: it.product_id,
+              name: it.name,
+              unit: it.unit || 'ถุง',
+              price: Number(it.price),
+              unit_price: Number(it.price),
+              quantity: it.quantity,
+              stock_quantity: Number(it.stock_quantity),
+              subtotal: it.subtotal,
+            });
+          }
+        }
+
+        draft.cart = cart;
+        await setChatSession(userId, 'SHOPPING_CART', null, draft);
+
+        const lastAdded = orderIntent.items[orderIntent.items.length - 1];
+        return replyCartSummary(replyToken, cart, {
+          product_id: lastAdded.product_id,
+          name: lastAdded.name,
+          addedQty: lastAdded.quantity,
+        });
       }
     }
 

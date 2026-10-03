@@ -1,11 +1,25 @@
 import { pool } from '../../../db.js';
-import { client } from '../config.js';
+import { client, getChatSession } from '../config.js';
 
 // Reply veg menu Flex Message
 export async function replyVegMenu(replyToken, userId) {
   const [products] = await pool.query(
-    'SELECT name, price, unit, stock_quantity FROM products WHERE status = "available" AND stock_quantity > 0 ORDER BY id ASC LIMIT 8'
+    'SELECT id, name, price, unit, stock_quantity FROM products WHERE status = "available" AND stock_quantity > 0 ORDER BY id ASC LIMIT 8'
   );
+
+  // ตรวจสอบว่ามีสินค้าค้างอยู่ในตะกร้าแชทหรือไม่
+  let cart = [];
+  try {
+    if (userId) {
+      const session = await getChatSession(userId);
+      if (Array.isArray(session?.draft_data?.cart) && session.draft_data.cart.length > 0) {
+        cart = session.draft_data.cart;
+      }
+    }
+  } catch (_) {}
+
+  const cartTotalAmount = cart.reduce((sum, it) => sum + Number(it.subtotal || (it.quantity * it.price)), 0);
+  const cartTotalPacks = cart.reduce((sum, it) => sum + Number(it.quantity), 0);
 
   const productRows = [];
   if (products.length === 0) {
@@ -31,17 +45,23 @@ export async function replyVegMenu(replyToken, userId) {
       productRows.push({
         type: 'box',
         layout: 'horizontal',
-        spacing: 'md',
+        spacing: 'sm',
         alignItems: 'center',
         margin: 'sm',
+        action: {
+          type: 'postback',
+          label: 'สั่ง',
+          data: `action=select_product&product_id=${p.id}`,
+          displayText: `สั่ง ${p.name}`,
+        },
         contents: [
           // 1. Number Badge (1, 2, 3...)
           {
             type: 'box',
             layout: 'vertical',
-            width: '26px',
-            height: '26px',
-            cornerRadius: '13px',
+            width: '24px',
+            height: '24px',
+            cornerRadius: '12px',
             backgroundColor: '#e8f5e9',
             justifyContent: 'center',
             alignItems: 'center',
@@ -83,7 +103,7 @@ export async function replyVegMenu(replyToken, userId) {
           {
             type: 'box',
             layout: 'vertical',
-            flex: 3,
+            flex: 2,
             alignItems: 'flex-end',
             contents: [
               {
@@ -100,6 +120,27 @@ export async function replyVegMenu(replyToken, userId) {
                 size: 'xxs',
                 color: '#9e9e9e',
                 align: 'end',
+              },
+            ],
+          },
+          // 4. Quick Order Button (สั่ง 🛒)
+          {
+            type: 'box',
+            layout: 'vertical',
+            width: '52px',
+            height: '28px',
+            backgroundColor: '#1b5e20',
+            cornerRadius: '14px',
+            justifyContent: 'center',
+            alignItems: 'center',
+            contents: [
+              {
+                type: 'text',
+                text: 'สั่ง 🛒',
+                color: '#ffffff',
+                size: 'xxs',
+                weight: 'bold',
+                align: 'center',
               },
             ],
           },
@@ -173,7 +214,7 @@ export async function replyVegMenu(replyToken, userId) {
             contents: [
               {
                 type: 'text',
-                text: '💡 วิธีสั่งซื้อ: พิมพ์สั่งในแชทได้ทันทีครับ เช่น:\n• "สั่งกรีนโอ๊ค 2 ถุง"\n• "ขอสั่งฟิลเล่ย์ 3 ถุง"\n(สามารถสั่งเป็น "กิโล" ได้ ระบบจะคำนวณเป็นจำนวนถุงให้อัตโนมัติครับ เช่น 2 กิโล = 5 ถุง 🌱)',
+                text: '💡 วิธีสั่งซื้อง่ายๆ ในแชท:\n• แตะที่ผัก หรือปุ่ม [สั่ง 🛒] เพื่อเลือกจำนวนผักสะสมลงตะกร้า\n• แตะเลือกผักได้หลายชนิดตามต้องการ โดยไม่ต้องพิมพ์เอง\n• เมื่อเลือกครบแล้ว แตะ [✅ สรุปสั่งซื้อเลย] จบในแชทได้ทันที 🌱',
                 wrap: true,
                 size: 'xs',
                 color: '#2e7d32',
@@ -185,9 +226,32 @@ export async function replyVegMenu(replyToken, userId) {
       footer: {
         type: 'box',
         layout: 'vertical',
-        spacing: 'xs',
+        spacing: 'sm',
         paddingAll: 'md',
-        contents: [
+        contents: cart.length > 0 ? [
+          {
+            type: 'button',
+            action: {
+              type: 'postback',
+              label: `🧺 ดูตะกร้า/สั่งซื้อ (${cartTotalPacks} ถุง • ฿${cartTotalAmount.toLocaleString()})`,
+              data: 'action=view_cart',
+              displayText: 'ดูตะกร้าสินค้า',
+            },
+            style: 'primary',
+            color: '#16a34a',
+            height: 'sm',
+          },
+          {
+            type: 'button',
+            action: {
+              type: 'message',
+              label: '📦 เช็คสถานะออเดอร์ของฉัน',
+              text: 'เช็คสถานะ',
+            },
+            style: 'secondary',
+            height: 'sm',
+          },
+        ] : [
           {
             type: 'button',
             action: {

@@ -2,6 +2,9 @@ import { messagingApi } from '@line/bot-sdk';
 import crypto from 'crypto';
 import dns from 'dns';
 dns.setDefaultResultOrder('ipv4first');
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']);
+} catch (_) {}
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -21,24 +24,36 @@ export const lineConfig = {
   channelSecret: process.env.LINE_CHANNEL_SECRET || 'dummy_secret',
 };
 
-// Create LINE Messaging API Client with Auto-Retry on network/socket reset
+// Create LINE Messaging API Client with Auto-Retry on network/socket reset & DNS lookup
 export const client = new MessagingApiClient({
   channelAccessToken: lineConfig.channelAccessToken,
 });
 
-// Auto-retry wrapper against Undici idle keep-alive socket drops
+// Auto-retry wrapper against Undici idle keep-alive socket drops & DNS hiccup
 const _originalReplyMessage = client.replyMessage.bind(client);
 client.replyMessage = async function (params) {
-  try {
-    return await _originalReplyMessage(params);
-  } catch (err) {
-    if (err?.message?.includes('fetch failed')) {
-      console.warn('⚠️ LINE fetch failed (socket reset). Retrying once in 250ms...');
-      await new Promise(r => setTimeout(r, 250));
+  let lastError = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
       return await _originalReplyMessage(params);
+    } catch (err) {
+      lastError = err;
+      const isRetryable = (
+        err?.message?.includes('fetch failed') ||
+        err?.message?.includes('EAI_AGAIN') ||
+        err?.code === 'EAI_AGAIN' ||
+        err?.cause?.code === 'EAI_AGAIN' ||
+        err?.cause?.message?.includes('EAI_AGAIN')
+      );
+      if (isRetryable && attempt < 3) {
+        console.warn(`⚠️ LINE API attempt ${attempt} failed (${err.cause?.code || err.message}). Retrying in ${attempt * 300}ms...`);
+        await new Promise(r => setTimeout(r, attempt * 300));
+        continue;
+      }
+      throw err;
     }
-    throw err;
   }
+  throw lastError;
 };
 
 // Auto-initialize line_chat_sessions table

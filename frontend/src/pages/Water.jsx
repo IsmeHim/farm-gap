@@ -157,21 +157,6 @@ export default function Water() {
     }
   };
 
-  // 1-Click Climate Quick Toggle
-  const handleClimateToggle = async (newCondition) => {
-    try {
-      await api.post('/api/water/climate-toggle', { climate_condition: newCondition });
-      toast.success(
-        newCondition === 'rainy_humidity'
-          ? '🌧️ สภาพอากาศ: ฝนตก/ความชื้นสูง (ระบบจะปรับบันทึกเป็นการรดควบคุมความชื้น GAP)'
-          : '☀️ สภาพอากาศ: แดดจัดปกติ (รดน้ำรอบมาตรฐานสมบูรณ์ 100%)'
-      );
-      setReloadKey(k => k + 1);
-    } catch (err) {
-      toast.error('ไม่สามารถเปลี่ยนสภาพอากาศได้');
-    }
-  };
-
   // 1-Click Toggle Auto-Routine Mode
   const handleToggleAuto = async () => {
     setLoadingAction(true);
@@ -473,48 +458,6 @@ export default function Water() {
                 />
               </button>
             </div>
-          </div>
-        </div>
-
-        {/* Climate Condition Quick Toggle (Normal vs Rainy/High Humidity) */}
-        <div className="p-2.5 sm:p-3 bg-slate-50 border border-slate-200/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-slate-700">สภาพอากาศโรงเรือน:</span>
-            <div className="inline-flex rounded-xl p-0.5 sm:p-1 bg-white border border-slate-200 shadow-inner">
-              <button
-                type="button"
-                onClick={() => handleClimateToggle('normal')}
-                className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                  todayStatus.climate_condition === 'normal'
-                    ? 'bg-amber-100 text-amber-950 font-black shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <Sun className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                <span>☀️ แดดจัดปกติ</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleClimateToggle('rainy_humidity')}
-                className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                  todayStatus.climate_condition === 'rainy_humidity'
-                    ? 'bg-sky-500 text-white font-black shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <CloudRain className="w-3.5 h-3.5 shrink-0" />
-                <span>🌧️ ฝนตก / ชื้นสูง</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="text-[10px] sm:text-[11px] text-slate-500 flex items-center gap-1.5 font-medium">
-            <Info className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-            <span>
-              {todayStatus.climate_condition === 'rainy_humidity'
-                ? 'ฝนตก/ชื้นสูง: ดินระเหยช้า ระบบปรับเป็นการให้น้ำคุมความชื้นเพื่อป้องกันโรครา'
-                : 'แดดจัดปกติ: ระบบบันทึกการให้น้ำรอบมาตรฐาน GAP 100%'}
-            </span>
           </div>
         </div>
 

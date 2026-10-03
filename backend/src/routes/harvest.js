@@ -103,7 +103,10 @@ harvestRouter.post('/smart-record', async (req, res) => {
     }
     const destLabel = dest === 'cold_storage' ? '❄️ เข้าห้องเย็น/ตู้เย็นพักผัก' : '🛒 วางขายหน้าร้าน LINE';
     const partialLabel = isPartialHarvest ? ` (ทยอยเก็บเกี่ยว ${plantsHarvested > 0 ? `${plantsHarvested} ต้น` : ''})` : ' (ปิดรอบแปลง)';
-    const postHarvestText = postharvest_handling || notes || 'ตัดแต่งราก คัดแยกใบเหลือง ล้างด้วยน้ำสะอาด บรรจุถุงเจาะรูระบายอากาศ มาตรฐาน GAP';
+    let postHarvestText = postharvest_handling || notes || 'ตัดแต่งราก คัดแยกใบเหลือง ล้างด้วยน้ำสะอาด บรรจุถุงเจาะรูระบายอากาศ มาตรฐาน GAP';
+    if (dest === 'cold_storage' && !postHarvestText.includes('ห้องเย็น') && !postHarvestText.includes('ตู้เย็น')) {
+      postHarvestText = `❄️ เข้าห้องเย็น 4-8°C พักผักรอดัดเกรด/แพ็กถุง • ${postHarvestText}`;
+    }
     const logNotes = `เก็บเกี่ยว ${weightKg} กก.${partialLabel} บรรจุ ${bagType} ได้ ${totalPacks} ถุง ราคาถุงละ ${unitPrice} บาท (รวม ฿${totalRevenue.toLocaleString()}) ปลายทาง: ${destLabel} ช่องทาง: ${sale_channel}`;
 
     // บันทึกลงตาราง harvest_logs
@@ -141,25 +144,6 @@ harvestRouter.post('/smart-record', async (req, res) => {
         req.user.email,
       ]
     );
-
-    // ถ้าเลือกเก็บเข้าห้องเย็น/ตู้เย็นพักผัก ให้บันทึกลง storage_logs อัตโนมัติ
-    if (dest === 'cold_storage') {
-      await pool.query(
-        `INSERT INTO storage_logs (
-          user_id, harvest_id, log_date, storage_location,
-          storage_conditions, notes, worker_name, created_by, updated_by
-        ) VALUES (?, ?, ?, 'ห้องเย็น / ตู้เย็นพักผลผลิตฟาร์ม', 'อุณหภูมิควบคุม 4-8°C ความชื้นสัมพัทธ์ 90-95%', ?, ?, ?, ?)`,
-        [
-          req.user.id,
-          hResult.insertId,
-          hDate,
-          `พักผักรอแพ็ก/คัดเกรด: ${plot.crop_name} ${weightKg} กก. (${totalPacks} ถุง) ล็อต ${lotCode}`,
-          worker,
-          req.user.email,
-          req.user.email,
-        ]
-      ).catch(e => console.warn('Failed to insert storage_log:', e.message));
-    }
 
     // ซิงค์เข้าสต็อกหน้าร้าน products (หน่วยเป็น 'ถุง')
     let syncedProduct = null;

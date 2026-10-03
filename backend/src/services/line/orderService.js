@@ -77,11 +77,18 @@ export async function createChatOrder(userId, draftData, paymentMethod = 'transf
     );
     const orderId = orderResult.insertId;
 
-    // 5. Insert order items
+    // 5. Insert order items (พร้อมบันทึก harvest_date และ lot_code)
     for (const item of items) {
+      const [hRows] = await connection.query(
+        'SELECT harvest_date, lot_code FROM harvest_logs WHERE product_id = ? ORDER BY id DESC LIMIT 1',
+        [item.product_id]
+      );
+      const hDate = hRows[0]?.harvest_date || null;
+      const hLot = hRows[0]?.lot_code || null;
+
       await connection.query(
-        'INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal) VALUES (?, ?, ?, ?, ?)',
-        [orderId, item.product_id, item.quantity, item.price, item.subtotal]
+        'INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal, harvest_date, lot_code) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [orderId, item.product_id, item.quantity, item.price, item.subtotal, hDate, hLot]
       );
     }
 

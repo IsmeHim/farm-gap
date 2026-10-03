@@ -63,18 +63,23 @@ export function getProductKeywords(productName) {
 
   // 1. ดึงชื่อภาษาอังกฤษในวงเล็บ เช่น (Chinese Cabbage), (Green Oak) (ข้ามคำที่เป็นหน่วย/ตัวเลข เช่น 4 ขีด, ถุงใส)
   const enMatch = lower.match(/\(([^)]+)\)/);
-  const skipWords = ['ขีด', 'ถุง', 'ถุงใส', 'กรัม', 'กก', 'gap', 'kg', 'g', 'gm'];
+  const skipWords = ['ขีด', 'ถุง', 'ถุงใส', 'กรัม', 'กก', 'gap', 'kg', 'g', 'gm', 'กิโล', 'กิโลกรัม'];
   if (enMatch && enMatch[1]) {
-    const en = enMatch[1].trim();
-    if (!skipWords.includes(en.toLowerCase()) && !/^[0-9.\s]+$/.test(en)) {
+    // ลบตัวเลขและหน่วยน้ำหนัก/บรรจุภัณฑ์ออกจากในวงเล็บ เช่น "4 ขีด", "ถุงใส 4 ขีด"
+    let en = enMatch[1]
+      .replace(/\d+(?:\.\d+)?\s*(?:ขีด|ถุง|กรัม|กก|kg|g|gm|กิโลกรัม|กิโล)/gi, '')
+      .replace(/ถุงใส|ถุง|แพ็ค|แพค|gap/gi, '')
+      .trim();
+
+    if (en && !skipWords.includes(en.toLowerCase()) && !/^[0-9.\s]+$/.test(en)) {
       keywords.push(en);
+      en.split(/[\s-]+/).forEach(w => {
+        const cleanW = w.replace(/^[0-9.]+|[0-9.]+$/g, '').trim().toLowerCase();
+        if (cleanW.length >= 3 && !skipWords.includes(cleanW) && !/^\d+$/.test(cleanW) && cleanW !== 'lettuce') {
+          keywords.push(cleanW);
+        }
+      });
     }
-    en.split(/[\s-]+/).forEach(w => {
-      const cleanW = w.replace(/^[0-9.]+|[0-9.]+$/g, '').trim().toLowerCase();
-      if (cleanW.length >= 3 && !skipWords.includes(cleanW) && !/^\d+$/.test(cleanW)) {
-        keywords.push(cleanW);
-      }
-    });
   }
 
   // 2. ดึงชื่อภาษาไทยหลัก ตัดคำตกแต่ง (เช่น ปลอดสาร, สด, GAP, อินทรีย์, พรีเมียม ฯลฯ)
@@ -98,11 +103,11 @@ export function getProductKeywords(productName) {
   if (lower.includes('กวางตุ้ง') || lower.includes('choy') || lower.includes('กวางตุง')) {
     keywords.push('ผักกวางตุ้งสด', 'ผักกวางตุ้ง', 'ผัก กวางตุ้ง', 'กวางตุ้ง', 'กวาง ตุ้ง', 'กวางตุง', 'กวางตุ้งฮ่องเต้', 'choy sum', 'bok choy');
   }
-  if (lower.includes('กาดขาว') || lower.includes('cabbage')) {
-    keywords.push('ผักกาดขาวสด', 'ผักกาดขาว', 'ผัก กาดขาว', 'กาดขาว', 'cabbage', 'chinese cabbage');
+  if (lower.includes('กาดขาว') || (lower.includes('cabbage') && !lower.includes('salad'))) {
+    keywords.push('ผักกาดขาวสด', 'ผักกาดขาว', 'ผัก กาดขาว', 'กาดขาว', 'chinese cabbage');
   }
-  if (lower.includes('กาดหอม') || lower.includes('lettuce')) {
-    keywords.push('ผักกาดหอมสด', 'ผักกาดหอม', 'ผัก กาดหอม', 'กาดหอม', 'lettuce');
+  if (lower.includes('กาดหอม') && !lower.includes('คอส')) {
+    keywords.push('ผักกาดหอมสด', 'ผักกาดหอม', 'ผัก กาดหอม', 'กาดหอม');
   }
   if (lower.includes('ฟิล') || lower.includes('ฟิน') || lower.includes('frillice') || lower.includes('ไอซ์เบิร์ก')) {
     keywords.push('ผักฟิลเล่ย์', 'ผัก ฟิลเล่ย์', 'ฟิลเล่ย์', 'ฟิล เล่ย์', 'ฟินเล่ย์', 'ฟิน เล่ย์', 'ฟิลเลย์', 'ฟินเลย์', 'ฟิลเล', 'ไอซ์เบิร์ก', 'ไอซ์ เบิร์ก', 'ไอสเบิร์ก', 'ไอซ์เบิก', 'frillice');
@@ -173,14 +178,18 @@ export async function extractOrderIntent(text) {
     const escapedKw = escapeRx(kw);
     const weightPerBag = getProductWeightInKg(product?.name);
 
+    // ลบ packaging info เช่น (4 ขีด), (ถุงใส 4 ขีด), (Cos Lettuce 4 ขีด) ออกจาก segment ชั่วคราวสำหรับการคำนวณจำนวน
+    // เพื่อป้องกันไม่ให้ "4 ขีด" ในชื่อสินค้าถูกเข้าใจผิดว่าเป็นจำนวนที่ลูกค้าต้องการสั่ง
+    const cleanSegment = segment.replace(/\([^)]*(?:ขีด|กรัม|ถุง|กก|kg|g)[^)]*\)/gi, ' ');
+
     // 1. kw ... num unit
     let rx = new RegExp(escapedKw + '[^0-9]{0,25}?([0-9]+(?:\\.[0-9]+)?)\\s*(' + unitsRegexStr + ')?', 'i');
-    let match = segment.match(rx);
+    let match = cleanSegment.match(rx);
 
     // 2. num unit ... kw
     if (!match) {
       rx = new RegExp('([0-9]+(?:\\.[0-9]+)?)\\s*(' + unitsRegexStr + ')?[^0-9]{0,25}?' + escapedKw, 'i');
-      match = segment.match(rx);
+      match = cleanSegment.match(rx);
     }
 
     let rawQty = null;
@@ -192,7 +201,7 @@ export async function extractOrderIntent(text) {
     }
 
     if (!rawQty || isNaN(rawQty) || rawQty <= 0) {
-      return { qty: null, note: null };
+      return { qty: null, rawQty: null, rawUnit: null, note: null, has_explicit_qty: false };
     }
 
     const isKg = rawUnit && /^(กิโลกรัม|กิโล|กีโล|กก\.|ก\.ก\.|กก|โล|kg)$/i.test(rawUnit);
@@ -221,7 +230,7 @@ export async function extractOrderIntent(text) {
       finalQty = Math.round(rawQty);
     }
 
-    return { qty: finalQty, rawQty, rawUnit, note };
+    return { qty: finalQty, rawQty, rawUnit, note, has_explicit_qty: true };
   };
 
   // Helper สำหรับคำนวณจำนวนกรณีมี "อย่างละ ..."
@@ -270,12 +279,14 @@ export async function extractOrderIntent(text) {
         }
         if (!qty) qty = 1;
 
+        const hasExplicit = Boolean(parsed.has_explicit_qty || defaultEachRawQty);
         matchedItems.push({
           product_id: product.id,
           name: product.name,
           price: Number(product.price),
           unit: product.unit || 'ถุง',
           quantity: qty,
+          has_explicit_qty: hasExplicit,
           stock_quantity: Number(product.stock_quantity),
           subtotal: Number(product.price) * qty,
           conversion_note: note,
@@ -304,12 +315,14 @@ export async function extractOrderIntent(text) {
         }
         if (!qty) qty = 1;
 
+        const hasExplicit = Boolean(parsed.has_explicit_qty || defaultEachRawQty);
         matchedItems.push({
           product_id: product.id,
           name: product.name,
           price: Number(product.price),
           unit: product.unit || 'ถุง',
           quantity: qty,
+          has_explicit_qty: hasExplicit,
           stock_quantity: Number(product.stock_quantity),
           subtotal: Number(product.price) * qty,
           conversion_note: note,
@@ -320,12 +333,14 @@ export async function extractOrderIntent(text) {
   }
 
   // กรณีสั่งผักรายการเดียว และในประโยคมีตัวเลขโดดๆ (เช่น "ขอสั่งผักกาดขาว 10")
-  if (matchedItems.length === 1 && matchedItems[0].quantity === 1 && !matchedItems[0].conversion_note) {
-    const singleDigitMatch = lowerText.match(/\b([1-9][0-9]*)\b/);
+  const lowerTextWithoutPackaging = lowerText.replace(/\([^)]*(?:ขีด|กรัม|ถุง|กก|kg|g)[^)]*\)/gi, ' ');
+  if (matchedItems.length === 1 && !matchedItems[0].has_explicit_qty && !matchedItems[0].conversion_note) {
+    const singleDigitMatch = lowerTextWithoutPackaging.match(/\b([1-9][0-9]*)\b/);
     if (singleDigitMatch && singleDigitMatch[1]) {
       const parsedNum = parseInt(singleDigitMatch[1], 10);
       if (parsedNum > 0 && parsedNum <= 100) {
         matchedItems[0].quantity = parsedNum;
+        matchedItems[0].has_explicit_qty = true;
         matchedItems[0].subtotal = matchedItems[0].price * matchedItems[0].quantity;
       }
     }
@@ -345,6 +360,7 @@ export async function extractOrderIntent(text) {
             price: Number(prod.price),
             unit: prod.unit || 'กก.',
             quantity: qty,
+            has_explicit_qty: true,
             stock_quantity: Number(prod.stock_quantity),
             subtotal: Number(prod.price) * qty,
           });
@@ -396,6 +412,7 @@ export async function extractOrderIntent(text) {
   return {
     isOrder: true,
     items: matchedItems,
+    has_explicit_qty: matchedItems.some(it => it.has_explicit_qty),
     totalAmount,
   };
 }

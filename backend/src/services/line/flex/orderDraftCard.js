@@ -322,7 +322,7 @@ export async function replyReturningCustomerConfirmation(replyToken, items, tota
             borderWidth: '1px',
             cornerRadius: 'md',
             paddingAll: 'sm',
-            spacing: 'xxs',
+            spacing: 'xs',
             margin: 'sm',
             contents: [
               {
@@ -389,7 +389,7 @@ export async function replyReturningCustomerConfirmation(replyToken, items, tota
       messages: [flexCard],
     });
   } catch (err) {
-    console.error('Failed to reply returning customer confirmation:', err.message);
+    console.error('Failed to reply returning customer confirmation:', err.originalError?.response?.data || err.response?.data || err.message);
   }
 }
 

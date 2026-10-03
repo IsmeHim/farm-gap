@@ -22,28 +22,63 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 
-const getDaysPlanted = (dateStr) => {
-  if (!dateStr) return 0;
+const parseDateMidnight = (dateStr) => {
+  if (!dateStr) return null;
+  const cleanStr = String(dateStr).split('T')[0];
+  const parts = cleanStr.split('-');
+  if (parts.length === 3) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    return new Date(y, m, d);
+  }
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return 0;
+  return isNaN(d.getTime()) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+};
+
+const getDaysPlanted = (dateStr) => {
+  const dZero = parseDateMidnight(dateStr);
+  if (!dZero) return 0;
   const now = new Date();
-  const diff = now.getTime() - d.getTime();
-  return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+  const nowZero = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = nowZero.getTime() - dZero.getTime();
+  return Math.max(0, Math.round(diff / (1000 * 60 * 60 * 24)));
 };
 
 const getBatchProgressInfo = (batch, plot) => {
   const isHarvestReady = (plot && plot.status === 'harvest_ready') || (batch && batch.status === 'harvest_ready');
   const isHarvested = (plot && plot.status === 'harvested') || (batch && batch.status === 'harvested');
   const startDate = batch?.start_date || plot?.planting_date;
-  const expectedDate = batch?.expected_harvest_date || plot?.expected_harvest_date;
-  const growthDays = Number(batch?.growth_days || 30);
+  const growthDays = Number(batch?.growth_days || plot?.growth_days || 30);
 
-  const daysPlanted = startDate ? getDaysPlanted(startDate) : 0;
+  // ตรวจสอบวันที่เริ่มเพาะเมล็ด / กิจกรรมต้นกล้า
+  const seedDate = batch?.seed_prep_date || plot?.batch_seed_prep_date || plot?.seed_prep_date || plot?.activities?.find(a => a.stage === 'seeding')?.activity_date;
+
+  const daysInBed = startDate ? getDaysPlanted(startDate) : 0;
+  const plantAge = seedDate ? Math.max(daysInBed, getDaysPlanted(seedDate)) : daysInBed;
+  const nurseryDays = Math.max(0, plantAge - daysInBed);
+
+  // คำนวณวันคาดการณ์เก็บเกี่ยวที่แท้จริง: ถ้ามี seedDate ให้คำนวณจาก seedDate + growthDays
+  let effectiveExpectedDate = batch?.expected_harvest_date || plot?.expected_harvest_date;
+  if (seedDate) {
+    const seedMidnight = parseDateMidnight(seedDate);
+    if (seedMidnight) {
+      const calcExp = new Date(seedMidnight.getTime() + growthDays * 24 * 60 * 60 * 1000);
+      effectiveExpectedDate = calcExp.toISOString().split('T')[0];
+    }
+  }
+
+  // คำนวณวันคงเหลือ
+  const daysLeft = Math.max(0, growthDays - plantAge);
 
   if (isHarvested) {
     return {
       percent: 100,
-      daysPlanted,
+      daysPlanted: daysInBed,
+      plantAge,
+      seedDate,
+      effectiveExpectedDate,
+      nurseryDays,
       growthDays,
       daysLeft: 0,
       statusLabel: 'เก็บเกี่ยวแล้ว',
@@ -51,10 +86,14 @@ const getBatchProgressInfo = (batch, plot) => {
     };
   }
 
-  if (isHarvestReady || (expectedDate && new Date(expectedDate) <= new Date())) {
+  if (isHarvestReady || daysLeft === 0 || (effectiveExpectedDate && parseDateMidnight(effectiveExpectedDate) <= new Date())) {
     return {
       percent: 100,
-      daysPlanted,
+      daysPlanted: daysInBed,
+      plantAge: Math.max(plantAge, growthDays),
+      seedDate,
+      effectiveExpectedDate,
+      nurseryDays,
       growthDays,
       daysLeft: 0,
       statusLabel: 'พร้อมเก็บเกี่ยว',
@@ -62,15 +101,18 @@ const getBatchProgressInfo = (batch, plot) => {
     };
   }
 
-  const percent = Math.min(100, Math.max(0, Math.round((daysPlanted / growthDays) * 100)));
-  const daysLeft = Math.max(0, growthDays - daysPlanted);
+  const percent = Math.min(100, Math.max(0, Math.round((plantAge / growthDays) * 100)));
 
   return {
     percent,
-    daysPlanted,
+    daysPlanted: daysInBed,
+    plantAge,
+    seedDate,
+    effectiveExpectedDate,
+    nurseryDays,
     growthDays,
     daysLeft,
-    statusLabel: daysLeft === 0 ? 'ครบกำหนด' : `เหลืออีก ~${daysLeft} วัน`,
+    statusLabel: `เหลืออีก ~${daysLeft} วัน`,
     color: 'emerald',
   };
 };
@@ -143,16 +185,31 @@ export default function Plots() {
   });
   const [savingSoil, setSavingSoil] = useState(false);
 
-  // State for Pre-recording Seed Prep / Germination (ก่อนลงปลูก / แช่เมล็ด / เพาะกล้าล่วงหน้า)
-  const [showSeedModal, setShowSeedModal] = useState(false);
-  const [seedForm, setSeedForm] = useState({
+  // State for Nursery & Pre-planting Activities (บันทึกกิจกรรมต้นกล้า / เพาะเมล็ด / ย้ายถาด)
+  const [showNurseryModal, setShowNurseryModal] = useState(false);
+  const [nurseryForm, setNurseryForm] = useState({
+    activity_id: null,
     plot_id: null,
     plot_name: '',
     seed_crop_id: '',
-    seed_prep_date: new Date().toISOString().split('T')[0],
-    seed_notes: ''
+    activity_date: new Date().toISOString().split('T')[0],
+    stage: 'seeding',
+    title: '',
+    details: '',
+    materials_used: '',
+    operator_name: 'เจ้าของฟาร์ม'
   });
-  const [savingSeed, setSavingSeed] = useState(false);
+  const [savingNursery, setSavingNursery] = useState(false);
+
+  // State for Crop Timeline Drawer / Modal
+  const [showTimelineModal, setShowTimelineModal] = useState(false);
+  const [timelinePlotId, setTimelinePlotId] = useState(null);
+
+  const timelinePlot = plots.find(p => p.id === timelinePlotId) || null;
+  const openTimelineForPlot = (plot) => {
+    setTimelinePlotId(plot.id);
+    setShowTimelineModal(true);
+  };
 
   const fetchData = async () => {
     try {
@@ -244,7 +301,7 @@ export default function Plots() {
       seed_prep_date: found?.seed_prep_date
         ? new Date(found.seed_prep_date).toISOString().split('T')[0]
         : '',
-      notes: found?.seed_notes || chosenCrop?.notes || '',
+      notes: '',
       soil_recipe: found?.soil_recipe || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)'
     }));
     setShowNewModal(true);
@@ -387,12 +444,14 @@ export default function Plots() {
   };
 
   const handleOpenSoilModal = (plot) => {
+    const currentBatch = batches.find(b => b.plot_id === plot.id && (b.status === 'growing' || b.status === 'harvest_ready'));
+    const initialSoilDate = plot.soil_prep_date || currentBatch?.soil_prep_date;
     setSoilForm({
       plot_id: plot.id,
       plot_name: plot.name,
-      soil_recipe: plot.soil_recipe || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)',
-      soil_prep_date: plot.soil_prep_date
-        ? new Date(plot.soil_prep_date).toISOString().split('T')[0]
+      soil_recipe: plot.soil_recipe || currentBatch?.soil_recipe || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)',
+      soil_prep_date: initialSoilDate
+        ? new Date(initialSoilDate).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0]
     });
     setShowSoilModal(true);
@@ -418,60 +477,112 @@ export default function Plots() {
     }
   };
 
-  const handleOpenSeedModal = (plot) => {
-    const defaultCropId = plot.seed_crop_id || (crops[0]?.id || '');
+  const handleOpenNurseryModal = (plot) => {
+    const isGrowing = plot.status === 'growing' || plot.status === 'harvest_ready';
+    const defaultCropId = plot.seed_crop_id || (crops.find(c => c.name === plot.crop_name)?.id) || (crops[0]?.id || '');
     const matchedCrop = crops.find(c => String(c.id) === String(defaultCropId));
-    setSeedForm({
+    const cropName = matchedCrop ? matchedCrop.name : (plot.crop_name && plot.crop_name !== '-' ? plot.crop_name : 'ผัก');
+
+    const defaultStage = isGrowing ? 'maintenance' : 'seeding';
+    const defaultTitle = isGrowing
+      ? `ดูแลแปลง/พ่นชีวภัณฑ์ (${cropName})`
+      : `เพาะเมล็ดพันธุ์${cropName}`;
+    const defaultDetails = isGrowing
+      ? 'ตรวจแปลง ฉีดพ่นน้ำหมักชีวภาพ/สารชีวภัณฑ์ ป้องกันศัตรูพืช และรดน้ำตามรอบมาตรฐาน GAP'
+      : (matchedCrop?.notes || 'เพาะเมล็ดในกล่องพลาสติกที่มีฝาปิดมิดชิด วางกระดาษทิชชูในกล่องพลาสติก พ่นน้ำให้ทั่วกระดาษทิชชูหมาดๆ โรยเมล็ดบางๆ ปิดทับด้วยกระดาษทิชชูแล้วพ่นน้ำให้หมาดๆ เสร็จแล้วปิดฝากล่อง');
+    const defaultMaterials = isGrowing
+      ? 'สารชีวภัณฑ์, น้ำหมักชีวภาพ, ถังพ่นยา'
+      : 'กล่องพลาสติก, กระดาษทิชชู, ฟ็อกกี้พ่นน้ำ';
+
+    setNurseryForm({
+      activity_id: null,
       plot_id: plot.id,
       plot_name: plot.name,
       seed_crop_id: defaultCropId,
-      seed_prep_date: plot.seed_prep_date
-        ? new Date(plot.seed_prep_date).toISOString().split('T')[0]
-        : new Date().toISOString().split('T')[0],
-      seed_notes: plot.seed_notes || matchedCrop?.notes || ''
+      activity_date: new Date().toISOString().split('T')[0],
+      stage: defaultStage,
+      title: defaultTitle,
+      details: defaultDetails,
+      materials_used: defaultMaterials,
+      operator_name: 'เจ้าของฟาร์ม'
     });
-    setShowSeedModal(true);
+    setShowNurseryModal(true);
   };
 
-  const handleSaveSeed = async (e) => {
+  const handleOpenEditNurseryModal = (activity, plot) => {
+    setNurseryForm({
+      activity_id: activity.id,
+      plot_id: plot.id,
+      plot_name: plot.name,
+      seed_crop_id: plot.seed_crop_id || (crops.find(c => c.name === plot.crop_name)?.id) || '',
+      activity_date: activity.activity_date
+        ? new Date(activity.activity_date).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
+      stage: activity.stage || 'seeding',
+      title: activity.title || '',
+      details: activity.details || '',
+      materials_used: activity.materials_used || '',
+      operator_name: activity.operator_name || 'เจ้าของฟาร์ม'
+    });
+    setShowNurseryModal(true);
+  };
+
+  const handleSaveNurseryActivity = async (e) => {
     e.preventDefault();
-    if (!seedForm.plot_id) return;
+    if (!nurseryForm.plot_id) return;
+    if (!nurseryForm.title || !nurseryForm.activity_date) {
+      return toast.error('กรุณาระบุวันที่และชื่อกิจกรรม');
+    }
+
     try {
-      setSavingSeed(true);
-      await api.put(`/api/plots/${seedForm.plot_id}`, {
-        seed_prep_date: seedForm.seed_prep_date || null,
-        seed_crop_id: seedForm.seed_crop_id ? Number(seedForm.seed_crop_id) : null,
-        seed_notes: seedForm.seed_notes || null
-      });
-      toast.success(`บันทึกการเพาะ/แช่เมล็ดของ "${seedForm.plot_name}" เรียบร้อยแล้ว!`);
-      setShowSeedModal(false);
+      setSavingNursery(true);
+      if (nurseryForm.activity_id) {
+        // Edit existing activity
+        await api.put(`/api/plots/activities/${nurseryForm.activity_id}`, {
+          activity_date: nurseryForm.activity_date,
+          stage: nurseryForm.stage,
+          title: nurseryForm.title,
+          details: nurseryForm.details,
+          materials_used: nurseryForm.materials_used,
+          operator_name: nurseryForm.operator_name
+        });
+        toast.success(`แก้ไขกิจกรรม "${nurseryForm.title}" เรียบร้อยแล้ว!`);
+      } else {
+        // Create new activity
+        await api.post(`/api/plots/${nurseryForm.plot_id}/activities`, {
+          seed_crop_id: nurseryForm.seed_crop_id ? Number(nurseryForm.seed_crop_id) : null,
+          activity_date: nurseryForm.activity_date,
+          stage: nurseryForm.stage,
+          title: nurseryForm.title,
+          details: nurseryForm.details,
+          materials_used: nurseryForm.materials_used,
+          operator_name: nurseryForm.operator_name
+        });
+        toast.success(`บันทึกกิจกรรม "${nurseryForm.title}" เรียบร้อยแล้ว!`);
+      }
+      setShowNurseryModal(false);
       fetchData();
     } catch (err) {
-      console.error('Failed to update seed prep:', err);
-      toast.error(err.response?.data?.error || 'เกิดข้อผิดพลาดในการบันทึกการเพาะเมล็ด');
+      console.error('Failed to save nursery activity:', err);
+      toast.error(err.response?.data?.error || 'เกิดข้อผิดพลาดในการบันทึกกิจกรรม');
     } finally {
-      setSavingSeed(false);
+      setSavingNursery(false);
     }
   };
 
-  const handleClearSeed = async () => {
-    if (!seedForm.plot_id) return;
-    if (!window.confirm(`ต้องการล้างข้อมูลการเพาะเมล็ดของ "${seedForm.plot_name}" หรือไม่?`)) return;
+  const handleDeleteNurseryActivity = async (activityId, activityTitle) => {
+    if (!window.confirm(`ต้องการลบกิจกรรม "${activityTitle || 'นี้'}" หรือไม่?`)) return;
     try {
-      setSavingSeed(true);
-      await api.put(`/api/plots/${seedForm.plot_id}`, {
-        seed_prep_date: null,
-        seed_crop_id: null,
-        seed_notes: null
-      });
-      toast.success(`ล้างข้อมูลการเพาะเมล็ดของ "${seedForm.plot_name}" เรียบร้อยแล้ว`);
-      setShowSeedModal(false);
+      setSavingNursery(true);
+      await api.delete(`/api/plots/activities/${activityId}`);
+      toast.success('ลบกิจกรรมเรียบร้อยแล้ว');
+      setShowNurseryModal(false);
       fetchData();
     } catch (err) {
-      console.error('Failed to clear seed prep:', err);
-      toast.error(err.response?.data?.error || 'เกิดข้อผิดพลาดในการล้างข้อมูล');
+      console.error('Failed to delete nursery activity:', err);
+      toast.error(err.response?.data?.error || 'เกิดข้อผิดพลาดในการลบกิจกรรม');
     } finally {
-      setSavingSeed(false);
+      setSavingNursery(false);
     }
   };
 
@@ -625,9 +736,9 @@ export default function Plots() {
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-bold text-[11px] text-amber-900 flex items-center gap-1 flex-wrap">
                         <span>สูตรดิน (GAP ข้อ 2)</span>
-                        {(currentBatch?.soil_prep_date || p.soil_prep_date) && (
+                        {(p.soil_prep_date || currentBatch?.soil_prep_date) && (
                           <span className="font-medium text-amber-800 text-[10px]">
-                            • เตรียมเมื่อ {format(new Date(currentBatch?.soil_prep_date || p.soil_prep_date), 'dd/MM/yyyy')}
+                            • เตรียมเมื่อ {format(new Date(p.soil_prep_date || currentBatch?.soil_prep_date), 'dd/MM/yyyy')}
                           </span>
                         )}
                       </span>
@@ -642,7 +753,7 @@ export default function Plots() {
                       </button>
                     </div>
                     <p className="text-[11px] leading-relaxed text-amber-900 font-medium whitespace-pre-line line-clamp-3 hover:line-clamp-none">
-                      {currentBatch?.soil_recipe || p.soil_recipe || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)'}
+                      {p.soil_recipe || currentBatch?.soil_recipe || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)'}
                     </p>
                   </div>
 
@@ -662,14 +773,27 @@ export default function Plots() {
                         </span>
                       </div>
                       <p className="text-base font-black text-slate-900 mt-1">{p.crop_name}</p>
-                      <div className="mt-2 text-xs text-slate-600 font-medium space-y-1">
+                      <div className="mt-2 text-xs text-slate-600 font-medium space-y-1.5">
+                        {progressInfo?.seedDate && (
+                          <div className="flex justify-between items-center text-teal-950 bg-teal-50/70 px-2 py-1 rounded-lg border border-teal-200/80">
+                            <span className="flex items-center gap-1 font-bold text-[11px]">
+                              🌱 เริ่มเพาะเมล็ด:
+                            </span>
+                            <span className="font-bold text-teal-900">
+                              {format(new Date(progressInfo.seedDate), 'dd/MM/yyyy')}
+                              <span className="text-teal-700 font-normal ml-1">
+                                (อายุรวม {progressInfo.plantAge} วัน)
+                              </span>
+                            </span>
+                          </div>
+                        )}
                         <div className="flex justify-between items-center">
-                          <span>เริ่มปลูก:</span>
+                          <span>ย้ายลงแปลง:</span>
                           <span className="font-semibold text-slate-800">
                             {p.planting_date ? format(new Date(p.planting_date), 'dd/MM/yyyy') : '-'}
                             {progressInfo?.daysPlanted !== undefined && (
                               <span className="text-slate-500 font-normal ml-1">
-                                (ปลูกแล้ว {progressInfo.daysPlanted} วัน)
+                                (ในแปลง {progressInfo.daysPlanted} วัน)
                               </span>
                             )}
                           </span>
@@ -677,7 +801,14 @@ export default function Plots() {
                         <div className="flex justify-between items-center">
                           <span>คาดการณ์เก็บเกี่ยว:</span>
                           <span className="font-semibold text-emerald-800">
-                            {p.expected_harvest_date ? format(new Date(p.expected_harvest_date), 'dd/MM/yyyy') : '-'}
+                            {progressInfo?.effectiveExpectedDate
+                              ? format(parseDateMidnight(progressInfo.effectiveExpectedDate), 'dd/MM/yyyy')
+                              : (p.expected_harvest_date ? format(new Date(p.expected_harvest_date), 'dd/MM/yyyy') : '-')}
+                            {progressInfo?.daysLeft !== undefined && (
+                              <span className="text-emerald-600 font-normal ml-1">
+                                ({progressInfo.daysLeft > 0 ? `อีก ${progressInfo.daysLeft} วัน` : 'ครบกำหนดแล้ว'})
+                              </span>
+                            )}
                           </span>
                         </div>
                         {currentBatch?.notes && (
@@ -753,7 +884,14 @@ export default function Plots() {
                           <div className="flex items-center justify-between text-[11px] mb-1.5">
                             <span className="font-bold text-slate-700 flex items-center gap-1">
                               <Clock className="w-3.5 h-3.5 text-emerald-700" />
-                              <span>ความคืบหน้ารอบปลูก</span>
+                              <span>
+                                ความคืบหน้ารอบปลูก
+                                {progressInfo.plantAge !== undefined && progressInfo.growthDays ? (
+                                  <span className="text-slate-500 font-normal ml-1">
+                                    (อายุ {progressInfo.plantAge}/{progressInfo.growthDays} วัน)
+                                  </span>
+                                ) : null}
+                              </span>
                             </span>
                             <span className={`font-black ${isHarvestReady ? 'text-amber-800' : 'text-emerald-800'}`}>
                               {progressInfo.percent}% {isHarvestReady ? '🔔 พร้อมเก็บเกี่ยว' : `(${progressInfo.statusLabel})`}
@@ -771,6 +909,48 @@ export default function Plots() {
                           </div>
                         </div>
                       )}
+
+                      {/* Compact Activity Summary Bar (ไม่ยืดการ์ด รักษาความสูงแปลงเท่ากันทุกแคร่) */}
+                      <div className="mt-3 pt-2.5 border-t border-slate-200/70 flex items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="p-1 rounded-md bg-emerald-100/90 text-emerald-800 shrink-0">
+                            <Sprout className="w-3.5 h-3.5" />
+                          </span>
+                          <div className="truncate">
+                            <span className="font-bold text-slate-800 text-[11.5px]">
+                              กิจกรรม ({p.activities?.length || 0})
+                            </span>
+                            {p.activities && p.activities.length > 0 && (
+                              <span className="text-[10.5px] text-slate-500 font-medium ml-1 hidden sm:inline truncate">
+                                • {p.activities[p.activities.length - 1]?.title}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {p.activities && p.activities.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => openTimelineForPlot(p)}
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700 hover:text-slate-950 bg-white hover:bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200/90 shadow-2xs transition cursor-pointer active:scale-95"
+                              title="เปิดดูไทม์ไลน์กิจกรรมทั้งหมดของแปลงนี้"
+                            >
+                              <Clock className="w-3 h-3 text-slate-500" />
+                              <span>ดูไทม์ไลน์</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenNurseryModal(p)}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 hover:text-emerald-950 bg-emerald-100/90 hover:bg-emerald-200 px-2 py-1 rounded-lg border border-emerald-300 shadow-2xs transition cursor-pointer active:scale-95"
+                            title="จดบันทึกการดูแล พ่นชีวภัณฑ์ รดน้ำ หรือบันทึกเพิ่มเติม"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>+ จดเพิ่ม</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <div className="mt-3 bg-linear-to-b from-slate-50/90 to-emerald-50/30 rounded-2xl p-3 border border-slate-200/80 space-y-2.5">
@@ -806,54 +986,68 @@ export default function Plots() {
 
                         <button
                           type="button"
-                          onClick={() => handleOpenSeedModal(p)}
-                          className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer shadow-2xs border ${
-                            (p.seed_prep_date || p.seed_crop_id)
-                              ? 'bg-teal-100 hover:bg-teal-200 text-teal-950 border-teal-300'
-                              : 'bg-teal-50 hover:bg-teal-100 text-teal-900 border-teal-300'
-                          }`}
-                          title="บันทึกการแช่เมล็ด / เพาะกล้าล่วงหน้า (GAP ข้อ 3)"
+                          onClick={() => handleOpenNurseryModal(p)}
+                          className="flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer shadow-2xs border bg-teal-50 hover:bg-teal-100 text-teal-900 border-teal-300"
+                          title="บันทึกกิจกรรมต้นกล้า เช่น เพาะเมล็ด, ย้ายลงถาดหลุม 200 หลุม, รดน้ำต้นกล้า (GAP ข้อ 3)"
                         >
                           <Sprout className="w-3.5 h-3.5 text-teal-700 shrink-0" />
-                          <span className="truncate">
-                            {(p.seed_prep_date || p.seed_crop_id) ? '✓ เพาะเมล็ดแล้ว' : 'เพาะ/แช่เมล็ด'}
-                          </span>
+                          <span className="truncate">+ บันทึกกิจกรรมต้นกล้า</span>
                         </button>
                       </div>
 
-                      {/* Summary Box when seed is pre-recorded */}
-                      {(p.seed_prep_date || p.seed_crop_id || p.seed_notes) ? (
-                        <div className="bg-white rounded-xl p-2.5 border border-teal-200/80 space-y-1 text-xs shadow-2xs">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-bold text-teal-950 text-xs">
-                                🌱 {p.seed_crop_name || 'ผักเป้าหมาย'}
+                      {/* Compact Activities Summary Bar (สำหรับแปลงว่าง / แปลงเพาะกล้า) */}
+                      {p.activities && p.activities.length > 0 ? (
+                        <div className="bg-white/90 rounded-xl p-2.5 border border-teal-200/90 flex items-center justify-between gap-2 shadow-2xs text-xs">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="p-1 rounded-md bg-teal-100 text-teal-800 shrink-0">
+                              <Sprout className="w-3.5 h-3.5" />
+                            </span>
+                            <div className="truncate">
+                              <span className="font-bold text-teal-950 text-[11.5px]">
+                                กิจกรรมต้นกล้า ({p.activities.length})
                               </span>
-                              {p.seed_prep_date && (
-                                <span className="text-[10px] text-teal-800 font-semibold bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">
-                                  {format(new Date(p.seed_prep_date), 'dd/MM/yyyy')}
+                              {p.seed_crop_name && (
+                                <span className="text-[10px] text-teal-800 font-semibold bg-teal-100/70 px-1.5 py-0.2 rounded ml-1 border border-teal-200/60 hidden sm:inline">
+                                  🌱 {p.seed_crop_name}
                                 </span>
                               )}
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenSeedModal(p)}
-                              className="text-[10.5px] font-bold text-teal-700 hover:text-teal-900 underline cursor-pointer shrink-0"
-                            >
-                              แก้ไข
-                            </button>
                           </div>
-                          {p.seed_notes && (
-                            <p className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed">
-                              {p.seed_notes}
-                            </p>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => openTimelineForPlot(p)}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-900 hover:text-teal-950 bg-teal-50 hover:bg-teal-100 px-2.5 py-1 rounded-lg border border-teal-300 transition cursor-pointer active:scale-95 shrink-0 shadow-2xs"
+                            title="เปิดดูไทม์ไลน์กิจกรรมต้นกล้าทั้งหมดของแปลงนี้"
+                          >
+                            <Clock className="w-3 h-3 text-teal-700" />
+                            <span>ดูไทม์ไลน์</span>
+                          </button>
+                        </div>
+                      ) : (p.seed_prep_date || p.seed_crop_id || p.seed_notes) ? (
+                        <div className="bg-white/90 rounded-xl p-2.5 border border-teal-200/80 flex items-center justify-between gap-2 text-xs shadow-2xs">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="font-bold text-teal-950 text-xs truncate">
+                              🌱 {p.seed_crop_name || 'ผักเป้าหมาย'}
+                            </span>
+                            {p.seed_prep_date && (
+                              <span className="text-[10px] text-teal-800 font-semibold bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200 shrink-0">
+                                {format(new Date(p.seed_prep_date), 'dd/MM/yyyy')}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenNurseryModal(p)}
+                            className="text-[10.5px] font-bold text-teal-800 hover:text-teal-950 bg-teal-50 hover:bg-teal-100 px-2 py-1 rounded-lg border border-teal-300 cursor-pointer shrink-0"
+                          >
+                            + บันทึกเพิ่ม
+                          </button>
                         </div>
                       ) : (
                         <div className="py-2.5 px-3 text-center border border-dashed border-slate-300/80 rounded-xl bg-white/70">
                           <p className="text-xs font-bold text-slate-700">แปลงว่าง พร้อมลงรอบปลูกใหม่</p>
                           <p className="text-[10.5px] text-slate-400 mt-0.5">
-                            กดปุ่มด้านล่างเพื่อเริ่มลงปลูกผักในแปลงนี้ได้ทันที
+                            สามารถบันทึกกิจกรรมต้นกล้า หรือกดปุ่มด้านล่างเพื่อเริ่มลงปลูกได้ทันที
                           </p>
                         </div>
                       )}
@@ -1122,7 +1316,7 @@ export default function Plots() {
       {/* Modal เริ่มรอบการปลูกใหม่ */}
       {showNewModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-hidden">
-          <div className="bg-white rounded-3xl max-w-xl md:max-w-2xl lg:max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 text-slate-900 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-3xl max-w-lg md:max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 text-slate-900 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             {/* Header */}
             <div className="flex items-center justify-between p-4 sm:p-5 md:px-6 md:py-4 border-b border-slate-100 shrink-0 bg-white">
               <div>
@@ -1181,11 +1375,10 @@ export default function Plots() {
                       value={form.crop_id}
                       onChange={(e) => {
                         const val = e.target.value;
-                        const cropObj = crops.find(c => String(c.id) === String(val));
                         setForm(prev => ({
                           ...prev,
                           crop_id: val,
-                          notes: cropObj?.notes || ''
+                          notes: ''
                         }));
                       }}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"
@@ -1257,93 +1450,6 @@ export default function Plots() {
                         />
                         <span>เปิดบันทึกรดน้ำอัตโนมัติ</span>
                       </label>
-                    </div>
-                  </div>
-
-                  {/* สูตรดินสำหรับรอบการปลูกนี้ */}
-                  <div className="md:col-span-2 bg-amber-50/50 p-3.5 rounded-2xl border border-amber-200/70 space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                      <label className="block text-xs font-bold text-amber-950 items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                        <span>สูตรดิน & วันที่เตรียมแคร่ (GAP ข้อ 2)</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => setForm(prev => ({ ...prev, soil_recipe: 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)' }))}
-                        className="text-[11px] text-emerald-700 hover:text-emerald-900 font-bold hover:underline cursor-pointer self-start sm:self-auto"
-                      >
-                        + ใช้สูตรมาตรฐานฟาร์ม (กากยาง 8 กระบะ)
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className="sm:col-span-1">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1 items-center gap-1">
-                          <Calendar className="w-3 h-3 text-amber-600" />
-                          <span>วันที่ผสมดิน</span>
-                        </label>
-                        <input
-                          type="date"
-                          value={form.soil_prep_date}
-                          onChange={(e) => setForm({ ...form, soil_prep_date: e.target.value })}
-                          className="w-full px-3 py-2 rounded-xl border border-amber-200 bg-white text-slate-900 font-bold focus:border-amber-600 focus:ring-1 focus:ring-amber-600 outline-none text-xs"
-                        />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                          รายละเอียดสูตรดิน
-                        </label>
-                        <textarea
-                          rows={2}
-                          value={form.soil_recipe}
-                          onChange={(e) => setForm({ ...form, soil_recipe: e.target.value })}
-                          placeholder="เช่น ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)"
-                          className="w-full px-3 py-2 rounded-xl border border-amber-200 bg-white text-slate-900 font-medium placeholder:text-slate-400 focus:border-amber-600 focus:ring-1 focus:ring-amber-600 outline-none text-xs leading-relaxed"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ที่มาเมล็ดพันธุ์ & บันทึกต้นน้ำ (การแช่/เพาะเมล็ด) */}
-                  <div className="md:col-span-2 bg-emerald-50/50 p-3.5 rounded-2xl border border-emerald-200/70 space-y-3">
-                    <label className="block text-xs font-bold text-emerald-950 items-center gap-1.5">
-                      <Leaf className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>ที่มาเมล็ดพันธุ์ & บันทึกต้นน้ำ (การแช่/เพาะเมล็ด - ทางเลือก)</span>
-                    </label>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className="sm:col-span-1">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1 items-center gap-1">
-                          <Calendar className="w-3 h-3 text-emerald-600" />
-                          <span>วันที่เริ่มแช่/เพาะเมล็ด</span>
-                        </label>
-                        <input
-                          type="date"
-                          value={form.seed_prep_date}
-                          onChange={(e) => setForm({ ...form, seed_prep_date: e.target.value })}
-                          className="w-full px-3 py-2 rounded-xl border border-emerald-200 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-xs"
-                        />
-                        <span className="text-[10px] text-slate-400 block mt-0.5">
-                          * เว้นว่างได้หากไม่ได้แช่
-                        </span>
-                      </div>
-                      <div className="sm:col-span-2">
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="block text-[11px] font-bold text-slate-700">
-                            วิธีแช่/เพาะกล้า/ที่มาเมล็ด
-                          </label>
-                          <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
-                            ✨ ดึงข้อมูลจากคลังผักอัตโนมัติ
-                          </span>
-                        </div>
-                        <textarea
-                          rows={2}
-                          placeholder="วิธีเพาะ/เทคนิคการปลูกจากคลังผักจะแสดงที่นี่อัตโนมัติ (แก้ไขได้)"
-                          value={form.notes}
-                          onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                          className="w-full px-3 py-2 rounded-xl border border-emerald-200 bg-white text-slate-900 font-medium placeholder:text-slate-400 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-xs leading-relaxed"
-                        />
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -1850,8 +1956,8 @@ export default function Plots() {
         </div>
       )}
 
-      {/* Modal บันทึกการเพาะเมล็ด / แช่เมล็ด / บ่มต้นกล้าล่วงหน้า (GAP ข้อ 3) */}
-      {showSeedModal && (
+      {/* Modal บันทึกกิจกรรมต้นกล้า / เพาะเมล็ด / อนุบาลกล้า (GAP ข้อ 3) */}
+      {showNurseryModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-hidden">
           <div className="bg-white rounded-3xl max-w-lg w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 text-slate-900 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             {/* Header */}
@@ -1859,15 +1965,15 @@ export default function Plots() {
               <div>
                 <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
                   <Sprout className="w-5 h-5 text-teal-600" />
-                  เพาะเมล็ด / แช่กล้าล่วงหน้า
+                  {nurseryForm.activity_id ? 'แก้ไขกิจกรรม' : '+ บันทึกกิจกรรมแปลง/ต้นกล้า'}
                 </h3>
                 <p className="text-xs text-slate-500 font-medium mt-0.5">
-                  {seedForm.plot_name} • มาตรฐาน GAP ข้อ 3 (การจัดการเมล็ดพันธุ์และต้นกล้า)
+                  {nurseryForm.plot_name} • มาตรฐาน GAP ข้อ 3 (การจัดการเมล็ดพันธุ์และแปลงปลูก)
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setShowSeedModal(false)}
+                onClick={() => setShowNurseryModal(false)}
                 className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-sm cursor-pointer transition-colors"
               >
                 <X className="w-4 h-4" />
@@ -1875,23 +1981,97 @@ export default function Plots() {
             </div>
 
             {/* Form Body */}
-            <form onSubmit={handleSaveSeed} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+            <form onSubmit={handleSaveNurseryActivity} className="flex flex-col flex-1 min-h-0 overflow-hidden">
               <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
+                {/* ปุ่มลัดเลือกกิจกรรม (Quick Presets) */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 mb-1.5 flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                    <span>ตัวอย่างกิจกรรมทั่วไป (คลิกเพื่อเติมข้อความด่วน)</span>
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const matchedCrop = crops.find(c => String(c.id) === String(nurseryForm.seed_crop_id));
+                        const cropName = matchedCrop ? matchedCrop.name : 'ผัก';
+                        setNurseryForm(prev => ({
+                          ...prev,
+                          stage: 'seeding',
+                          title: `เพาะเมล็ดพันธุ์${cropName}ในกล่องพลาสติก`,
+                          details: 'วางกระดาษทิชชูในกล่องพลาสติก พ่นน้ำเดินให้ทั่วกระดาษทิชชูหมาดๆ โรยเมล็ดบางๆ แล้วปิดทับด้วยกระดาษทิชชู พ่นน้ำให้หมาดๆ เสร็จแล้วปิดฝากล่องพลาสติกให้มิดชิด',
+                          materials_used: 'กล่องพลาสติกมีฝาปิด, กระดาษทิชชู, ฟ็อกกี้พ่นน้ำ'
+                        }));
+                      }}
+                      className="text-xs px-2.5 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold border border-teal-200/80 transition cursor-pointer active:scale-95"
+                    >
+                      🌱 1. เพาะเมล็ด (กล่อง/ทิชชู)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNurseryForm(prev => ({
+                          ...prev,
+                          stage: 'nursery',
+                          title: 'ย้ายต้นกล้าลงถาดหลุม 200 หลุม',
+                          details: 'ย้ายต้นกล้าลงถาดหลุม 200 หลุม ใส่พีทมอส รดน้ำ เช้า-เที่ยง-เย็น อนุบาลประมาณ 14–15 วัน',
+                          materials_used: 'ถาดหลุม 200 หลุม, พีทมอส, บัวรดน้ำฝอย'
+                        }));
+                      }}
+                      className="text-xs px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold border border-emerald-200/80 transition cursor-pointer active:scale-95"
+                    >
+                      🪴 2. ย้ายลงถาดหลุม 200 หลุม
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNurseryForm(prev => ({
+                          ...prev,
+                          stage: 'nursery',
+                          title: 'รดน้ำและอนุบาลต้นกล้า',
+                          details: 'รดน้ำ เช้า-เที่ยง-เย็น ตรวจสอบความชื้นให้เหมาะสม รับแสงแดดรำไร',
+                          materials_used: 'น้ำสะอาดมาตรฐาน GAP'
+                        }));
+                      }}
+                      className="text-xs px-2.5 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold border border-sky-200/80 transition cursor-pointer active:scale-95"
+                    >
+                      💧 3. รดน้ำ/อนุบาลต้นกล้า
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNurseryForm(prev => ({
+                          ...prev,
+                          stage: 'maintenance',
+                          title: 'ฉีดพ่นน้ำหมักชีวภาพ / กำจัดศัตรูพืช',
+                          details: 'ฉีดพ่นน้ำหมักชีวภาพ/บิวเวอร์เรีย ป้องกันหนอนและแมลงศัตรูพืช ตรวจสภาพแปลง ช่วงแดดร่ม',
+                          materials_used: 'น้ำหมักชีวภาพสะเดา, สารชีวภัณฑ์, ถังพ่นยา'
+                        }));
+                      }}
+                      className="text-xs px-2.5 py-1.5 rounded-lg bg-lime-50 hover:bg-lime-100 text-lime-800 font-bold border border-lime-200/80 transition cursor-pointer active:scale-95"
+                    >
+                      🌿 4. พ่นชีวภัณฑ์/ดูแลแปลง
+                    </button>
+                  </div>
+                </div>
+
                 {/* ชนิดผักที่จะปลูก */}
                 <div>
                   <label className="text-xs font-bold text-slate-800 mb-1.5 flex items-center gap-1.5">
                     <Sprout className="w-4 h-4 text-teal-600" />
-                    <span>ชนิดผักที่ต้องการเพาะเมล็ด / ปลูก</span>
+                    <span>ชนิดผักที่เพาะ/ปลูก</span>
                   </label>
                   <select
-                    value={seedForm.seed_crop_id}
+                    value={nurseryForm.seed_crop_id}
                     onChange={(e) => {
                       const val = e.target.value;
                       const cropObj = crops.find(c => String(c.id) === String(val));
-                      setSeedForm(prev => ({
+                      const cropName = cropObj ? cropObj.name : 'ผัก';
+                      setNurseryForm(prev => ({
                         ...prev,
                         seed_crop_id: val,
-                        seed_notes: cropObj?.notes || ''
+                        title: !prev.activity_id ? `เพาะเมล็ดพันธุ์${cropName}` : prev.title,
+                        details: cropObj?.notes || prev.details
                       }));
                     }}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm cursor-pointer"
@@ -1903,81 +2083,342 @@ export default function Plots() {
                       </option>
                     ))}
                   </select>
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    * เมื่อกดเริ่มปลูกลงแปลง ระบบจะดึงชนิดผักนี้ไปเป็นค่าเริ่มต้นให้อัตโนมัติ
-                  </p>
                 </div>
 
-                {/* วันที่เริ่มแช่เมล็ด / เพาะกล้า */}
+                {/* วันที่ และ ระยะกิจกรรม */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="w-4 h-4 text-teal-600" />
+                        วันที่ทำกิจกรรม
+                      </span>
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={nurseryForm.activity_date}
+                      onChange={(e) => setNurseryForm({ ...nurseryForm, activity_date: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                      ระยะ / ประเภทกิจกรรม
+                    </label>
+                    <select
+                      value={nurseryForm.stage}
+                      onChange={(e) => setNurseryForm({ ...nurseryForm, stage: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm cursor-pointer"
+                    >
+                      <option value="seeding">🌱 เพาะเมล็ด / แช่น้ำอุ่น</option>
+                      <option value="nursery">🪴 อนุบาลต้นกล้า / ถาดหลุม</option>
+                      <option value="transplant">🚜 ย้ายกล้าลงแปลง</option>
+                      <option value="maintenance">🌿 ดูแลรักษา / พ่นชีวภัณฑ์ / กำจัดวัชพืช</option>
+                      <option value="watering">💧 ให้น้ำตามรอบ</option>
+                      <option value="prep">📝 บันทึกเตรียมการทั่วไป</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* หัวข้อกิจกรรม */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5 items-center gap-1.5">
-                    <Calendar className="w-4 h-4 text-teal-600" />
-                    <span>วันที่เริ่มแช่เมล็ด / เพาะกล้า</span>
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                    ชื่อกิจกรรม / การปฏิบัติ <span className="text-rose-500">*</span>
                   </label>
                   <input
-                    type="date"
+                    type="text"
                     required
-                    value={seedForm.seed_prep_date}
-                    onChange={(e) => setSeedForm({ ...seedForm, seed_prep_date: e.target.value })}
-                    className="w-full sm:w-64 px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm"
+                    value={nurseryForm.title}
+                    onChange={(e) => setNurseryForm({ ...nurseryForm, title: e.target.value })}
+                    placeholder="เช่น เพาะเมล็ดพันธุ์ผักกวางตุ้ง หรือ ย้ายต้นกล้าลงถาดหลุม 200 หลุม"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm"
                   />
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    * ระบุวันที่เริ่มแช่น้ำอุ่น เพาะกล่อง หรือลงถาดเพาะกล้า (เช่น 05/02/2569)
-                  </p>
                 </div>
 
-                {/* รายละเอียดการเพาะ / บันทึกเมล็ดพันธุ์ */}
+                {/* รายละเอียดขั้นตอน */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-xs font-bold text-slate-800">
-                      รายละเอียดการแช่เมล็ด / การเพาะกล้า
+                      รายละเอียดการปฏิบัติ (จะถูกส่งไปแสดงในรายงาน GAP)
                     </label>
                     <span className="text-[10px] text-teal-700 font-semibold bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200/60">
-                      ✨ ดึงข้อมูลจากคลังผักอัตโนมัติ
+                      ✨ ดึงวิธีเพาะจากคลังชนิดผักอัตโนมัติ
                     </span>
                   </div>
                   <textarea
                     rows={3}
-                    value={seedForm.seed_notes}
-                    onChange={(e) => setSeedForm({ ...seedForm, seed_notes: e.target.value })}
+                    value={nurseryForm.details}
+                    onChange={(e) => setNurseryForm({ ...nurseryForm, details: e.target.value })}
                     placeholder="วิธีเพาะ/เทคนิคการปลูกจากคลังผักจะแสดงที่นี่อัตโนมัติ (แก้ไขได้)"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-medium placeholder:text-slate-400 focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-xs sm:text-sm leading-relaxed"
                   />
-                  <p className="text-[11px] text-slate-500 mt-1.5">
-                    💡 เกษตรกรสามารถจดบันทึกปริมาณเมล็ด อุณหภูมิน้ำ หรือระยะเวลาบ่มผ้าไว้ก่อน เมื่อลงแปลงข้อมูลนี้จะถูกเก็บเป็นประวัติรอบปลูก GAP อัตโนมัติ
-                  </p>
+                </div>
+
+                {/* วัสดุอุปกรณ์ และ ผู้ปฏิบัติงาน */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                      วัสดุ / อุปกรณ์ที่ใช้
+                    </label>
+                    <input
+                      type="text"
+                      value={nurseryForm.materials_used}
+                      onChange={(e) => setNurseryForm({ ...nurseryForm, materials_used: e.target.value })}
+                      placeholder="เช่น พีทมอส, ถาด 200 หลุม, ทิชชู"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-medium focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                      ผู้ปฏิบัติงาน
+                    </label>
+                    <input
+                      type="text"
+                      value={nurseryForm.operator_name}
+                      onChange={(e) => setNurseryForm({ ...nurseryForm, operator_name: e.target.value })}
+                      placeholder="เช่น เจ้าของฟาร์ม"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-medium focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm"
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Fixed Footer Buttons */}
               <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-2.5 shrink-0 flex-wrap">
-                <button
-                  type="button"
-                  onClick={handleClearSeed}
-                  disabled={savingSeed}
-                  className="px-3.5 py-2.5 sm:py-3 rounded-xl border border-rose-200 text-rose-700 bg-rose-50 hover:bg-rose-100 font-bold text-xs sm:text-sm cursor-pointer transition-colors active:scale-95 disabled:opacity-50"
-                  title="ล้างข้อมูลการเพาะเมล็ดออกจากแปลงนี้"
-                >
-                  ล้างข้อมูล
-                </button>
+                {nurseryForm.activity_id ? (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteNurseryActivity(nurseryForm.activity_id, nurseryForm.title)}
+                    disabled={savingNursery}
+                    className="px-3.5 py-2.5 sm:py-3 rounded-xl border border-rose-200 text-rose-700 bg-rose-50 hover:bg-rose-100 font-bold text-xs sm:text-sm cursor-pointer transition-colors active:scale-95 disabled:opacity-50"
+                  >
+                    ลบกิจกรรมนี้
+                  </button>
+                ) : (
+                  <div />
+                )}
                 <div className="flex items-center gap-2 flex-1 justify-end">
                   <button
                     type="button"
-                    onClick={() => setShowSeedModal(false)}
+                    onClick={() => setShowNurseryModal(false)}
                     className="px-4 py-2.5 sm:py-3 rounded-xl border border-slate-300 font-bold text-xs sm:text-sm text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors"
                   >
                     ยกเลิก
                   </button>
                   <button
                     type="submit"
-                    disabled={savingSeed}
+                    disabled={savingNursery}
                     className="px-5 py-2.5 sm:py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-black text-xs sm:text-sm shadow-md shadow-teal-600/20 disabled:opacity-50 cursor-pointer transition-colors active:scale-95"
                   >
-                    {savingSeed ? 'กำลังบันทึก...' : '💾 บันทึกการเพาะเมล็ด'}
+                    {savingNursery ? 'กำลังบันทึก...' : (nurseryForm.activity_id ? '💾 บันทึกการแก้ไข' : '💾 บันทึกกิจกรรม')}
                   </button>
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Drawer / Modal แสดงประวัติกิจกรรมและการดูแลตามมาตรฐาน GAP (Crop Timeline) */}
+      {showTimelineModal && timelinePlot && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex justify-end overflow-hidden animate-in fade-in duration-200">
+          <div className="bg-slate-50 w-full sm:max-w-xl h-full flex flex-col shadow-2xl border-l border-slate-200 text-slate-900 overflow-hidden animate-in slide-in-from-right duration-250">
+            {/* Drawer Header */}
+            <div className="p-4 sm:p-5 bg-white border-b border-slate-200 shrink-0 shadow-2xs">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-teal-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-md shadow-teal-600/20">
+                    #{timelinePlot.plot_number || timelinePlot.id}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 truncate">
+                      {timelinePlot.name}
+                    </h3>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className={`text-[10.5px] font-bold px-2 py-0.2 rounded-md border ${
+                        timelinePlot.status === 'growing' || timelinePlot.status === 'harvest_ready'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                          : 'bg-slate-100 text-slate-700 border-slate-200'
+                      }`}>
+                        {timelinePlot.status === 'growing' ? `🌱 กำลังปลูก: ${timelinePlot.crop_name}` : 
+                         timelinePlot.status === 'harvest_ready' ? `🔔 พร้อมเก็บ: ${timelinePlot.crop_name}` : '🌿 แปลงว่าง / เตรียมกล้า'}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        • GAP ข้อ 3
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenNurseryModal(timelinePlot)}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-md shadow-teal-600/20 transition active:scale-95 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>จดกิจกรรม</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowTimelineModal(false)}
+                    className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-sm cursor-pointer transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Sub-bar: Summary info */}
+              <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+                <span className="font-semibold flex items-center gap-1 text-slate-700">
+                  <Clock className="w-3.5 h-3.5 text-teal-600" />
+                  <span>บันทึกกิจกรรมแล้วทั้งหมด: {timelinePlot.activities?.length || 0} รายการ</span>
+                </span>
+                <span className="text-[11px] text-teal-800 font-bold bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+                  ไทม์ไลน์มาตรฐาน GAP
+                </span>
+              </div>
+            </div>
+
+            {/* Timeline Body */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+              {timelinePlot.activities && timelinePlot.activities.length > 0 ? (
+                <div className="relative pl-6 sm:pl-8 space-y-4 before:absolute before:left-3 sm:before:left-4 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200">
+                  {timelinePlot.activities.map((act, idx) => {
+                    const isSeeding = act.stage === 'seeding';
+                    const isNursery = act.stage === 'nursery';
+                    const isPlanting = act.stage === 'transplant' || act.stage === 'planting';
+                    const isCare = act.stage === 'maintenance';
+                    const isWatering = act.stage === 'watering';
+                    const isHarvest = act.stage === 'harvest';
+
+                    return (
+                      <div key={act.id} className="relative group">
+                        {/* Timeline Marker Dot */}
+                        <div className={`absolute -left-6 sm:-left-8 top-1.5 w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] shadow-xs ${
+                          isSeeding ? 'bg-teal-500 border-teal-200 text-white' :
+                          isNursery ? 'bg-emerald-500 border-emerald-200 text-white' :
+                          isPlanting ? 'bg-sky-500 border-sky-200 text-white' :
+                          isCare ? 'bg-lime-500 border-lime-200 text-white' :
+                          isWatering ? 'bg-cyan-500 border-cyan-200 text-white' :
+                          isHarvest ? 'bg-amber-500 border-amber-200 text-white' :
+                          'bg-slate-500 border-slate-200 text-white'
+                        }`}>
+                          {idx + 1}
+                        </div>
+
+                        {/* Card Content */}
+                        <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-teal-300 transition-all">
+                          <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2 mb-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[11px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-lg border border-teal-200">
+                                📅 {act.activity_date ? format(new Date(act.activity_date), 'dd/MM/yyyy') : '-'}
+                              </span>
+                              <span className={`text-[10.5px] font-bold px-2 py-0.5 rounded-lg border ${
+                                isSeeding ? 'bg-teal-50 text-teal-900 border-teal-200' :
+                                isNursery ? 'bg-emerald-50 text-emerald-900 border-emerald-200' :
+                                isPlanting ? 'bg-sky-50 text-sky-900 border-sky-200' :
+                                isCare ? 'bg-lime-50 text-lime-900 border-lime-200' :
+                                isWatering ? 'bg-cyan-50 text-cyan-900 border-cyan-200' :
+                                isHarvest ? 'bg-amber-50 text-amber-900 border-amber-200' :
+                                'bg-slate-50 text-slate-800 border-slate-200'
+                              }`}>
+                                {isSeeding ? '🌱 เพาะเมล็ด' : 
+                                 isNursery ? '🪴 อนุบาลกล้า' : 
+                                 isPlanting ? '🚜 ย้ายลงแปลง' : 
+                                 isCare ? '🌿 ดูแลแปลง/พ่นยา' : 
+                                 isWatering ? '💧 ให้น้ำ' : 
+                                 isHarvest ? '🧺 เก็บเกี่ยว' : '📝 บันทึก'}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditNurseryModal(act, timelinePlot)}
+                                title="แก้ไขกิจกรรมนี้"
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-teal-700 hover:bg-teal-50 transition cursor-pointer"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteNurseryActivity(act.id, act.title)}
+                                title="ลบกิจกรรมนี้"
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <h4 className="text-sm font-black text-slate-900 leading-snug">
+                            {act.title}
+                          </h4>
+
+                          {act.details && (
+                            <p className="text-xs text-slate-600 mt-1.5 whitespace-pre-line leading-relaxed bg-slate-50/70 p-2.5 rounded-xl border border-slate-100">
+                              {act.details}
+                            </p>
+                          )}
+
+                          <div className="mt-2.5 pt-2 border-t border-slate-100/80 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                            {act.materials_used ? (
+                              <div className="flex items-center gap-1 text-slate-700 bg-amber-50/80 px-2 py-0.5 rounded-md border border-amber-200/60 font-medium">
+                                <span className="font-bold text-amber-900">อุปกรณ์/ชีวภัณฑ์:</span>
+                                <span>{act.materials_used}</span>
+                              </div>
+                            ) : <span />}
+                            <span className="text-[10.5px] text-slate-400">
+                              ผู้บันทึก: {act.operator_name || 'เจ้าของฟาร์ม'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="h-64 flex flex-col items-center justify-center text-center p-6 bg-white rounded-3xl border border-dashed border-slate-300">
+                  <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center mb-3">
+                    <Sprout className="w-6 h-6" />
+                  </div>
+                  <h4 className="font-bold text-slate-800 text-sm">ยังไม่มีกิจกรรมที่บันทึกไว้ในแปลงนี้</h4>
+                  <p className="text-xs text-slate-500 mt-1 max-w-xs leading-relaxed">
+                    คุณสามารถบันทึกกิจกรรมเพาะเมล็ด อนุบาลกล้า ย้ายปลูก หรือฉีดพ่นชีวภัณฑ์ตามมาตรฐาน GAP ได้เลย
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenNurseryModal(timelinePlot)}
+                    className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md shadow-teal-600/20 cursor-pointer transition active:scale-95"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ เริ่มบันทึกกิจกรรมแรก</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Drawer Footer */}
+            <div className="p-4 sm:p-5 bg-white border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowTimelineModal(false)}
+                className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold text-xs sm:text-sm cursor-pointer transition-colors"
+              >
+                ปิดหน้าต่าง
+              </button>
+              <button
+                type="button"
+                onClick={() => handleOpenNurseryModal(timelinePlot)}
+                className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-black text-xs sm:text-sm shadow-md shadow-teal-600/20 cursor-pointer transition-colors active:scale-95 flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ จดกิจกรรมเพิ่ม</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -17,7 +17,7 @@ import { format } from 'date-fns';
 export default function Storage() {
   return (
     <LogManager
-      title="ขนส่ง/เก็บรักษา (GAP #6)"
+      title="การขนส่งสินค้า (GAP #6)"
       endpoint="storage"
       renderTopBanner={({ rows }) => {
         const total = rows.length;

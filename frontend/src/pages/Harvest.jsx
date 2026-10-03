@@ -52,7 +52,7 @@ export default function Harvest() {
     worker_name: user?.display_name || 'เจ้าของฟาร์ม',
     notes: 'ตัดแต่งราก คัดแยกใบเหลือง ล้างด้วยน้ำสะอาด บรรจุถุงเจาะรูระบายอากาศ',
     sale_channel: 'ขายปลีกหน้าฟาร์ม + ตลาดนัดชุมชน + LINE Shop',
-    sync_to_stock: true,
+    sync_to_stock: false,
     price: 20,
     image_url: '',
     is_available: false,
@@ -245,7 +245,7 @@ export default function Harvest() {
       worker_name: user?.display_name || 'เจ้าของฟาร์ม',
       notes: 'ตัดแต่งราก คัดแยกใบเหลือง ล้างด้วยน้ำสะอาด บรรจุถุงเจาะรูระบายอากาศ',
       sale_channel: 'ขายปลีกหน้าฟาร์ม + ตลาดนัดชุมชน + LINE Shop',
-      sync_to_stock: true,
+      sync_to_stock: false,
       price: initialPrice,
       image_url: '',
       is_available: false,
@@ -1041,7 +1041,7 @@ export default function Harvest() {
                     <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3.5 text-xs text-blue-900 flex items-center gap-2">
                       <PackageCheck className="w-4 h-4 text-blue-700 shrink-0" />
                       <span>
-                        ❄️ ผลผลิตถูกนำเข้าพักใน <strong>ตู้เย็น / ห้องเย็นพักผักฟาร์ม</strong> เรียบร้อย (บันทึกเข้าระบบ GAP คลังเก็บรักษาผลผลิต)
+                        ❄️ ผลผลิตถูกนำเข้าพักใน <strong>ตู้เย็น / ห้องเย็นพักผักฟาร์ม (GAP ข้อ 5)</strong> เรียบร้อย (เมื่อพร้อมจำหน่ายสามารถกดปุ่ม [📦 ลงสต็อกสินค้า] ที่ท้ายแถวในตารางหน้านี้ได้ทันที)
                       </span>
                     </div>
                   ) : (
@@ -1225,11 +1225,16 @@ export default function Harvest() {
 
                 {/* ปลายทางผลผลิตหลังเก็บเกี่ยว (Storage vs Direct LINE Shop) */}
                 <div className="space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-2xl">
-                  <label className="text-xs font-bold text-slate-800 block">ปลายทางของผลผลิตหลังตัด (GAP ข้อ 5-6)</label>
+                  <label className="text-xs font-bold text-slate-800 block">ปลายทางของผลผลิตหลังตัด (GAP ข้อ 5)</label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={() => setForm(prev => ({ ...prev, destination: 'cold_storage', is_available: false }))}
+                      onClick={() => setForm(prev => ({ 
+                        ...prev, 
+                        destination: 'cold_storage', 
+                        sync_to_stock: false,
+                        is_available: false 
+                      }))}
                       className={`p-3 rounded-xl border text-left cursor-pointer transition ${
                         form.destination === 'cold_storage'
                           ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-300/40 text-blue-950 font-bold'
@@ -1240,13 +1245,18 @@ export default function Harvest() {
                         <span>❄️ เข้าห้องเย็น / ตู้เย็นพักผัก</span>
                       </div>
                       <p className="text-[11px] text-slate-500 mt-1 font-normal">
-                        บันทึกเข้าคลังพักผัก (storage_logs) 4-8°C รอคัดเกรด/แพ็กถุง
+                        พักผักในตู้เย็น/ห้องเย็น 4-8°C รอดัดเกรด/แพ็กถุง (กดลงสต็อกที่หน้านี้เมื่อพร้อมขาย)
                       </p>
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => setForm(prev => ({ ...prev, destination: 'direct_stock', is_available: true }))}
+                      onClick={() => setForm(prev => ({ 
+                        ...prev, 
+                        destination: 'direct_stock', 
+                        sync_to_stock: true,
+                        is_available: true 
+                      }))}
                       className={`p-3 rounded-xl border text-left cursor-pointer transition ${
                         form.destination === 'direct_stock'
                           ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-400/40 text-emerald-950 font-bold'
@@ -1406,19 +1416,32 @@ export default function Harvest() {
                   />
                 </div>
 
-                {/* 3. Auto Stock Sync Section */}
-                <div className="border-t border-slate-100 pt-3 space-y-2">
-                  <label className="text-xs font-bold text-slate-800 flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.sync_to_stock}
-                      onChange={e => setForm(prev => ({ ...prev, sync_to_stock: e.target.checked }))}
-                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
-                    />
-                    <span>📦 นำผลผลิตเข้าสต็อกหน้าร้าน LINE อัตโนมัติ (เพิ่ม {Math.max(1, Math.floor(Number(form.total_weight_kg || 0) / (Number(form.weight_per_unit_kg) || 0.4)))} ถุง)</span>
-                  </label>
+                {/* 3. Destination-driven Stock Section */}
+                {form.destination === 'cold_storage' ? (
+                  <div className="p-3.5 bg-blue-50/80 border border-blue-200 rounded-2xl flex items-start gap-3 text-blue-950">
+                    <div className="text-2xl shrink-0 mt-0.5">❄️</div>
+                    <div className="text-xs space-y-1">
+                      <div className="font-bold text-blue-900 text-sm">
+                        นำเข้าเก็บรักษาในห้องเย็น / ตู้เย็นพักผัก (GAP ข้อ 5)
+                      </div>
+                      <p className="text-[11px] text-blue-800 leading-relaxed font-normal">
+                        ผลผลิต <strong>{Math.max(1, Math.floor(Number(form.total_weight_kg || 0) / (Number(form.weight_per_unit_kg) || 0.4)))} ถุง</strong> จะถูกบันทึกสถานะเป็น <strong className="text-blue-950 font-bold">"รอลงสต็อก"</strong> (ยังไม่เปิดขายหน้าร้าน LINE เพื่อรอคัดเกรด/แพ็กถุง)<br />
+                        เมื่อพร้อมจำหน่าย สามารถกดปุ่ม <span className="inline-flex items-center px-1.5 py-0.5 bg-white border border-blue-300 rounded font-bold text-[10px] text-blue-900">📦 ลงสต็อกสินค้า</span> ในตารางหน้านี้ได้ทุกเมื่อ
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="border-t border-slate-100 pt-3 space-y-2">
+                    <div className="p-3 bg-emerald-50/80 border border-emerald-200 rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs font-bold text-emerald-950">
+                        <Store className="w-4 h-4 text-emerald-700 shrink-0" />
+                        <span>📦 วางขายหน้าร้าน LINE Shop ทันที (+{Math.max(1, Math.floor(Number(form.total_weight_kg || 0) / (Number(form.weight_per_unit_kg) || 0.4)))} ถุง)</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-emerald-700 bg-white border border-emerald-300 px-2 py-0.5 rounded-full">
+                        เปิดขายทันที
+                      </span>
+                    </div>
 
-                  {form.sync_to_stock && (
                     <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
                       {matchedProduct ? (
                         /* Case 1: Product Exists */
@@ -1512,8 +1535,8 @@ export default function Harvest() {
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
 
                 {/* Pinned Footer Action Bar */}
@@ -1528,10 +1551,27 @@ export default function Harvest() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 active:scale-95 text-white rounded-xl text-xs font-black shadow-md transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                    className={`px-5 py-2.5 active:scale-95 text-white rounded-xl text-xs font-black shadow-md transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5 ${
+                      form.destination === 'cold_storage'
+                        ? 'bg-blue-600 hover:bg-blue-700'
+                        : 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700'
+                    }`}
                   >
-                    <PackageCheck className="w-4 h-4" />
-                    <span>{submitting ? 'กำลังบันทึกและลงสต็อก...' : '✓ ยืนยันเก็บผลผลิตและลงสต็อก'}</span>
+                    {form.destination === 'cold_storage' ? (
+                      <>
+                        <span className="text-sm">❄️</span>
+                        <span>{submitting ? 'กำลังบันทึกนำเข้าห้องเย็น...' : '✓ บันทึกเก็บผลผลิต (นำเข้าห้องเย็น)'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <PackageCheck className="w-4 h-4" />
+                        <span>
+                          {submitting
+                            ? 'กำลังบันทึกและวางขาย...'
+                            : `✓ บันทึกและวางขายหน้าร้าน (+${Math.max(1, Math.floor(Number(form.total_weight_kg || 0) / (Number(form.weight_per_unit_kg) || 0.4)))} ถุง)`}
+                        </span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>

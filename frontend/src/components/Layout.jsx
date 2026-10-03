@@ -20,6 +20,7 @@ import {
   Sparkles,
   Sprout,
   TrendingUp,
+  Truck,
   UserCog,
   Users,
   Wallet,
@@ -52,9 +53,9 @@ const menuGroups = [
     group: '3. ผลผลิต & การขาย',
     items: [
       { to: '/harvest', icon: Leaf, label: 'เก็บเกี่ยวผลผลิต' },
-      { to: '/storage', icon: Package, label: 'พักผลผลิต & ห้องเย็น' },
       { to: '/products', icon: ShoppingBag, label: 'คลังสินค้าหน้าร้าน' },
       { to: '/orders', icon: ReceiptText, label: 'คำสั่งซื้อจาก LINE' },
+      { to: '/storage', icon: Truck, label: 'ขนส่งสินค้า (GAP #6)' },
     ]
   },
   {

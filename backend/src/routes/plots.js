@@ -6,11 +6,13 @@ import { authRequired } from '../middleware/auth.js';
 export const plotsRouter = Router();
 plotsRouter.use(authRequired);
 
-// Ensure soil_prep_date, seed_prep_date, seed_notes, seed_crop_id columns exist on plots
+// Ensure soil_prep_date, seed_prep_date, seed_notes, seed_crop_id columns exist on plots, and batch_id on crop_activities
 pool.query('ALTER TABLE plots ADD COLUMN soil_prep_date DATE NULL AFTER soil_recipe').catch(() => {});
 pool.query('ALTER TABLE plots ADD COLUMN seed_prep_date DATE NULL AFTER soil_prep_date').catch(() => {});
 pool.query('ALTER TABLE plots ADD COLUMN seed_notes TEXT NULL AFTER seed_prep_date').catch(() => {});
 pool.query('ALTER TABLE plots ADD COLUMN seed_crop_id INT NULL AFTER seed_notes').catch(() => {});
+pool.query('ALTER TABLE crop_activities ADD COLUMN batch_id INT NULL AFTER plot_id').catch(() => {});
+pool.query('ALTER TABLE planting_batches ADD COLUMN updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP').catch(() => {});
 
 
 // 1. ดึงรายการแปลงปลูกทั้งหมด เรียงจากแคร่ที่ 1 -> 2 -> 3 -> 4 -> 5 -> 6 (Ascending Order)
@@ -26,7 +28,9 @@ plotsRouter.get('/', async (req, res) => {
               COALESCE(b.planting_unit, ab.planting_unit) AS planting_unit,
               COALESCE(b.total_damaged_count, ab.total_damaged_count, 0) AS total_damaged_count,
               COALESCE(b.total_harvested_count, ab.total_harvested_count, 0) AS total_harvested_count,
-              COALESCE(b.notes, ab.notes) AS batch_notes
+              COALESCE(b.notes, ab.notes) AS batch_notes,
+              COALESCE(b.seed_prep_date, ab.seed_prep_date, p.seed_prep_date) AS batch_seed_prep_date,
+              COALESCE(bc.growth_days, sc.growth_days, 30) AS growth_days
        FROM plots p
        LEFT JOIN crops sc ON sc.id = p.seed_crop_id
        LEFT JOIN planting_batches b ON b.id = p.current_batch_id
@@ -40,10 +44,21 @@ plotsRouter.get('/', async (req, res) => {
            GROUP BY plot_id
          ) b2 ON b1.id = b2.max_id
        ) ab ON ab.plot_id = p.id
-       WHERE p.user_id = ?
-       ORDER BY COALESCE(p.plot_number, p.id) ASC, p.id ASC`,
+       LEFT JOIN crops bc ON bc.id = COALESCE(b.crop_id, ab.crop_id)
+        WHERE p.user_id = ?
+        ORDER BY COALESCE(p.plot_number, p.id) ASC, p.id ASC`,
       [req.user.id]
     );
+
+    const [activities] = await pool.query(
+      `SELECT a.* FROM crop_activities a WHERE a.user_id = ? ORDER BY a.activity_date ASC, a.id ASC`,
+      [req.user.id]
+    );
+
+    rows.forEach(p => {
+      p.activities = activities.filter(a => a.plot_id === p.id);
+    });
+
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -177,6 +192,103 @@ plotsRouter.post('/:id/reset', async (req, res) => {
   }
 });
 
+// 5. บันทึกกิจกรรมต้นกล้า / เตรียมแปลง (Add Plot Nursery Activity)
+plotsRouter.post('/:id/activities', async (req, res) => {
+  try {
+    const plotId = Number(req.params.id);
+    const { activity_date, stage, title, details, materials_used, operator_name, seed_crop_id } = req.body;
+    if (!title || !activity_date) {
+      return res.status(400).json({ error: 'กรุณาระบุวันที่และหัวข้อกิจกรรม' });
+    }
+
+    // Check if plot has an active batch
+    const [plotRows] = await pool.query(
+      'SELECT current_batch_id, seed_prep_date FROM plots WHERE id = ? AND user_id = ?',
+      [plotId, req.user.id]
+    );
+    const currentBatchId = plotRows[0]?.current_batch_id || null;
+
+    const [result] = await pool.query(
+      `INSERT INTO crop_activities (user_id, plot_id, batch_id, activity_date, stage, title, details, materials_used, operator_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        req.user.id,
+        plotId,
+        currentBatchId,
+        activity_date,
+        stage || 'seeding',
+        title,
+        details || null,
+        materials_used || null,
+        operator_name || req.user.display_name || 'เจ้าของฟาร์ม'
+      ]
+    );
+
+    // If plot is empty and seed_crop_id provided, sync plot's seed_crop_id and seed_prep_date
+    if (seed_crop_id) {
+      await pool.query(
+        `UPDATE plots 
+         SET seed_crop_id = ?, 
+             seed_prep_date = COALESCE(seed_prep_date, ?),
+             updated_at = NOW() 
+         WHERE id = ? AND user_id = ?`,
+        [seed_crop_id, activity_date, plotId, req.user.id]
+      );
+    }
+
+    const [newAct] = await pool.query('SELECT * FROM crop_activities WHERE id = ?', [result.insertId]);
+    res.status(201).json({
+      success: true,
+      activity: newAct[0],
+      message: 'บันทึกกิจกรรมต้นกล้าเรียบร้อยแล้ว!'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. แก้ไขกิจกรรมต้นกล้า (Edit Plot Nursery Activity)
+plotsRouter.put('/activities/:activityId', async (req, res) => {
+  try {
+    const actId = Number(req.params.activityId);
+    const { activity_date, stage, title, details, materials_used, operator_name } = req.body;
+    await pool.query(
+      `UPDATE crop_activities 
+       SET activity_date = ?, stage = ?, title = ?, details = ?, materials_used = ?, operator_name = ?
+       WHERE id = ? AND user_id = ?`,
+      [
+        activity_date,
+        stage || 'seeding',
+        title,
+        details || null,
+        materials_used || null,
+        operator_name || 'เจ้าของฟาร์ม',
+        actId,
+        req.user.id
+      ]
+    );
+    const [updated] = await pool.query('SELECT * FROM crop_activities WHERE id = ?', [actId]);
+    res.json({
+      success: true,
+      activity: updated[0],
+      message: 'แก้ไขกิจกรรมต้นกล้าเรียบร้อยแล้ว!'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 7. ลบกิจกรรมต้นกล้า (Delete Plot Nursery Activity)
+plotsRouter.delete('/activities/:activityId', async (req, res) => {
+  try {
+    const actId = Number(req.params.activityId);
+    await pool.query('DELETE FROM crop_activities WHERE id = ? AND user_id = ?', [actId, req.user.id]);
+    res.json({ success: true, message: 'ลบกิจกรรมเรียบร้อยแล้ว' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Middleware to auto-calculate expected_harvest_date if growth_days is passed
 plotsRouter.use('/', (req, res, next) => {
   if (['POST', 'PUT'].includes(req.method) && req.body) {
@@ -189,6 +301,40 @@ plotsRouter.use('/', (req, res, next) => {
         req.body.expected_harvest_date = d.toISOString().split('T')[0];
       }
     }
+  }
+  next();
+});
+
+// Sync soil_recipe and soil_prep_date to active planting_batches if updated on plot
+plotsRouter.put('/:id', async (req, res, next) => {
+  try {
+    const plotId = Number(req.params.id);
+    const { soil_recipe, soil_prep_date } = req.body;
+
+    if (soil_recipe !== undefined || soil_prep_date !== undefined) {
+      const sets = [];
+      const vals = [];
+      if (soil_recipe !== undefined) {
+        sets.push('soil_recipe = ?');
+        vals.push(soil_recipe);
+      }
+      if (soil_prep_date !== undefined) {
+        sets.push('soil_prep_date = ?');
+        vals.push(soil_prep_date || null);
+      }
+      if (sets.length > 0) {
+        sets.push('updated_at = NOW()');
+        vals.push(plotId, req.user.id);
+        await pool.query(
+          `UPDATE planting_batches 
+           SET ${sets.join(', ')} 
+           WHERE plot_id = ? AND user_id = ? AND status IN ('growing', 'harvest_ready')`,
+          vals
+        );
+      }
+    }
+  } catch (err) {
+    console.error('Error syncing soil update to batch:', err);
   }
   next();
 });
