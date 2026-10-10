@@ -397,10 +397,46 @@ aiRouter.post('/notify-harvest', async (req, res) => {
     const isMock = !token || token === 'dummy_token';
     const client = isMock ? null : new MessagingApiClient({ channelAccessToken: token });
 
+    const {
+      product_id = null
+    } = req.body;
+
+    // หา product_id ที่สอดคล้องกับผักนี้ เพื่อให้กดสั่งใน LINE แล้วเด้งการ์ดเลือกจำนวนทันที
+    let targetProductId = product_id ? Number(product_id) : null;
+    if (!targetProductId) {
+      const [prods] = await pool.query(
+        'SELECT id, name, price, stock_quantity FROM products WHERE name LIKE ? OR ? LIKE CONCAT("%", name, "%") ORDER BY stock_quantity DESC LIMIT 1',
+        [`%${crop_name}%`, crop_name]
+      );
+      if (prods[0]) targetProductId = prods[0].id;
+    }
+
     const finalTitle = (custom_title || '').trim() || `🥦 ${crop_name} สดๆ เพิ่งเก็บเกี่ยววันนี้!`;
     const finalImage = (custom_image_url || '').trim() || 'https://images.unsplash.com/photo-1540420773420-3366772f4999?q=80&w=600&auto=format&fit=crop';
-    const finalCtaLabel = (cta_label || '').trim() || '🛒 กดสั่งซื้อผักสดทันที';
-    const finalCtaUrl = (cta_url || '').trim() || process.env.LIFF_ORDER_URL || 'https://liff.line.me/2011230817-FlfQg9Yb';
+    const finalCtaLabel = (cta_label || '').trim() || `🛒 กดสั่งซื้อ${crop_name}ทันที`;
+
+    // สร้าง Action สำหรับปุ่มสั่งซื้อ: สั่งซื้อใน LINE โดยตรง
+    let primaryButtonAction = null;
+    if (targetProductId) {
+      primaryButtonAction = {
+        type: 'postback',
+        label: finalCtaLabel.slice(0, 20),
+        data: `action=select_product&product_id=${targetProductId}`,
+        displayText: `สั่งซื้อ ${crop_name}`,
+      };
+    } else {
+      primaryButtonAction = {
+        type: 'message',
+        label: finalCtaLabel.slice(0, 20),
+        text: `สั่งซื้อ ${crop_name}`,
+      };
+    }
+
+    const viewMenuButtonAction = {
+      type: 'message',
+      label: '🥗 ดูเมนูผักทั้งหมด',
+      text: 'เมนูผัก',
+    };
 
     let sentCount = 0;
 
@@ -448,16 +484,21 @@ aiRouter.post('/notify-harvest', async (req, res) => {
           footer: {
             type: 'box',
             layout: 'vertical',
+            spacing: 'sm',
+            paddingAll: 'md',
             contents: [
               {
                 type: 'button',
-                action: {
-                  type: 'uri',
-                  label: finalCtaLabel,
-                  uri: finalCtaUrl,
-                },
+                action: primaryButtonAction,
                 style: 'primary',
                 color: '#15803d',
+                height: 'sm',
+              },
+              {
+                type: 'button',
+                action: viewMenuButtonAction,
+                style: 'secondary',
+                color: '#f0fdf4',
                 height: 'sm',
               },
             ],

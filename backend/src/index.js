@@ -32,8 +32,11 @@ import { cropsRouter } from './routes/crops.js';
 import { batchesRouter } from './routes/batches.js';
 import { pestsRouter } from './routes/pests.js';
 
+import compression from 'compression';
+
 dotenv.config();
 const app = express();
+app.use(compression());
 app.use(cors());
 app.use(express.json({
   limit: '15mb',

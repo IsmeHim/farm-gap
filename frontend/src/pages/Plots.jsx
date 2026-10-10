@@ -661,14 +661,21 @@ export default function Plots() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {plots.map((p) => {
-            const isGrowing = p.status === 'growing' && p.crop_name && p.crop_name !== '-';
-            const isHarvestReady = p.status === 'harvest_ready';
-            const isEmpty = !isGrowing && !isHarvestReady;
-
             // Find current active batch if exists
             const currentBatch = batches.find(b => b.plot_id === p.id && (b.status === 'growing' || b.status === 'harvest_ready'));
-            const progressInfo = (isGrowing || isHarvestReady) ? getBatchProgressInfo(currentBatch, p) : null;
+            const hasCrop = (p.status === 'growing' || p.status === 'harvest_ready') && p.crop_name && p.crop_name !== '-';
+            const progressInfo = hasCrop ? getBatchProgressInfo(currentBatch, p) : null;
             const daysPlanted = progressInfo?.daysPlanted ?? 0;
+
+            // ตรวจสอบความพร้อมเก็บเกี่ยว: ครบ 100% หรือสถานะเป็น harvest_ready หรือวันคงเหลือเป็น 0
+            const isHarvestReady = hasCrop && (
+              p.status === 'harvest_ready' ||
+              currentBatch?.status === 'harvest_ready' ||
+              (progressInfo && (progressInfo.percent >= 100 || progressInfo.daysLeft === 0))
+            );
+            const isGrowing = hasCrop && !isHarvestReady;
+            const isEmpty = !hasCrop;
+
             // อนุญาตให้แก้ไขหรือยกเลิกได้เฉพาะช่วง 2 วันแรกของการเริ่มปลูก และยังไม่พร้อมเก็บเกี่ยว เพื่อป้องกันเจ้าของกดผิด
             const isEarlyStage = !isHarvestReady && isGrowing && daysPlanted <= 2;
 
@@ -677,7 +684,7 @@ export default function Plots() {
                 key={p.id}
                 className={`bg-white rounded-3xl border-2 p-5 shadow-xs flex flex-col justify-between transition-all ${
                   isHarvestReady
-                    ? 'border-amber-300 ring-2 ring-amber-200/50'
+                    ? 'border-amber-300 ring-2 ring-amber-200/50 bg-amber-50/10'
                     : isGrowing
                     ? 'border-emerald-200 hover:border-emerald-400'
                     : 'border-slate-200/90 bg-slate-50/40'
@@ -1082,9 +1089,10 @@ export default function Plots() {
                   ) : isHarvestReady ? (
                     <button
                       onClick={() => navigate(`/harvest?plot_id=${p.id}&smart=true`)}
-                      className="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-black text-xs shadow-sm hover:shadow transition cursor-pointer active:scale-95 border border-amber-300 whitespace-nowrap min-h-9"
+                      className="inline-flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl bg-linear-to-r from-amber-400 via-amber-500 to-amber-400 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black text-xs shadow-md shadow-amber-400/30 hover:shadow-lg transition cursor-pointer active:scale-95 border border-amber-300 whitespace-nowrap min-h-9"
+                      title="ผักในแปลงโตเต็มที่ 100% พร้อมเก็บเกี่ยวเข้าคลังแล้ว!"
                     >
-                      <ShoppingBag className="w-3.5 h-3.5 text-slate-950" />
+                      <Sparkles className="w-3.5 h-3.5 text-slate-950 fill-current" />
                       <span>🧺 เก็บเกี่ยวเข้าคลัง</span>
                     </button>
                   ) : isEarlyStage ? (
@@ -1176,8 +1184,10 @@ export default function Plots() {
                 </tr>
               ) : (
                 batches.map((b) => {
+                  const isHarvested = b.status === 'harvested';
                   const bProg = getBatchProgressInfo(b);
-                  const bIsEarlyStage = b.status === 'growing' && (bProg?.daysPlanted ?? 0) <= 2;
+                  const bIsHarvestReady = !isHarvested && (b.status === 'harvest_ready' || (bProg && (bProg.percent >= 100 || bProg.daysLeft === 0)));
+                  const bIsEarlyStage = !isHarvested && !bIsHarvestReady && b.status === 'growing' && (bProg?.daysPlanted ?? 0) <= 2;
                   return (
                   <tr key={b.id} className="hover:bg-slate-50/80 transition">
                     <td className="py-3 px-4 font-mono font-bold text-slate-900">{b.batch_code}</td>
@@ -1202,7 +1212,7 @@ export default function Plots() {
                         : '-'}
                     </td>
                     <td className="py-3 px-4">
-                      {b.status === 'harvested' ? (
+                      {isHarvested ? (
                         <div className="space-y-1">
                           <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500">
                             <span>100%</span>
@@ -1212,7 +1222,7 @@ export default function Plots() {
                             <div className="bg-slate-400 h-full rounded-full w-full" />
                           </div>
                         </div>
-                      ) : b.status === 'harvest_ready' ? (
+                      ) : bIsHarvestReady ? (
                         <div className="space-y-1">
                           <div className="flex items-center justify-between text-[11px] font-black text-amber-800">
                             <span>100%</span>
@@ -1240,21 +1250,21 @@ export default function Plots() {
                     <td className="py-3 px-4">
                       <span
                         className={`px-2.5 py-0.5 rounded-full font-semibold text-[10px] ${
-                          b.status === 'growing'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : b.status === 'harvest_ready'
-                            ? 'bg-amber-100 text-amber-800'
-                            : b.status === 'harvested'
+                          isHarvested
                             ? 'bg-blue-100 text-blue-800'
+                            : bIsHarvestReady
+                            ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                            : b.status === 'growing'
+                            ? 'bg-emerald-100 text-emerald-800'
                             : 'bg-slate-100 text-slate-600'
                         }`}
                       >
-                        {b.status === 'growing'
-                          ? '🌱 กำลังปลูก'
-                          : b.status === 'harvest_ready'
-                          ? '🔔 พร้อมเก็บเกี่ยว'
-                          : b.status === 'harvested'
+                        {isHarvested
                           ? '✓ เก็บเกี่ยวแล้ว'
+                          : bIsHarvestReady
+                          ? '🔔 พร้อมเก็บเกี่ยว'
+                          : b.status === 'growing'
+                          ? '🌱 กำลังปลูก'
                           : b.status}
                       </span>
                     </td>
@@ -1265,7 +1275,7 @@ export default function Plots() {
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      {(b.status === 'growing' || b.status === 'harvest_ready') ? (
+                      {!isHarvested && (b.status === 'growing' || b.status === 'harvest_ready' || bIsHarvestReady) ? (
                         <div className="flex items-center justify-end gap-1.5">
                           {bIsEarlyStage && (
                             <>
@@ -1291,13 +1301,28 @@ export default function Plots() {
                           <button
                             onClick={() => navigate(`/harvest?plot_id=${b.plot_id}&smart=true`)}
                             className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap ${
-                              b.status === 'harvest_ready'
-                                ? 'bg-amber-400 hover:bg-amber-500 text-slate-950 font-black'
+                              bIsHarvestReady
+                                ? 'bg-amber-400 hover:bg-amber-500 text-slate-950 font-black border border-amber-300'
                                 : 'bg-emerald-600 hover:bg-emerald-700 text-white'
                             }`}
                           >
                             <ShoppingBag className="w-3.5 h-3.5" />
                             <span>เก็บเกี่ยว</span>
+                          </button>
+                        </div>
+                      ) : isHarvested ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-100/90 px-2.5 py-1 rounded-xl border border-slate-200 shadow-2xs">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>เก็บเกี่ยวแล้ว</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/harvest?batch_id=${b.id}`)}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-xl border border-emerald-200 transition cursor-pointer shadow-2xs active:scale-95"
+                            title="ดูประวัติการเก็บเกี่ยวและสต็อกสินค้าในหน้าผลผลิต"
+                          >
+                            <span>ดูผลผลิต</span>
                           </button>
                         </div>
                       ) : (

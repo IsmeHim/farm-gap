@@ -265,3 +265,100 @@ export async function replyCartSummary(replyToken, cart, newlyAddedItem = null) 
     console.error('Failed to reply cart summary:', err.message);
   }
 }
+
+// Flex Message: การ์ดยืนยันล้างตะกร้าสินค้าแบบน่ารัก (Clean & Fresh Cart Cleared Card)
+export async function replyCartClearedCard(replyToken) {
+  const flexCard = {
+    type: 'flex',
+    altText: '🗑️ ล้างตะกร้าสินค้าเรียบร้อยแล้ว',
+    contents: {
+      type: 'bubble',
+      size: 'kilo',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'md',
+        paddingAll: 'xl',
+        alignItems: 'center',
+        contents: [
+          {
+            type: 'box',
+            layout: 'vertical',
+            width: '64px',
+            height: '64px',
+            cornerRadius: '100px',
+            backgroundColor: '#f1f5f9',
+            justifyContent: 'center',
+            alignItems: 'center',
+            contents: [
+              {
+                type: 'text',
+                text: '🗑️',
+                size: 'xxl',
+              },
+            ],
+          },
+          {
+            type: 'text',
+            text: 'ล้างตะกร้าสินค้าเรียบร้อยแล้ว',
+            weight: 'bold',
+            size: 'md',
+            color: '#1e293b',
+            align: 'center',
+          },
+          {
+            type: 'text',
+            text: 'รายการผักในตะกร้าถูกนำออกทั้งหมดแล้วครับ คุณลูกค้าสามารถเริ่มเลือกผักสดใหม่ลงตะกร้าได้ตลอดเวลาเลยนะครับ 🌱',
+            size: 'xs',
+            color: '#64748b',
+            wrap: true,
+            align: 'center',
+          },
+        ],
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'sm',
+        paddingAll: 'lg',
+        paddingTop: 'none',
+        contents: [
+          {
+            type: 'button',
+            action: {
+              type: 'postback',
+              label: '🥗 ดูเมนูผักสดทั้งหมด',
+              data: 'action=show_menu',
+              displayText: 'เมนูผัก',
+            },
+            style: 'primary',
+            color: '#16a34a',
+            height: 'sm',
+          },
+        ],
+      },
+    },
+    quickReply: {
+      items: [
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: '🥗 ดูเมนูผัก',
+            data: 'action=show_menu',
+            displayText: 'เมนูผัก',
+          },
+        },
+      ],
+    },
+  };
+
+  try {
+    await client.replyMessage({
+      replyToken: replyToken,
+      messages: [flexCard],
+    });
+  } catch (err) {
+    console.error('Failed to reply cart cleared card:', err.message);
+  }
+}

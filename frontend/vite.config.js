@@ -7,5 +7,18 @@ export default defineConfig({
   server: { port: 5173, host: true, watch: { usePolling: true } },
   optimizeDeps: {
     exclude: ['axios', 'lucide-react', 'html2canvas']
+  },
+  build: {
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          pdf: ['jspdf', 'jspdf-autotable'],
+          icons: ['lucide-react'],
+          charts: ['recharts'],
+        }
+      }
+    }
   }
 });

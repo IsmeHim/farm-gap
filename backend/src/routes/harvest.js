@@ -55,6 +55,10 @@ harvestRouter.post('/smart-record', async (req, res) => {
     if (!plots[0]) return res.status(404).json({ error: 'ไม่พบแปลงปลูกนี้' });
     const plot = plots[0];
 
+    if (plot.status === 'empty' || !plot.crop_name || plot.crop_name === '-') {
+      return res.status(400).json({ error: `ไม่สามารถบันทึกเก็บเกี่ยวได้ เนื่องจาก "${plot.name}" เป็นแปลงว่างและยังไม่มีการลงปลูกผัก` });
+    }
+
     if (!activeBatch) {
       const [bRows] = await pool.query(
         'SELECT * FROM planting_batches WHERE plot_id = ? AND status IN ("growing", "harvest_ready") ORDER BY id DESC LIMIT 1',
@@ -190,21 +194,33 @@ harvestRouter.post('/smart-record', async (req, res) => {
       }
     }
 
-    // จัดการ planting_batches และ plots ตามเงื่อนไข isPartialHarvest
+    // จัดการ planting_batches และ plots ตามเงื่อนไข isPartialHarvest หรือ ยอดผักเหลือ 0
+    let isFullyCompleted = !isPartialHarvest;
+
     if (activeBatch) {
       if (plantsHarvested > 0) {
+        const currentRem = (activeBatch.remaining_count !== null && activeBatch.remaining_count !== undefined)
+          ? Number(activeBatch.remaining_count)
+          : Number(activeBatch.initial_count || 0);
+        const newRemaining = Math.max(0, currentRem - plantsHarvested);
+
         await pool.query(
           `UPDATE planting_batches
            SET total_harvested_count = COALESCE(total_harvested_count, 0) + ?,
-               remaining_count = GREATEST(0, COALESCE(remaining_count, initial_count, 0) - ?),
+               remaining_count = ?,
                updated_at = NOW()
            WHERE id = ?`,
-          [plantsHarvested, plantsHarvested, activeBatch.id]
+          [plantsHarvested, newRemaining, activeBatch.id]
         );
+
+        // ถ้าผักถูกตัดจนเหลือ 0 ต้นแล้ว -> ถือว่าตัดครบหมดแปลง (Fully Completed) ทันที
+        if (newRemaining <= 0) {
+          isFullyCompleted = true;
+        }
       }
 
-      if (!isPartialHarvest) {
-        // เก็บเกี่ยวหมดแปลง -> ปิดรอบ batch
+      if (isFullyCompleted) {
+        // เก็บเกี่ยวหมดแปลง หรือ ยอดต้นไม้เหลือ 0 -> ปิดรอบ batch
         await pool.query(
           `UPDATE planting_batches SET status = 'harvested', actual_harvest_date = ? WHERE id = ?`,
           [hDate, activeBatch.id]
@@ -226,8 +242,8 @@ harvestRouter.post('/smart-record', async (req, res) => {
       ]
     );
 
-    // หากเป็นการเก็บเกี่ยวหมดแปลง ให้รีเซ็ตแปลงเป็น empty
-    if (!isPartialHarvest) {
+    // หากเป็นการเก็บเกี่ยวหมดแปลง หรือ ยอดต้นไม้เหลือ 0 ให้รีเซ็ตแปลงเป็น empty
+    if (isFullyCompleted) {
       await pool.query(
         `UPDATE plots 
          SET status = 'empty', 
@@ -247,9 +263,9 @@ harvestRouter.post('/smart-record', async (req, res) => {
 
     const [hRow] = await pool.query('SELECT * FROM harvest_logs WHERE id = ?', [hResult.insertId]);
 
-    const partialMsg = isPartialHarvest
+    const partialMsg = !isFullyCompleted
       ? ` (ทยอยเก็บเกี่ยว แปลงยังคงสถานะปลูกต่อ)`
-      : ` (เก็บเกี่ยวหมดแปลง รีเซ็ตแปลงพร้อมปลูกรอบใหม่)`;
+      : ` (เก็บเกี่ยวครบตามจำนวน/หมดแปลง รีเซ็ตแปลงพร้อมปลูกรอบใหม่)`;
 
     res.json({
       success: true,
@@ -420,6 +436,71 @@ harvestRouter.post('/:id/stock', async (req, res) => {
     });
   } catch (err) {
     console.error('Error stocking harvest:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ดึงรายการเก็บเกี่ยวพร้อม JOIN ข้อมูลชนิดผัก, รหัสแปลง, รหัสรอบปลูก และข้อมูลสินค้า
+harvestRouter.get('/', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT 
+        h.*,
+        p.name AS plot_name,
+        p.plot_number,
+        pb.batch_code,
+        c.name AS batch_crop_name,
+        c.category AS crop_category,
+        c.icon AS crop_icon,
+        pr.name AS product_name,
+        pr.image_url AS product_image_url,
+        pr.price AS product_price,
+        COALESCE(c.name, pr.name, p.crop_name, 'ผักสด') AS crop_name,
+        pr.image_url AS effective_image_url
+      FROM harvest_logs h
+      LEFT JOIN plots p ON h.plot_id = p.id
+      LEFT JOIN planting_batches pb ON h.batch_id = pb.id
+      LEFT JOIN crops c ON pb.crop_id = c.id
+      LEFT JOIN products pr ON h.product_id = pr.id
+      WHERE h.user_id = ?
+      ORDER BY h.id DESC`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('Error fetching harvest logs:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+harvestRouter.get('/:id', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT 
+        h.*,
+        p.name AS plot_name,
+        p.plot_number,
+        pb.batch_code,
+        c.name AS batch_crop_name,
+        c.category AS crop_category,
+        c.icon AS crop_icon,
+        pr.name AS product_name,
+        pr.image_url AS product_image_url,
+        pr.price AS product_price,
+        COALESCE(c.name, pr.name, p.crop_name, 'ผักสด') AS crop_name,
+        pr.image_url AS effective_image_url
+      FROM harvest_logs h
+      LEFT JOIN plots p ON h.plot_id = p.id
+      LEFT JOIN planting_batches pb ON h.batch_id = pb.id
+      LEFT JOIN crops c ON pb.crop_id = c.id
+      LEFT JOIN products pr ON h.product_id = pr.id
+      WHERE h.id = ? AND h.user_id = ?`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('Error fetching harvest log by id:', err);
     res.status(500).json({ error: err.message });
   }
 });

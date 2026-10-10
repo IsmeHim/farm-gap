@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import LogManager from '../components/LogManager.jsx';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth.jsx';
@@ -24,9 +24,65 @@ import {
   Bot,
   MessageSquare,
   Eye,
+  Sprout,
+  Leaf,
+  Clock,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { getCropCycleId } from '../lib/cropCycle.js';
+
+const parseDateMidnight = (dateStr) => {
+  if (!dateStr) return null;
+  const cleanStr = String(dateStr).split('T')[0];
+  const parts = cleanStr.split('-');
+  if (parts.length === 3) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    return new Date(y, m, d);
+  }
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+};
+
+const getDaysPlanted = (dateStr) => {
+  const dZero = parseDateMidnight(dateStr);
+  if (!dZero) return 0;
+  const now = new Date();
+  const nowZero = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = nowZero.getTime() - dZero.getTime();
+  return Math.max(0, Math.round(diff / (1000 * 60 * 60 * 24)));
+};
+
+const getPlotProgressInfo = (plot, batch) => {
+  const isHarvestReady = (plot && plot.status === 'harvest_ready') || (batch && batch.status === 'harvest_ready');
+  const isHarvested = (plot && plot.status === 'harvested') || (batch && batch.status === 'harvested');
+  const startDate = batch?.start_date || plot?.planting_date;
+  const growthDays = Number(batch?.growth_days || plot?.growth_days || 30);
+  const seedDate = batch?.seed_prep_date || plot?.batch_seed_prep_date || plot?.seed_prep_date || plot?.activities?.find(a => a.stage === 'seeding')?.activity_date;
+  const daysInBed = startDate ? getDaysPlanted(startDate) : 0;
+  const plantAge = seedDate ? Math.max(daysInBed, getDaysPlanted(seedDate)) : daysInBed;
+
+  let effectiveExpectedDate = batch?.expected_harvest_date || plot?.expected_harvest_date;
+  if (seedDate) {
+    const seedMidnight = parseDateMidnight(seedDate);
+    if (seedMidnight) {
+      const calcExp = new Date(seedMidnight.getTime() + growthDays * 24 * 60 * 60 * 1000);
+      effectiveExpectedDate = calcExp.toISOString().split('T')[0];
+    }
+  }
+
+  const daysLeft = Math.max(0, growthDays - plantAge);
+
+  if (isHarvested) {
+    return { percent: 100, plantAge, daysLeft: 0, statusLabel: 'เก็บเกี่ยวแล้ว', isReady: false };
+  }
+  if (isHarvestReady || daysLeft === 0 || (effectiveExpectedDate && parseDateMidnight(effectiveExpectedDate) <= new Date())) {
+    return { percent: 100, plantAge: Math.max(plantAge, growthDays), daysLeft: 0, statusLabel: 'พร้อมเก็บเกี่ยว 100%', isReady: true };
+  }
+  const percent = Math.min(100, Math.max(0, Math.round((plantAge / growthDays) * 100)));
+  return { percent, plantAge, daysLeft, statusLabel: `โต ${percent}% (เหลืออีก ~${daysLeft} วัน)`, isReady: false };
+};
 
 export default function Harvest() {
   const { user } = useAuth();
@@ -68,6 +124,7 @@ export default function Harvest() {
   // Targeted Push Notification Modal state
   const [pushModalItem, setPushModalItem] = useState(null);
   const [pushPlot, setPushPlot] = useState(null);
+  const [pushCropName, setPushCropName] = useState('');
   const [pushMatchedProduct, setPushMatchedProduct] = useState(null);
   const [clustersList, setClustersList] = useState([]);
   const [pushForm, setPushForm] = useState({
@@ -217,7 +274,27 @@ export default function Harvest() {
 
   const openSmartHarvest = async (defaultPlotId = null) => {
     const data = await loadPrerequisites();
-    const targetPlot = (data.plots || []).find(p => p.id === Number(defaultPlotId));
+    const allPlots = data.plots || [];
+    const allBatches = data.batches || [];
+
+    // Filter harvestable plots (status growing or harvest_ready, and has crop_name)
+    const harvestablePlots = allPlots.filter(p => 
+      (p.status === 'growing' || p.status === 'harvest_ready') && 
+      p.crop_name && p.crop_name !== '-'
+    );
+
+    let chosenPlotId = defaultPlotId;
+    if (!chosenPlotId && harvestablePlots.length > 0) {
+      // Find a plot that is harvest_ready (100%) first, or pick the first growing plot
+      const readyPlot = harvestablePlots.find(p => {
+        const b = allBatches.find(bat => bat.plot_id === p.id && (bat.status === 'growing' || bat.status === 'harvest_ready'));
+        const prog = getPlotProgressInfo(p, b);
+        return prog.isReady;
+      });
+      chosenPlotId = readyPlot ? String(readyPlot.id) : String(harvestablePlots[0].id);
+    }
+
+    const targetPlot = allPlots.find(p => p.id === Number(chosenPlotId));
     let initialPackage = 'ถุงใสขนาด 9x18 นิ้ว (4 ขีด)';
     let initialPrice = 20;
 
@@ -232,11 +309,11 @@ export default function Harvest() {
       }
     }
 
-    const activeBatch = (data.batches || []).find(b => b.plot_id === Number(defaultPlotId) && (b.status === 'growing' || b.status === 'harvest_ready'));
+    const activeBatch = (data.batches || []).find(b => b.plot_id === Number(chosenPlotId) && (b.status === 'growing' || b.status === 'harvest_ready'));
     const currentRemaining = activeBatch?.remaining_count ?? activeBatch?.initial_count ?? targetPlot?.remaining_count ?? '';
 
     setForm({
-      plot_id: defaultPlotId ? String(defaultPlotId) : '',
+      plot_id: chosenPlotId ? String(chosenPlotId) : '',
       harvest_date: format(new Date(), 'yyyy-MM-dd'),
       total_weight_kg: 30,
       weight_per_unit_kg: 0.40,
@@ -389,30 +466,41 @@ export default function Harvest() {
       const currentProducts = prodsRes.data || [];
       if (products.length === 0) setProducts(currentProducts);
 
-      const cropName = currentPlot?.crop_name || 'ผักสดคุณภาพ GAP';
-      const defaultTitle = `🥦 ${cropName} สดๆ เพิ่งเก็บเกี่ยววันนี้!`;
-      const defaultMsg = `สวัสดีครับคุณ {name} ทางฟาร์ม FarmGAP พึ่งเก็บเกี่ยว ${cropName} ${harvestItem.quantity ? `จำนวน ${harvestItem.quantity} ${harvestItem.unit || 'กก.'}` : ''} จากแปลง ${currentPlot?.name || 'เพาะปลูก'} สดใหม่ ปลอดภัยมาตรฐาน GAP พร้อมส่งตรงถึงมือคุณแล้วครับ!`;
+      // ดึงชื่อผักจริงของล็อตที่เก็บเกี่ยวนี้
+      const rawCropName = harvestItem.crop_name || harvestItem.batch_crop_name || harvestItem.product_name || currentPlot?.crop_name || 'ผักสดคุณภาพ GAP';
+      const cropName = (rawCropName && rawCropName !== '-') ? rawCropName : 'ผักสดคุณภาพ GAP';
+      const cleanCropDisplay = cropName.replace(/\s*\([^)]*\)/g, '').trim();
+      setPushCropName(cleanCropDisplay);
 
-      // 1. จับคู่หาสินค้าจาก plot_id เป็นลำดับแรก (แม่นยำ 100%)
-      let matchedProd = currentProducts.find(p => p.plot_id && Number(p.plot_id) === Number(harvestItem.plot_id));
+      const plotTitle = currentPlot?.name || harvestItem.plot_name || 'แปลงเพาะปลูก';
+      const defaultTitle = `🥦 ${cleanCropDisplay} สดๆ เพิ่งเก็บเกี่ยววันนี้!`;
+      const defaultMsg = `สวัสดีครับคุณ {name} ทางฟาร์ม FarmGAP พึ่งเก็บเกี่ยว ${cleanCropDisplay} ${harvestItem.quantity ? `จำนวน ${harvestItem.quantity} ${harvestItem.unit || 'กก.'}` : ''} จาก${plotTitle} สดใหม่ ปลอดภัยมาตรฐาน GAP พร้อมส่งตรงถึงมือคุณแล้วครับ!`;
 
-      // 2. หากยังไม่พบ ให้ค้นหาด้วยคีย์เวิร์ดชื่อผัก
-      if (!matchedProd) {
-        const cleanName = cropName
-          .replace(/\([^)]*\)/g, '')
+      // 1. จับคู่หาสินค้าจาก product_id ของ harvestItem ก่อน (แม่นยำ 100%)
+      let matchedProd = null;
+      if (harvestItem.product_id) {
+        matchedProd = currentProducts.find(p => Number(p.id) === Number(harvestItem.product_id));
+      }
+      // 2. หากไม่มี ให้ค้นหาด้วย plot_id
+      if (!matchedProd && harvestItem.plot_id) {
+        matchedProd = currentProducts.find(p => p.plot_id && Number(p.plot_id) === Number(harvestItem.plot_id));
+      }
+      // 3. หากยังไม่พบ ให้ค้นหาด้วยคีย์เวิร์ดชื่อผัก
+      if (!matchedProd && cleanCropDisplay && cleanCropDisplay !== 'ผักสดคุณภาพ GAP') {
+        const cleanKeyword = cleanCropDisplay
           .replace(/ปลอดสาร|สด|gap|อินทรีย์|ซูเปอร์ฟู้ด|พรีเมียม/gi, '')
           .trim()
           .toLowerCase();
-        const cropLower = cropName.toLowerCase();
+        const cropLower = cleanCropDisplay.toLowerCase();
 
         matchedProd = currentProducts.find(p => {
           const pName = (p.name || '').toLowerCase();
-          return pName.includes(cropLower) || (cleanName && pName.includes(cleanName));
+          return pName.includes(cropLower) || (cleanKeyword && pName.includes(cleanKeyword));
         });
       }
 
       setPushMatchedProduct(matchedProd || null);
-      const defaultImage = matchedProd?.image_url || 'https://images.unsplash.com/photo-1540420773420-3366772f4999?q=80&w=600&auto=format&fit=crop';
+      const defaultImage = matchedProd?.image_url || harvestItem.effective_image_url || harvestItem.crop_image_url || 'https://images.unsplash.com/photo-1540420773420-3366772f4999?q=80&w=600&auto=format&fit=crop';
 
       const initialClusterId = clusters[0]?.id || '';
       setPushForm({
@@ -421,11 +509,11 @@ export default function Harvest() {
         custom_title: defaultTitle,
         custom_message: defaultMsg,
         custom_image_url: defaultImage,
-        cta_label: '🛒 กดสั่งซื้อผักสดทันที',
+        cta_label: `🛒 กดสั่งซื้อ${cleanCropDisplay}ทันที`,
         cta_url: '',
       });
 
-      loadAudiencePreview('auto', initialClusterId, cropName);
+      loadAudiencePreview('auto', initialClusterId, cleanCropDisplay);
     } catch (e) {
       console.error('Failed to prepare push modal:', e);
       toast.error('ไม่สามารถเตรียมข้อมูลแจ้งเตือนได้');
@@ -435,37 +523,38 @@ export default function Harvest() {
   const handleTargetTypeChange = (type) => {
     const nextForm = { ...pushForm, target_type: type };
     setPushForm(nextForm);
-    loadAudiencePreview(type, nextForm.cluster_id, pushPlot?.crop_name);
+    loadAudiencePreview(type, nextForm.cluster_id, pushCropName || pushPlot?.crop_name);
   };
 
   const handleClusterChange = (cId) => {
     const nextForm = { ...pushForm, cluster_id: cId };
     setPushForm(nextForm);
-    loadAudiencePreview('cluster', cId, pushPlot?.crop_name);
+    loadAudiencePreview('cluster', cId, pushCropName || pushPlot?.crop_name);
   };
 
   const applyPresetTemplate = (presetKey) => {
-    const cropName = pushPlot?.crop_name || 'ผักสด';
+    const cropName = pushCropName || (pushPlot?.crop_name && pushPlot.crop_name !== '-' ? pushPlot.crop_name : 'ผักสด');
+    const plotTitle = pushPlot?.name || pushModalItem?.plot_name || 'แปลงเพาะปลูก';
     if (presetKey === 'fresh') {
       setPushForm(prev => ({
         ...prev,
         custom_title: `🥦 ${cropName} สดๆ เพิ่งตัดจากแปลงวันนี้!`,
-        custom_message: `สวัสดีครับคุณ {name} ทางฟาร์มพึ่งตัด ${cropName} สดๆ จากแปลงเพาะปลูก ${pushPlot?.name || ''} มาตรฐาน GAP 100% สด กรอบ ปลอดภัย ไร้สารเคมีตกค้าง พร้อมส่งตรงถึงบ้านคุณครับ!`,
-        cta_label: '🛒 สั่งซื้อผักสดทันที',
+        custom_message: `สวัสดีครับคุณ {name} ทางฟาร์มพึ่งตัด ${cropName} สดๆ จาก${plotTitle} มาตรฐาน GAP 100% สด กรอบ ปลอดภัย ไร้สารเคมีตกค้าง พร้อมส่งตรงถึงบ้านคุณครับ!`,
+        cta_label: `🛒 สั่งซื้อ${cropName}ทันที`,
       }));
     } else if (presetKey === 'b2b') {
       setPushForm(prev => ({
         ...prev,
         custom_title: `📦 ${cropName} เกรดยกลัง ราคาส่งพิเศษสำหรับร้านค้า!`,
         custom_message: `สวัสดีครับคุณ {name} วันนี้ฟาร์มมี ${cropName} ล็อตใหม่คัดเกรดพิเศษ ${pushModalItem?.quantity ? `มีจำนวน ${pushModalItem.quantity} ${pushModalItem.unit || 'กก.'}` : ''} เหมาะสำหรับร้านอาหารและลูกค้ายกลัง ราคาส่งมิตรภาพ สนใจรับกี่ลังแจ้งได้เลยครับ`,
-        cta_label: '📦 ดูราคาส่งและสั่งจอง',
+        cta_label: `📦 สั่งจอง${cropName}ราคาส่ง`,
       }));
     } else if (presetKey === 'promo') {
       setPushForm(prev => ({
         ...prev,
         custom_title: `⚡ นาทีทอง! ${cropName} สดใหม่ ลดพิเศษวันนี้เท่านั้น`,
         custom_message: `สวัสดีครับคุณ {name} พิเศษสำหรับลูกค้าคนสำคัญ! ${cropName} เพิ่งเก็บเกี่ยวสดๆ วันนี้ จัดโปรโมชั่นลดพิเศษ จำนวนจำกัดเพียง ${pushModalItem?.quantity || 'ไม่กี่'} ${pushModalItem?.unit || 'กก.'} เท่านั้น ช้อปเลยก่อนหมด!`,
-        cta_label: '⚡ ช้อปโปรโมชั่นทันที',
+        cta_label: `⚡ สั่งซื้อ${cropName}โปรโมชั่น`,
       }));
     }
   };
@@ -475,13 +564,15 @@ export default function Harvest() {
     if (!pushModalItem) return;
     setSendingPush(true);
     try {
-      const cropName = pushPlot?.crop_name || 'ผักสลัดสด';
+      const cropName = pushCropName || (pushPlot?.crop_name && pushPlot.crop_name !== '-' ? pushPlot.crop_name : 'ผักสลัดสด');
+      const plotTitle = pushPlot?.name || pushModalItem?.plot_name || 'แปลงเกษตร';
       const res = await api.post('/api/ai/notify-harvest', {
         harvest_id: pushModalItem.id,
+        product_id: pushMatchedProduct?.id || pushModalItem.product_id || null,
         crop_name: cropName,
         quantity: pushModalItem.quantity,
         unit: pushModalItem.unit || 'kg',
-        plot_name: pushPlot?.name || 'แปลงเกษตร',
+        plot_name: plotTitle,
         target_type: pushForm.target_type,
         cluster_id: pushForm.cluster_id,
         custom_title: pushForm.custom_title,
@@ -539,9 +630,15 @@ export default function Harvest() {
                       <h3 className="font-black text-sm sm:text-base text-[#173f2a] truncate">
                         {cleanPlotTitle}
                       </h3>
-                      {batchCode && (
+                      {r.crop_name && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-900 bg-emerald-100/90 border border-emerald-300 px-2 py-0.5 rounded-md shadow-2xs">
+                          <span>🥦</span>
+                          <span>{r.crop_name}</span>
+                        </span>
+                      )}
+                      {(r.batch_code || batchCode) && (
                         <span className="font-mono text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 shrink-0">
-                          {batchCode}
+                          {r.batch_code || batchCode}
                         </span>
                       )}
                     </div>
@@ -838,10 +935,63 @@ export default function Harvest() {
             ),
           },
           {
+            key: 'crop_name',
+            label: 'ชนิดผัก',
+            hideInForm: true,
+            render: (val, r) => {
+              const crop = val || r.batch_crop_name || r.product_name || 'ผักสด';
+              const cleanCrop = crop.replace(/\s*\([^)]*\)/g, '').trim();
+              const img = r.effective_image_url || r.product_image_url || r.crop_image_url;
+              return (
+                <div className="flex items-center gap-2.5 min-w-[150px]">
+                  {img ? (
+                    <img
+                      src={img}
+                      alt={cleanCrop}
+                      className="w-8 h-8 rounded-lg object-cover border border-emerald-200/80 shadow-2xs shrink-0"
+                    />
+                  ) : (
+                    <span className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center text-sm font-bold shrink-0 border border-emerald-200">
+                      🥗
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <span className="font-black text-slate-900 text-xs block truncate" title={crop}>
+                      {cleanCrop}
+                    </span>
+                    {r.crop_category && (
+                      <span className="text-[10px] text-emerald-700 font-semibold block">
+                        {r.crop_category}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            },
+          },
+          {
             key: 'plot_id',
             label: 'แปลง / แคร่',
             placeholder: '-- เลือกแปลง --',
             required: true,
+            render: (val, r) => {
+              const p = plots.find(plot => plot.id === val);
+              const pName = r.plot_name || (p ? p.name : `แปลงที่ ${val}`);
+              const batchCode = r.batch_code || (p ? `#BATCH-${(p.name || '').replace(/แปลง|\/|\s|\(.*?\)/g, '').trim()}-R${p.cycle_number || 1}` : null);
+              return (
+                <div className="min-w-[140px] space-y-1">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-black text-emerald-950 bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200/90 whitespace-nowrap shadow-2xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0"></span>
+                    <span>{pName}</span>
+                  </span>
+                  {batchCode && (
+                    <div className="text-[10px] font-mono text-slate-400 font-semibold truncate" title={batchCode}>
+                      {batchCode}
+                    </div>
+                  )}
+                </div>
+              );
+            },
           },
           {
             key: 'quantity',
@@ -1095,62 +1245,177 @@ export default function Harvest() {
               <form onSubmit={handleSmartSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
                 <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 text-xs">
                 {/* 1. Select Plot */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <Layers className="w-4 h-4 text-emerald-700" />
-                    เลือกแปลงที่ต้องการเก็บผลผลิต <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    required
-                    value={form.plot_id}
-                    onChange={e => setForm(prev => ({ ...prev, plot_id: e.target.value }))}
-                    className="input text-xs w-full py-2.5 px-3.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600 bg-white"
-                  >
-                    <option value="">-- เลือกแปลงปลูก --</option>
-                    {plots.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} — {p.crop_name} [#{getCropCycleId(p)}] {p.status === 'active' ? '(กำลังปลูก)' : `(${p.status})`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {(() => {
+                  const activePlots = plots.filter(p => (p.status === 'growing' || p.status === 'harvest_ready') && p.crop_name && p.crop_name !== '-');
+                  const emptyPlots = plots.filter(p => !activePlots.some(ap => ap.id === p.id));
 
-                {/* Plot Quick Info */}
-                {selectedPlot && (() => {
-                  const currentBatch = batches.find(b => b.plot_id === selectedPlot.id && (b.status === 'growing' || b.status === 'harvest_ready'));
-                  const remaining = currentBatch?.remaining_count ?? currentBatch?.initial_count ?? selectedPlot.remaining_count;
-                  const initial = currentBatch?.initial_count ?? selectedPlot.initial_count;
-                  const unit = currentBatch?.planting_unit || selectedPlot.planting_unit || 'ต้น';
+                  // Categorize active plots by ready vs growing
+                  const readyPlots = [];
+                  const growingPlots = [];
+
+                  activePlots.forEach(p => {
+                    const currentBatch = batches.find(b => b.plot_id === p.id && (b.status === 'growing' || b.status === 'harvest_ready'));
+                    const prog = getPlotProgressInfo(p, currentBatch);
+                    const remaining = currentBatch?.remaining_count ?? currentBatch?.initial_count ?? p.remaining_count ?? 0;
+                    if (prog.isReady) {
+                      readyPlots.push({ plot: p, batch: currentBatch, prog, remaining });
+                    } else {
+                      growingPlots.push({ plot: p, batch: currentBatch, prog, remaining });
+                    }
+                  });
 
                   return (
-                    <div className="p-3.5 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl text-xs text-emerald-900 space-y-2">
+                    <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <div>
-                          <div>พืช: <strong>{selectedPlot.crop_name}</strong></div>
-                          <div className="text-[11px] text-emerald-700">
-                            วันปลูก: {selectedPlot.planting_date ? format(new Date(selectedPlot.planting_date), 'dd/MM/yyyy') : '-'}
-                            {initial && (
-                              <span className="ml-2 font-bold text-slate-800">
-                                (คงเหลือ {Number(remaining).toLocaleString()}/{Number(initial).toLocaleString()} {unit})
-                              </span>
-                            )}
+                        <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                          <Layers className="w-4 h-4 text-emerald-700" />
+                          <span>เลือกแปลงที่ต้องการเก็บผลผลิต</span> <span className="text-rose-500">*</span>
+                        </label>
+                        {activePlots.length > 0 && (
+                          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                            แปลงมีผัก {activePlots.length} แปลง (พร้อมเก็บ {readyPlots.length} แปลง)
+                          </span>
+                        )}
+                      </div>
+
+                      {activePlots.length === 0 ? (
+                        <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl text-xs text-amber-900 space-y-2">
+                          <div className="flex items-center gap-2 font-black text-amber-950">
+                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                            <span>ไม่มีแปลงที่กำลังปลูกผักในขณะนี้ (ทุกแปลงว่าง)</span>
+                          </div>
+                          <p className="text-[11px] text-amber-800">
+                            กรุณาเริ่มรอบการปลูกใหม่ที่หน้า "แปลงปลูก & รอบการผลิต" ก่อน จึงจะสามารถบันทึกการเก็บเกี่ยวได้
+                          </p>
+                          <div className="pt-1">
+                            <Link
+                              to="/plots"
+                              onClick={() => setSmartModalOpen(false)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs"
+                            >
+                              <Sprout className="w-3.5 h-3.5" />
+                              <span>ไปที่หน้าแปลงปลูกเพื่อเริ่มรอบใหม่</span>
+                            </Link>
                           </div>
                         </div>
-                        <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300">
+                      ) : (
+                        <select
+                          required
+                          value={form.plot_id}
+                          onChange={e => setForm(prev => ({ ...prev, plot_id: e.target.value }))}
+                          className="input text-xs w-full py-2.5 px-3.5 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-600 bg-white font-medium text-slate-800 shadow-xs"
+                        >
+                          <option value="">-- กรุณาเลือกแปลงปลูกที่มีผัก --</option>
+
+                          {/* กลุ่มที่ 1: พร้อมเก็บเกี่ยว (100%) */}
+                          {readyPlots.length > 0 && (
+                            <optgroup label="✨ แปลงที่พร้อมเก็บเกี่ยวแล้ว (100%)">
+                              {readyPlots.map(({ plot: p, remaining, prog }) => (
+                                <option key={p.id} value={p.id}>
+                                  🟢 {p.name} — {p.crop_name} (คงเหลือ {Number(remaining).toLocaleString()} ต้น • พร้อมเก็บ 100%)
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+
+                          {/* กลุ่มที่ 2: กำลังปลูก (ยังไม่ครบวันแต่สามารถเก็บเกี่ยวได้) */}
+                          {growingPlots.length > 0 && (
+                            <optgroup label="🌱 แปลงที่กำลังปลูก (อยู่ระหว่างการเติบโต)">
+                              {growingPlots.map(({ plot: p, remaining, prog }) => (
+                                <option key={p.id} value={p.id}>
+                                  🟡 {p.name} — {p.crop_name} (คงเหลือ {Number(remaining).toLocaleString()} ต้น • โต {prog.percent}% เหลือ ~{prog.daysLeft} วัน)
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+
+                          {/* กลุ่มที่ 3: แปลงว่าง (ปิดการเลือก ป้องกันกดผิด) */}
+                          {emptyPlots.length > 0 && (
+                            <optgroup label="⚪ แปลงว่าง (ยังไม่ได้ลงปลูก - ไม่สามารถเก็บเกี่ยวได้)">
+                              {emptyPlots.map(p => (
+                                <option key={p.id} value={p.id} disabled className="text-slate-400 bg-slate-100">
+                                  ⚪ {p.name} (แปลงว่าง - ไม่มีผักปลูก)
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                        </select>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Plot Quick Info */}
+                {selectedPlot && selectedPlot.crop_name && selectedPlot.crop_name !== '-' && (() => {
+                  const currentBatch = batches.find(b => b.plot_id === selectedPlot.id && (b.status === 'growing' || b.status === 'harvest_ready'));
+                  const remaining = currentBatch?.remaining_count ?? currentBatch?.initial_count ?? selectedPlot.remaining_count ?? 0;
+                  const initial = currentBatch?.initial_count ?? selectedPlot.initial_count;
+                  const unit = currentBatch?.planting_unit || selectedPlot.planting_unit || 'ต้น';
+                  const prog = getPlotProgressInfo(selectedPlot, currentBatch);
+                  const matchedCrop = crops.find(c => 
+                    selectedPlot.crop_name.toLowerCase().includes(c.name.toLowerCase()) || 
+                    c.name.toLowerCase().includes(selectedPlot.crop_name.toLowerCase())
+                  );
+
+                  return (
+                    <div className="p-3.5 bg-gradient-to-br from-emerald-50/90 to-teal-50/50 border border-emerald-200 rounded-2xl text-xs text-emerald-950 space-y-2.5 shadow-xs">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-white border border-emerald-200 flex items-center justify-center text-xl shrink-0 shadow-xs">
+                            {matchedCrop?.icon || '🥬'}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-black text-sm text-slate-900">{selectedPlot.crop_name}</span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                {selectedPlot.name}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 mt-0.5">
+                              วันลงปลูก: {selectedPlot.planting_date ? format(new Date(selectedPlot.planting_date), 'dd/MM/yyyy') : '-'}
+                              {initial && (
+                                <span className="ml-2 font-bold text-emerald-900">
+                                  (คงเหลือ {Number(remaining).toLocaleString()} / ทั้งหมด {Number(initial).toLocaleString()} {unit})
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <span className="font-mono text-[10px] font-bold px-2.5 py-1 rounded-lg bg-amber-100/90 text-amber-900 border border-amber-300 shrink-0">
                           #{getCropCycleId(selectedPlot)} (รอบที่ {selectedPlot.cycle_number || 1})
                         </span>
                       </div>
 
-                      {/* Progress Indicator */}
-                      <div className="pt-2 border-t border-emerald-200/60 flex items-center justify-between text-[11px]">
-                        <span className="font-bold text-slate-700 flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>ความคืบหน้ารอบปลูก:</span>
-                        </span>
-                        <span className="font-black text-amber-900 bg-amber-100/90 px-2.5 py-0.5 rounded-full border border-amber-300 flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
-                          100% ครบกำหนดพร้อมเก็บเกี่ยว
-                        </span>
+                      {/* Progress Indicator & Status Bar */}
+                      <div className="pt-2 border-t border-emerald-200/70 space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                            <CheckCircle2 className={`w-3.5 h-3.5 ${prog.isReady ? 'text-emerald-600' : 'text-amber-500'}`} />
+                            <span>สถานะความพร้อม:</span>
+                          </span>
+                          {prog.isReady ? (
+                            <span className="font-black text-emerald-900 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                              พร้อมเก็บเกี่ยวแล้ว (100%)
+                            </span>
+                          ) : (
+                            <span className="font-bold text-amber-900 bg-amber-100/80 px-2.5 py-0.5 rounded-full border border-amber-300 flex items-center gap-1.5">
+                              <Clock className="w-3 h-3 text-amber-600" />
+                              โต {prog.percent}% (เหลืออีก ~{prog.daysLeft} วัน)
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all duration-500 rounded-full ${
+                              prog.isReady ? 'bg-emerald-500' : 'bg-amber-500'
+                            }`}
+                            style={{ width: `${Math.min(100, Math.max(5, prog.percent))}%` }}
+                          />
+                        </div>
                       </div>
                     </div>
                   );
@@ -1203,24 +1468,41 @@ export default function Harvest() {
                     </button>
                   </div>
 
-                  {form.is_partial && (
-                    <div className="pt-2 border-t border-slate-200/80">
-                      <label className="text-[11px] font-bold text-emerald-900 block mb-1">
-                        จำนวนต้นที่ตัดในรอบนี้ (ต้น)
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        placeholder="เช่น 50"
-                        value={form.harvested_plants_count}
-                        onChange={e => setForm(prev => ({ ...prev, harvested_plants_count: e.target.value }))}
-                        className="input text-xs w-full py-2 px-3 rounded-xl border border-emerald-300 bg-white font-bold text-emerald-900 focus:border-emerald-600"
-                      />
-                      <span className="text-[10px] text-emerald-700 block mt-1">
-                        * ระบบจะตัดยอดออกจากแปลงให้อัตโนมัติ แปลงจะยังคงเหลือต้นที่เหลือไว้ให้ดูแลต่อ
-                      </span>
-                    </div>
-                  )}
+                  {form.is_partial && (() => {
+                    const currentBatch = batches.find(b => b.plot_id === Number(form.plot_id) && (b.status === 'growing' || b.status === 'harvest_ready'));
+                    const currentRem = Number(currentBatch?.remaining_count ?? currentBatch?.initial_count ?? selectedPlot?.remaining_count ?? 0);
+                    const harvestNum = Number(form.harvested_plants_count || 0);
+                    const willDrainPlot = currentRem > 0 && harvestNum >= currentRem;
+
+                    return (
+                      <div className="pt-2 border-t border-slate-200/80">
+                        <label className="text-[11px] font-bold text-emerald-900 block mb-1">
+                          จำนวนต้นที่ตัดในรอบนี้ (ต้น) {currentRem > 0 && <span className="text-slate-500 font-normal">(คงเหลือในแปลง: {currentRem} ต้น)</span>}
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder="เช่น 50"
+                          value={form.harvested_plants_count}
+                          onChange={e => setForm(prev => ({ ...prev, harvested_plants_count: e.target.value }))}
+                          className="input text-xs w-full py-2 px-3 rounded-xl border border-emerald-300 bg-white font-bold text-emerald-900 focus:border-emerald-600"
+                        />
+                        {willDrainPlot ? (
+                          <div className="mt-2 p-2.5 bg-amber-50 border border-amber-300 rounded-xl text-[11px] text-amber-900 flex items-start gap-2">
+                            <span className="text-base leading-none">✨</span>
+                            <div>
+                              <p className="font-bold">คุณกำลังตัดจนครบยอดที่เหลือทั้งหมดในแปลง ({currentRem} ต้น)</p>
+                              <p className="text-amber-700 text-[10px] mt-0.5">ระบบจะปิดรอบการปลูกของชุดนี้ให้อัตโนมัติ และรีเซ็ตสถานะแปลงเป็น "ว่าง" พร้อมลงรอบใหม่</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-emerald-700 block mt-1">
+                            * ระบบจะตัดยอดออกจากแปลงให้อัตโนมัติ แปลงจะยังคงเหลือ {Math.max(0, currentRem - harvestNum)} ต้นไว้ให้ดูแลต่อ
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* ปลายทางผลผลิตหลังเก็บเกี่ยว (Storage vs Direct LINE Shop) */}
@@ -1595,7 +1877,7 @@ export default function Harvest() {
                   ยิงแจ้งเตือน LINE อัจฉริยะ (Targeted Push)
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  ผลผลิต: <strong className="text-emerald-900">{pushPlot?.crop_name || 'ผักสด'}</strong> | แปลง: {pushPlot?.name || '-'} | จำนวน: {pushModalItem.quantity} {pushModalItem.unit}
+                  ผลผลิต: <strong className="text-emerald-900">{pushCropName || pushModalItem.crop_name || pushPlot?.crop_name || 'ผักสด'}</strong> | แปลง: {pushPlot?.name || pushModalItem.plot_name || '-'} | จำนวน: {pushModalItem.quantity} {pushModalItem.unit}
                 </p>
               </div>
               <button
@@ -1829,7 +2111,7 @@ export default function Harvest() {
                       )}
                     </div>
                     <div>
-                      <label className="text-[11px] font-bold text-slate-600 block mb-1">ข้อความบนปุ่มกด (CTA Button)</label>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">ข้อความบนปุ่มหลัก (สั่งซื้อทันทีใน LINE แชท)</label>
                       <input
                         type="text"
                         value={pushForm.cta_label}
@@ -1837,6 +2119,9 @@ export default function Harvest() {
                         placeholder="เช่น 🛒 กดสั่งซื้อผักสดทันที"
                         className="input text-xs w-full rounded-xl"
                       />
+                      <p className="text-[10px] text-emerald-700 mt-1">
+                        * เมื่อลูกค้ากดปุ่มนี้ ระบบจะส่งการ์ดเลือกจำนวนผักในห้องแชท LINE ทันที (ไม่ต้องเปิดเว็บ)
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1877,10 +2162,13 @@ export default function Harvest() {
                       </p>
                     </div>
 
-                    {/* Button */}
-                    <div className="p-3 pt-0">
+                    {/* Two Buttons: Direct Order + View Menu */}
+                    <div className="p-3 pt-0 space-y-1.5">
                       <div className="w-full py-2 bg-emerald-700 text-white font-bold text-center text-xs rounded-xl shadow-xs">
                         {pushForm.cta_label || '🛒 กดสั่งซื้อผักสดทันที'}
+                      </div>
+                      <div className="w-full py-2 bg-emerald-50 text-emerald-800 font-bold text-center text-xs rounded-xl border border-emerald-200 shadow-2xs">
+                        🥗 ดูเมนูผักทั้งหมด
                       </div>
                     </div>
                   </div>

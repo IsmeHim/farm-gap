@@ -16,7 +16,7 @@ import { replyPaymentMethodSelection } from './flex/paymentSelectionCard.js';
 import { replyOrderStatus, replyOrderHistory } from './flex/orderStatusCard.js';
 import { replyRefundInstructions, replyOwnerContact } from './flex/refundCard.js';
 import { replyMissingContactInfo } from './flex/missingContactCard.js';
-import { replyCartSummary } from './flex/cartSummaryCard.js';
+import { replyCartSummary, replyCartClearedCard } from './flex/cartSummaryCard.js';
 import { replyProductQuantityCard } from './flex/productQtyCard.js';
 import { sendSmartOrderDraftConfirmation } from './flex/orderDraftCard.js';
 import { createChatOrder, cancelChatOrder } from './orderService.js';
@@ -343,15 +343,7 @@ export async function handleEvent(event) {
         session.draft_data.cart = [];
         await setChatSession(userId, 'IDLE', null, session.draft_data);
       }
-      return client.replyMessage({
-        replyToken: event.replyToken,
-        messages: [
-          {
-            type: 'text',
-            text: '🗑️ ล้างตะกร้าสินค้าเรียบร้อยแล้วครับ หากต้องการสั่งผักใหม่ พิมพ์ "เมนูผัก" เพื่อเลือกผักสดได้ตลอดเวลาครับ 🌱',
-          },
-        ],
-      });
+      return replyCartClearedCard(event.replyToken);
     }
 
     // 3.5 ดูตะกร้าปัจจุบัน
@@ -924,15 +916,7 @@ export async function handleEvent(event) {
         session.draft_data.cart = [];
         await setChatSession(userId, 'IDLE', null, session.draft_data);
       }
-      return client.replyMessage({
-        replyToken,
-        messages: [
-          {
-            type: 'text',
-            text: '🗑️ ล้างตะกร้าสินค้าเรียบร้อยแล้วครับ หากต้องการสั่งผักใหม่ พิมพ์ "เมนูผัก" เพื่อเลือกผักสดได้ตลอดเวลาครับ 🌱',
-          },
-        ],
-      });
+      return replyCartClearedCard(replyToken);
     }
 
     const isCheckoutInquiry = ['สรุปยอด', 'คิดเงิน', 'เช็คบิล', 'สั่งซื้อเลย', 'ยืนยันตะกร้า', 'checkout'].some(k => lowerTrimText === k || lowerTrimText.startsWith(k));
