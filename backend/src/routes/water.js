@@ -104,8 +104,8 @@ export async function processAutoWaterRoutineForUser(userId) {
     `SELECT plot_id, session FROM water_logs WHERE user_id = ? AND DATE(log_date) = ?`,
     [userId, today]
   );
-  const existingMorning = new Set(existingLogs.filter(r => r.session === 'เช้า' || !r.session).map(r => r.plot_id));
-  const existingEvening = new Set(existingLogs.filter(r => r.session === 'เย็น').map(r => r.plot_id));
+  const existingMorning = existingLogs.some(r => r.session === 'เช้า' || !r.session);
+  const existingEvening = existingLogs.some(r => r.session === 'เย็น');
 
   const [u] = await pool.query('SELECT display_name, email FROM users WHERE id = ?', [userId]);
   const worker = u[0]?.display_name || 'เจ้าของฟาร์ม';
@@ -114,41 +114,37 @@ export async function processAutoWaterRoutineForUser(userId) {
   let addedMorning = 0;
   let addedEvening = 0;
 
-  // ตรวจรอบเช้า: ถ้าเลยเวลาเช้าแล้วและยังไม่ได้บันทึก
+  // ตรวจรอบเช้า: ถ้าเลยเวลาเช้าแล้วและยังไม่ได้บันทึก (บันทึกรวม 1 แถวต่อรอบสำหรับทั้งฟาร์ม)
   if (currentTimeVal >= morningTimeVal) {
-    for (const p of activePlots) {
-      if (!existingMorning.has(p.id)) {
-        const isRainy = settings.climate_condition === 'rainy_humidity';
-        const noteText = isRainy
-          ? `🌧️ กิจวัตรอัตโนมัติรอบเช้า (${settings.morning_time} น.) - ฝนตก/ความชื้นสูง รดควบคุมความชื้น [โรงเรือนหลังคาใส GAP]`
-          : `💧 กิจวัตรอัตโนมัติรอบเช้า (${settings.morning_time} น.) - น้ำสะอาดมาตรฐาน GAP [โรงเรือนหลังคาใส]`;
+    if (!existingMorning) {
+      const isRainy = settings.climate_condition === 'rainy_humidity';
+      const noteText = isRainy
+        ? `🌧️ กิจวัตรอัตโนมัติรอบเช้า (${settings.morning_time} น.) - ฝนตก/ความชื้นสูง รดควบคุมความชื้น ทุกแปลง [โรงเรือนหลังคาใส GAP]`
+        : `💧 กิจวัตรอัตโนมัติรอบเช้า (${settings.morning_time} น.) - น้ำสะอาดมาตรฐาน GAP ทุกแปลง [โรงเรือนหลังคาใส]`;
 
-        await pool.query(
-          `INSERT INTO water_logs (user_id, plot_id, log_date, session, water_source, water_source_type, water_quality, contamination_check, amount_liters, worker_name, notes, climate_condition, is_auto_routine, created_by, updated_by)
-           VALUES (?, ?, ?, 'เช้า', ?, ?, 'ผ่าน', 1, NULL, ?, ?, ?, 1, ?, ?)`,
-          [userId, p.id, today, p.water_source || settings.water_source, p.water_source || settings.water_source, p.default_worker_name || worker, noteText, settings.climate_condition || 'normal', userEmail, userEmail]
-        );
-        addedMorning++;
-      }
+      await pool.query(
+        `INSERT INTO water_logs (user_id, plot_id, log_date, session, water_source, water_source_type, water_quality, contamination_check, amount_liters, worker_name, notes, climate_condition, is_auto_routine, created_by, updated_by)
+         VALUES (?, NULL, ?, 'เช้า', ?, ?, 'ผ่าน', 1, NULL, ?, ?, ?, 1, ?, ?)`,
+        [userId, today, settings.water_source || 'น้ำสะอาดมาตรฐาน GAP', settings.water_source || 'น้ำสะอาดมาตรฐาน GAP', worker, noteText, settings.climate_condition || 'normal', userEmail, userEmail]
+      );
+      addedMorning++;
     }
   }
 
-  // ตรวจรอบเย็น: ถ้าเลยเวลาเย็นแล้วและยังไม่ได้บันทึก
+  // ตรวจรอบเย็น: ถ้าเลยเวลาเย็นแล้วและยังไม่ได้บันทึก (บันทึกรวม 1 แถวต่อรอบสำหรับทั้งฟาร์ม)
   if (currentTimeVal >= eveningTimeVal) {
-    for (const p of activePlots) {
-      if (!existingEvening.has(p.id)) {
-        const isRainy = settings.climate_condition === 'rainy_humidity';
-        const noteText = isRainy
-          ? `🌧️ กิจวัตรอัตโนมัติรอบเย็น (${settings.evening_time} น.) - สภาพอากาศความชื้นสูง รดเบาบางควบคุมความชื้น [โรงเรือนหลังคาใส GAP]`
-          : `💧 กิจวัตรอัตโนมัติรอบเย็น (${settings.evening_time} น.) - น้ำสะอาดมาตรฐาน GAP [โรงเรือนหลังคาใส]`;
+    if (!existingEvening) {
+      const isRainy = settings.climate_condition === 'rainy_humidity';
+      const noteText = isRainy
+        ? `🌧️ กิจวัตรอัตโนมัติรอบเย็น (${settings.evening_time} น.) - สภาพอากาศความชื้นสูง รดเบาบางควบคุมความชื้น ทุกแปลง [โรงเรือนหลังคาใส GAP]`
+        : `💧 กิจวัตรอัตโนมัติรอบเย็น (${settings.evening_time} น.) - น้ำสะอาดมาตรฐาน GAP ทุกแปลง [โรงเรือนหลังคาใส]`;
 
-        await pool.query(
-          `INSERT INTO water_logs (user_id, plot_id, log_date, session, water_source, water_source_type, water_quality, contamination_check, amount_liters, worker_name, notes, climate_condition, is_auto_routine, created_by, updated_by)
-           VALUES (?, ?, ?, 'เย็น', ?, ?, 'ผ่าน', 1, NULL, ?, ?, ?, 1, ?, ?)`,
-          [userId, p.id, today, p.water_source || settings.water_source, p.water_source || settings.water_source, p.default_worker_name || worker, noteText, settings.climate_condition || 'normal', userEmail, userEmail]
-        );
-        addedEvening++;
-      }
+      await pool.query(
+        `INSERT INTO water_logs (user_id, plot_id, log_date, session, water_source, water_source_type, water_quality, contamination_check, amount_liters, worker_name, notes, climate_condition, is_auto_routine, created_by, updated_by)
+         VALUES (?, NULL, ?, 'เย็น', ?, ?, 'ผ่าน', 1, NULL, ?, ?, ?, 1, ?, ?)`,
+        [userId, today, settings.water_source || 'น้ำสะอาดมาตรฐาน GAP', settings.water_source || 'น้ำสะอาดมาตรฐาน GAP', worker, noteText, settings.climate_condition || 'normal', userEmail, userEmail]
+      );
+      addedEvening++;
     }
   }
 
@@ -321,17 +317,35 @@ waterRouter.get('/today-status', async (req, res) => {
 
     // ดึง rows ปัจจุบันของวันนี้ทั้งหมด (ตามเวลาท้องถิ่นไทย)
     const [rows] = await pool.query(
-      `SELECT w.*, p.name AS plot_name, p.crop_name
+      `SELECT w.*, COALESCE(p.name, 'ทุกแปลงในฟาร์ม') AS plot_name, p.crop_name
        FROM water_logs w
-       JOIN plots p ON p.id = w.plot_id
+       LEFT JOIN plots p ON p.id = w.plot_id
        WHERE w.user_id = ? AND DATE(w.log_date) = ?
        ORDER BY w.id DESC`,
       [req.user.id, today]
     );
 
-    const morningPlotIds = [...new Set(rows.filter(r => r.session === 'เช้า' || !r.session).map(r => r.plot_id))];
-    const eveningPlotIds = [...new Set(rows.filter(r => r.session === 'เย็น').map(r => r.plot_id))];
-    const wateredPlotIds = [...new Set(rows.map(r => r.plot_id))];
+    const [activePlots] = await pool.query(
+      `SELECT id FROM plots 
+       WHERE user_id = ? 
+         AND status IN ('active', 'growing', 'harvest_ready')
+         AND (auto_water_enabled IS NULL OR auto_water_enabled = 1)`,
+      [req.user.id]
+    );
+    const activePlotIds = activePlots.map(p => p.id);
+
+    const hasFarmMorning = rows.some(r => (r.session === 'เช้า' || !r.session) && r.plot_id === null);
+    const hasFarmEvening = rows.some(r => r.session === 'เย็น' && r.plot_id === null);
+
+    const morningPlotIds = hasFarmMorning
+      ? activePlotIds
+      : [...new Set(rows.filter(r => r.session === 'เช้า' || !r.session).map(r => r.plot_id).filter(Boolean))];
+
+    const eveningPlotIds = hasFarmEvening
+      ? activePlotIds
+      : [...new Set(rows.filter(r => r.session === 'เย็น').map(r => r.plot_id).filter(Boolean))];
+
+    const wateredPlotIds = [...new Set([...morningPlotIds, ...eveningPlotIds])];
 
     // คำนวณวันหมดอายุและจำนวนวันที่เหลือ
     let isExpired = false;
@@ -392,8 +406,8 @@ waterRouter.get('/cycle-summary', async (req, res) => {
         daysPlanted = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
       }
 
-      // หาประวัติการให้น้ำของแปลงนี้นับตั้งแต่วันที่ปลูก
-      let logQuery = `SELECT * FROM water_logs WHERE user_id = ? AND plot_id = ?`;
+      // หาประวัติการให้น้ำของแปลงนี้นับตั้งแต่วันที่ปลูก (รวมทั้งบันทึกเฉพาะแปลง และบันทึกรวมทั้งฟาร์ม plot_id IS NULL)
+      let logQuery = `SELECT * FROM water_logs WHERE user_id = ? AND (plot_id = ? OR plot_id IS NULL)`;
       const queryParams = [req.user.id, p.id];
       if (p.planting_date) {
         logQuery += ` AND DATE(log_date) >= ?`;
@@ -474,9 +488,9 @@ waterRouter.get('/daily-table', async (req, res) => {
     const { start_date, end_date } = req.query;
 
     let query = `
-      SELECT w.*, p.name AS plot_name, p.plot_number, p.crop_name
+      SELECT w.*, COALESCE(p.name, 'ทุกแปลงในฟาร์ม') AS plot_name, p.plot_number, p.crop_name
       FROM water_logs w
-      JOIN plots p ON p.id = w.plot_id
+      LEFT JOIN plots p ON p.id = w.plot_id
       WHERE w.user_id = ?
     `;
     const params = [req.user.id];
@@ -509,6 +523,8 @@ waterRouter.get('/daily-table', async (req, res) => {
           total_logs: 0,
           morning_plots: [],
           evening_plots: [],
+          has_farm_morning: false,
+          has_farm_evening: false,
           climate_condition: log.climate_condition || 'normal',
           water_source: log.water_source || 'น้ำสะอาดมาตรฐาน GAP',
           water_quality: log.water_quality || 'ผ่าน',
@@ -529,49 +545,66 @@ waterRouter.get('/daily-table', async (req, res) => {
       const isMorning = log.session === 'เช้า' || !log.session;
       const isEvening = log.session === 'เย็น';
 
-      const plotInfo = {
-        plot_id: log.plot_id,
-        plot_name: log.plot_name,
-        plot_number: log.plot_number,
-        crop_name: log.crop_name,
-        amount_liters: log.amount_liters,
-        notes: log.notes,
-        created_at: log.created_at,
-      };
+      if (log.plot_id === null) {
+        if (isMorning) dayGroup.has_farm_morning = true;
+        if (isEvening) dayGroup.has_farm_evening = true;
+      } else {
+        const plotInfo = {
+          plot_id: log.plot_id,
+          plot_name: log.plot_name,
+          plot_number: log.plot_number,
+          crop_name: log.crop_name,
+          amount_liters: log.amount_liters,
+          notes: log.notes,
+          created_at: log.created_at,
+        };
 
-      if (isMorning) {
-        if (!dayGroup.morning_plots.some(p => p.plot_id === log.plot_id)) {
-          dayGroup.morning_plots.push(plotInfo);
-        }
-      } else if (isEvening) {
-        if (!dayGroup.evening_plots.some(p => p.plot_id === log.plot_id)) {
-          dayGroup.evening_plots.push(plotInfo);
+        if (isMorning) {
+          if (!dayGroup.morning_plots.some(p => p.plot_id === log.plot_id)) {
+            dayGroup.morning_plots.push(plotInfo);
+          }
+        } else if (isEvening) {
+          if (!dayGroup.evening_plots.some(p => p.plot_id === log.plot_id)) {
+            dayGroup.evening_plots.push(plotInfo);
+          }
         }
       }
     }
 
     const rows = Array.from(map.values()).map(g => {
+      const activePlotsInfo = activePlots.map(p => ({
+        plot_id: p.id,
+        plot_name: p.name,
+        plot_number: p.plot_number,
+        crop_name: p.crop_name,
+        amount_liters: null,
+        notes: 'รดน้ำมาตรฐาน GAP',
+      }));
+
+      const morningPlots = g.has_farm_morning ? activePlotsInfo : g.morning_plots;
+      const eveningPlots = g.has_farm_evening ? activePlotsInfo : g.evening_plots;
+
       const distinctPlotIds = new Set([
-        ...g.morning_plots.map(p => p.plot_id),
-        ...g.evening_plots.map(p => p.plot_id)
+        ...morningPlots.map(p => p.plot_id),
+        ...eveningPlots.map(p => p.plot_id)
       ]);
 
-      const isMorningCompleted = (enabledActiveCount > 0 && g.morning_plots.length >= enabledActiveCount) || (totalActiveCount > 0 && g.morning_plots.length >= totalActiveCount);
-      const isEveningCompleted = (enabledActiveCount > 0 && g.evening_plots.length >= enabledActiveCount) || (totalActiveCount > 0 && g.evening_plots.length >= totalActiveCount);
+      const isMorningCompleted = g.has_farm_morning || (enabledActiveCount > 0 && g.morning_plots.length >= enabledActiveCount) || (totalActiveCount > 0 && g.morning_plots.length >= totalActiveCount);
+      const isEveningCompleted = g.has_farm_evening || (enabledActiveCount > 0 && g.evening_plots.length >= enabledActiveCount) || (totalActiveCount > 0 && g.evening_plots.length >= totalActiveCount);
 
       return {
         date: g.date,
         total_logs: g.total_logs,
-        plots_watered_count: distinctPlotIds.size,
+        plots_watered_count: (g.has_farm_morning || g.has_farm_evening) ? totalActiveCount : distinctPlotIds.size,
         total_active_count: totalActiveCount,
         enabled_active_count: enabledActiveCount,
         paused_plots: pausedPlots.map(p => ({ id: p.id, name: p.name, crop_name: p.crop_name })),
-        morning_count: g.morning_plots.length,
-        evening_count: g.evening_plots.length,
+        morning_count: morningPlots.length,
+        evening_count: eveningPlots.length,
         is_morning_completed: isMorningCompleted,
         is_evening_completed: isEveningCompleted,
-        morning_plots: g.morning_plots,
-        evening_plots: g.evening_plots,
+        morning_plots: morningPlots,
+        evening_plots: eveningPlots,
         climate_condition: g.climate_condition,
         water_source: g.water_source,
         water_quality: g.water_quality,
@@ -631,23 +664,46 @@ waterRouter.post('/daily-record', async (req, res) => {
     const worker = worker_name || req.user.display_name || 'เจ้าของฟาร์ม';
 
     let count = 0;
-    for (const sess of sessions) {
-      for (const plot of targetPlots) {
+    const isAllPlots = !plot_ids || plot_ids.length === 0;
+
+    if (isAllPlots) {
+      for (const sess of sessions) {
         const [existing] = await pool.query(
-          `SELECT id FROM water_logs WHERE user_id = ? AND plot_id = ? AND DATE(log_date) = ? AND session = ?`,
-          [req.user.id, plot.id, log_date, sess]
+          `SELECT id FROM water_logs WHERE user_id = ? AND DATE(log_date) = ? AND session = ?`,
+          [req.user.id, log_date, sess]
         );
         if (existing.length === 0) {
           const defaultNote = notes || (climate === 'rainy_humidity' 
-            ? `🌧️ บันทึกการให้น้ำรอบ${sess} - สภาพอากาศฝนตก/ความชื้นสูง รดควบคุมความชื้น [โรงเรือนหลังคาใส GAP]`
-            : `💧 บันทึกการให้น้ำรอบ${sess} - น้ำสะอาดมาตรฐาน GAP [โรงเรือนหลังคาใส]`);
+            ? `🌧️ บันทึกการให้น้ำรอบ${sess} - สภาพอากาศฝนตก/ความชื้นสูง รดควบคุมความชื้น ทุกแปลง [โรงเรือนหลังคาใส GAP]`
+            : `💧 บันทึกการให้น้ำรอบ${sess} - น้ำสะอาดมาตรฐาน GAP ทุกแปลง [โรงเรือนหลังคาใส]`);
 
           await pool.query(
             `INSERT INTO water_logs (user_id, plot_id, log_date, session, water_source, water_source_type, water_quality, contamination_check, amount_liters, worker_name, notes, climate_condition, is_auto_routine, created_by, updated_by)
-             VALUES (?, ?, ?, ?, ?, ?, 'ผ่าน', 1, NULL, ?, ?, ?, 0, ?, ?)`,
-            [req.user.id, plot.id, log_date, sess, src, src, worker, defaultNote, climate, req.user.email, req.user.email]
+             VALUES (?, NULL, ?, ?, ?, ?, 'ผ่าน', 1, NULL, ?, ?, ?, 0, ?, ?)`,
+            [req.user.id, log_date, sess, src, src, worker, defaultNote, climate, req.user.email, req.user.email]
           );
           count++;
+        }
+      }
+    } else {
+      for (const sess of sessions) {
+        for (const plot of targetPlots) {
+          const [existing] = await pool.query(
+            `SELECT id FROM water_logs WHERE user_id = ? AND plot_id = ? AND DATE(log_date) = ? AND session = ?`,
+            [req.user.id, plot.id, log_date, sess]
+          );
+          if (existing.length === 0) {
+            const defaultNote = notes || (climate === 'rainy_humidity' 
+              ? `🌧️ บันทึกการให้น้ำรอบ${sess} - สภาพอากาศฝนตก/ความชื้นสูง รดควบคุมความชื้น [โรงเรือนหลังคาใส GAP]`
+              : `💧 บันทึกการให้น้ำรอบ${sess} - น้ำสะอาดมาตรฐาน GAP [โรงเรือนหลังคาใส]`);
+
+            await pool.query(
+              `INSERT INTO water_logs (user_id, plot_id, log_date, session, water_source, water_source_type, water_quality, contamination_check, amount_liters, worker_name, notes, climate_condition, is_auto_routine, created_by, updated_by)
+               VALUES (?, ?, ?, ?, ?, ?, 'ผ่าน', 1, NULL, ?, ?, ?, 0, ?, ?)`,
+              [req.user.id, plot.id, log_date, sess, src, src, worker, defaultNote, climate, req.user.email, req.user.email]
+            );
+            count++;
+          }
         }
       }
     }
@@ -721,18 +777,16 @@ waterRouter.post('/quick-all', async (req, res) => {
     }
 
     const [todayWatered] = await pool.query(
-      `SELECT plot_id FROM water_logs WHERE user_id = ? AND DATE(log_date) = ? AND (session = ? OR (session IS NULL AND ? = 'เช้า'))`,
+      `SELECT id, plot_id FROM water_logs WHERE user_id = ? AND DATE(log_date) = ? AND (session = ? OR (session IS NULL AND ? = 'เช้า'))`,
       [req.user.id, today, session, session]
     );
-    const alreadyWateredIds = new Set(todayWatered.map(r => r.plot_id));
-    const plotsToWater = activePlots.filter(p => !alreadyWateredIds.has(p.id));
 
-    if (plotsToWater.length === 0) {
+    if (todayWatered.length > 0) {
       return res.json({
         success: true,
         count: 0,
         already_watered: true,
-        message: `ทุกแปลงที่กำลังปลูกได้รับการบันทึกรดน้ำรอบ${session} สำหรับวันนี้เรียบร้อยแล้ว`
+        message: `บันทึกรดน้ำรอบ${session} สำหรับวันนี้เรียบร้อยแล้ว`
       });
     }
 
@@ -747,25 +801,18 @@ waterRouter.post('/quick-all', async (req, res) => {
       ? `🌧️ รดน้ำรอบ${session} ทุกแปลง - สภาพอากาศฝนตก/ความชื้นสูง รดควบคุมความชื้น [โรงเรือนหลังคาใส GAP]`
       : `⚡ 1-Click รดน้ำรอบ${session} ทุกแปลง - น้ำสะอาดมาตรฐาน GAP [โรงเรือนหลังคาใส]`;
 
-    const inserted = [];
-    for (const p of plotsToWater) {
-      const waterSource = p.water_source || settings.water_source || 'น้ำสะอาดมาตรฐาน GAP';
-      const waterSourceType = waterSource;
-      const worker = p.default_worker_name || defaultWorker;
-
-      const [resIns] = await pool.query(
-        `INSERT INTO water_logs (user_id, plot_id, log_date, session, water_source, water_source_type, water_quality, contamination_check, amount_liters, worker_name, notes, climate_condition, is_auto_routine, created_by, updated_by)
-         VALUES (?, ?, ?, ?, ?, ?, 'ผ่าน', 1, NULL, ?, ?, ?, 0, ?, ?)`,
-        [req.user.id, p.id, today, session, waterSource, waterSourceType, worker, defaultNote, settings.climate_condition || 'normal', req.user.email, req.user.email]
-      );
-      inserted.push({ id: resIns.insertId, plot_id: p.id, plot_name: p.name, session });
-    }
+    const waterSource = settings.water_source || 'น้ำสะอาดมาตรฐาน GAP';
+    const [resIns] = await pool.query(
+      `INSERT INTO water_logs (user_id, plot_id, log_date, session, water_source, water_source_type, water_quality, contamination_check, amount_liters, worker_name, notes, climate_condition, is_auto_routine, created_by, updated_by)
+       VALUES (?, NULL, ?, ?, ?, ?, 'ผ่าน', 1, NULL, ?, ?, ?, 0, ?, ?)`,
+      [req.user.id, today, session, waterSource, waterSource, defaultWorker, defaultNote, settings.climate_condition || 'normal', req.user.email, req.user.email]
+    );
 
     res.json({
       success: true,
-      count: inserted.length,
-      plots: inserted,
-      message: `บันทึกรดน้ำรอบ${session} ให้ ${inserted.length} แปลงเรียบร้อยแล้ว!`
+      count: 1,
+      plots: activePlots.map(p => ({ id: resIns.insertId, plot_id: p.id, plot_name: p.name, session })),
+      message: `บันทึกรดน้ำรอบ${session} รวมทุกแปลงเรียบร้อยแล้ว!`
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

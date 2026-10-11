@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import LogManager from '../components/LogManager.jsx';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth.jsx';
 import { toast } from 'sonner';
@@ -66,7 +65,6 @@ export default function Water() {
 
   const { user } = useAuth();
   const [dailyLogs, setDailyLogs] = useState([]);
-  const [tableSubTab, setTableSubTab] = useState('daily'); // 'daily' | 'detailed'
   const [searchDaily, setSearchDaily] = useState('');
   const [deleteConfirmDate, setDeleteConfirmDate] = useState(null);
   const [manualModalOpen, setManualModalOpen] = useState(false);
@@ -850,81 +848,52 @@ export default function Water() {
                 </p>
               </div>
 
-              {/* Sub-tab view toggle & Actions */}
+              {/* Actions */}
               <div className="flex items-center gap-2 flex-wrap">
-                <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 text-xs font-bold">
-                  <button
-                    type="button"
-                    onClick={() => setTableSubTab('daily')}
-                    className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                      tableSubTab === 'daily'
-                        ? 'bg-white text-slate-950 shadow-xs font-black'
-                        : 'text-slate-600 hover:text-slate-950'
-                    }`}
-                  >
-                    📋 บันทึกรายวันรวมทุกแปลง
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTableSubTab('detailed')}
-                    className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                      tableSubTab === 'detailed'
-                        ? 'bg-white text-slate-950 shadow-xs font-black'
-                        : 'text-slate-600 hover:text-slate-950'
-                    }`}
-                  >
-                    🔍 ดูละเอียดแยกรายแปลง
-                  </button>
-                </div>
-
-                {tableSubTab === 'daily' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setManualForm({
-                        log_date: format(new Date(), 'yyyy-MM-dd'),
-                        sessions: ['เช้า', 'เย็น'],
-                        plot_ids: [],
-                        water_source: settings.water_source || 'น้ำสะอาดมาตรฐาน GAP',
-                        climate_condition: settings.climate_condition || 'normal',
-                        notes: '',
-                        worker_name: user?.display_name || 'เจ้าของฟาร์ม',
-                      });
-                      setManualModalOpen(true);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition shadow-xs cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>บันทึกย้อนหลัง</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManualForm({
+                      log_date: format(new Date(), 'yyyy-MM-dd'),
+                      sessions: ['เช้า', 'เย็น'],
+                      plot_ids: [],
+                      water_source: settings.water_source || 'น้ำสะอาดมาตรฐาน GAP',
+                      climate_condition: settings.climate_condition || 'normal',
+                      notes: '',
+                      worker_name: user?.display_name || 'เจ้าของฟาร์ม',
+                    });
+                    setManualModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>บันทึกย้อนหลัง / กำหนดเอง</span>
+                </button>
               </div>
             </div>
 
-            {/* If Daily View: */}
-            {tableSubTab === 'daily' && (
-              <div className="space-y-3">
-                {/* Search Bar & Summary Stats */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                  <div className="relative w-full sm:w-72">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      placeholder="ค้นหาวันที่, ผู้ปฏิบัติ..."
-                      value={searchDaily}
-                      onChange={e => setSearchDaily(e.target.value)}
-                      className="input pl-8 py-1.5 text-xs w-full rounded-xl bg-slate-50 border-slate-200"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-2 text-xs text-slate-500 font-medium self-end sm:self-center">
-                    <span>ทั้งหมด <strong className="text-slate-900">{filteredDailyLogs.length}</strong> วัน</span>
-                    <span>•</span>
-                    <span className="text-emerald-700 font-bold">
-                      ลดแถวซ้ำซ้อน ~{Math.max(0, filteredDailyLogs.reduce((s, r) => s + (r.total_logs - 1), 0))} แถว
-                    </span>
-                  </div>
+            <div className="space-y-3">
+              {/* Search Bar & Summary Stats */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="relative w-full sm:w-72">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="ค้นหาวันที่, ผู้ปฏิบัติ..."
+                    value={searchDaily}
+                    onChange={e => setSearchDaily(e.target.value)}
+                    className="input pl-8 py-1.5 text-xs w-full rounded-xl bg-slate-50 border-slate-200"
+                  />
                 </div>
+
+                <div className="flex items-center gap-2 text-xs text-slate-500 font-medium self-end sm:self-center">
+                  <span>ทั้งหมด <strong className="text-slate-900">{filteredDailyLogs.length}</strong> วันบันทึก</span>
+                  <span>•</span>
+                  <span className="text-emerald-700 font-bold">
+                    มาตรฐาน GAP กะทัดรัด สะอาดตา
+                  </span>
+                </div>
+              </div>
 
                 {/* Table Container */}
                 <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-2xs">
@@ -1102,40 +1071,6 @@ export default function Water() {
                   </table>
                 </div>
               </div>
-            )}
-
-            {/* If Detailed View (Fallback to LogManager): */}
-            {tableSubTab === 'detailed' && (
-              <LogManager
-                title="ตารางบันทึกละเอียดแยกรายแปลง (Detail Logs)"
-                endpoint="water"
-                plotsLookup
-                reloadTrigger={reloadKey}
-                fields={[
-                  { key: 'log_date', label: 'วันที่', type: 'date', required: true },
-                  {
-                    key: 'session',
-                    label: 'รอบให้น้ำ',
-                    type: 'select',
-                    options: ['เช้า', 'เย็น', 'บ่าย'],
-                    default: 'เช้า',
-                  },
-                  { key: 'plot_id', label: 'แปลง/แคร่', placeholder: '-- เลือกแปลง --', required: true },
-                  { key: 'water_source', label: 'แหล่งน้ำ', placeholder: 'เช่น น้ำสะอาดมาตรฐาน GAP' },
-                  {
-                    key: 'climate_condition',
-                    label: 'สภาพอากาศ',
-                    type: 'select',
-                    options: ['normal', 'rainy_humidity'],
-                    default: 'normal',
-                  },
-                  { key: 'water_quality', label: 'คุณภาพน้ำ', placeholder: 'ผ่าน / ปลอดภัย' },
-                  { key: 'contamination_check', label: 'น้ำสะอาด GAP', type: 'bool' },
-                  { key: 'worker_name', label: 'ผู้ปฏิบัติ', placeholder: 'ชื่อผู้ปฏิบัติ' },
-                  { key: 'notes', label: 'หมายเหตุ', type: 'textarea', hideInTable: true },
-                ]}
-              />
-            )}
           </div>
         )}
       </div>

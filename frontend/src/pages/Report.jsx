@@ -373,7 +373,7 @@ export default function Report() {
     if (!displayPlots.length) return [];
     const waterLogs = reportData?.water || [];
     return displayPlots.map(p => {
-      const logs = waterLogs.filter(w => w.plot_id === p.id);
+      const logs = waterLogs.filter(w => !w.plot_id || w.plot_id === p.id);
       const morningCount = logs.filter(w => w.session === 'เช้า' || !w.session).length;
       const eveningCount = logs.filter(w => w.session === 'เย็น').length;
       const rainyCount = logs.filter(w => w.climate_condition === 'rainy_humidity').length;
@@ -404,7 +404,7 @@ export default function Report() {
   const displayWaterLogs = useMemo(() => {
     if (!reportData?.water) return [];
     if (selectedCycleScope === 'all') return reportData.water;
-    return reportData.water.filter(w => plotIdsInCycle.has(w.plot_id));
+    return reportData.water.filter(w => !w.plot_id || plotIdsInCycle.has(w.plot_id));
   }, [reportData, selectedCycleScope, plotIdsInCycle]);
 
   const plotName = (id) => reportData?.plots?.find(p => p.id === id)?.name || '-';
