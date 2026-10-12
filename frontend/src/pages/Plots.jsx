@@ -741,23 +741,37 @@ export default function Plots() {
                   </div>
 
                   {/* Soil Mix Recipe Box (GAP ข้อ 2) */}
-                  <div className="mt-3 bg-amber-50/90 rounded-2xl p-3 border border-amber-200/80 text-xs text-amber-950">
+                  <div className={`mt-3 rounded-2xl p-3 border text-xs ${
+                    (p.soil_prep_date || currentBatch?.soil_prep_date)
+                      ? 'bg-amber-50/90 border-amber-200/80 text-amber-950'
+                      : 'bg-orange-50/70 border-orange-200/90 text-orange-950'
+                  }`}>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-bold text-[11px] text-amber-900 flex items-center gap-1 flex-wrap">
-                        <span>สูตรดิน (GAP ข้อ 2)</span>
-                        {(p.soil_prep_date || currentBatch?.soil_prep_date) && (
+                      <span className="font-bold text-[11px] flex items-center gap-1 flex-wrap">
+                        <span className={p.soil_prep_date || currentBatch?.soil_prep_date ? 'text-amber-900' : 'text-orange-900'}>
+                          สูตรดิน (GAP ข้อ 2)
+                        </span>
+                        {(p.soil_prep_date || currentBatch?.soil_prep_date) ? (
                           <span className="font-medium text-amber-800 text-[10px]">
                             • เตรียมเมื่อ {format(new Date(p.soil_prep_date || currentBatch?.soil_prep_date), 'dd/MM/yyyy')}
+                          </span>
+                        ) : (
+                          <span className="font-bold text-orange-700 text-[10px] bg-orange-100/90 px-1.5 py-0.2 rounded border border-orange-300">
+                            • รอเตรียมดินรอบใหม่
                           </span>
                         )}
                       </span>
                       <button
                         type="button"
                         onClick={() => handleOpenSoilModal(p)}
-                        className="inline-flex items-center gap-1 text-[10.5px] font-bold text-amber-800 hover:text-amber-950 bg-amber-100/90 hover:bg-amber-200 px-2 py-0.5 rounded-lg border border-amber-300 transition cursor-pointer active:scale-95 shrink-0"
+                        className={`inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-lg border transition cursor-pointer active:scale-95 shrink-0 ${
+                          (p.soil_prep_date || currentBatch?.soil_prep_date)
+                            ? 'text-amber-800 hover:text-amber-950 bg-amber-100/90 hover:bg-amber-200 border-amber-300'
+                            : 'text-orange-800 hover:text-orange-950 bg-orange-100/90 hover:bg-orange-200 border-orange-300'
+                        }`}
                         title="ปรับปรุงสูตรดิน / บันทึกการเตรียมแคร่"
                       >
-                        <Edit3 className="w-3 h-3 text-amber-700" />
+                        <Edit3 className="w-3 h-3" />
                         <span>ปรับสูตรดิน</span>
                       </button>
                     </div>
@@ -984,12 +998,16 @@ export default function Plots() {
                         <button
                           type="button"
                           onClick={() => handleOpenSoilModal(p)}
-                          className="flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300 text-xs font-bold transition active:scale-95 cursor-pointer shadow-2xs"
-                          title="บันทึกสูตรดิน / เตรียมแคร่ (GAP ข้อ 2)"
+                          className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-xs font-bold transition active:scale-95 cursor-pointer shadow-2xs border ${
+                            p.soil_prep_date
+                              ? 'bg-amber-50 hover:bg-amber-100 text-amber-950 border-amber-300'
+                              : 'bg-orange-50 hover:bg-orange-100 text-orange-900 border-orange-300/90 ring-1 ring-orange-400/30'
+                          }`}
+                          title="บันทึกสูตรดิน / เตรียมแคร่รอบใหม่ (GAP ข้อ 2)"
                         >
-                          <Edit3 className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                          <Edit3 className={`w-3.5 h-3.5 shrink-0 ${p.soil_prep_date ? 'text-amber-700' : 'text-orange-600'}`} />
                           <span className="truncate">
-                            {p.soil_prep_date ? '✓ เตรียมดินแล้ว' : 'เตรียมดิน'}
+                            {p.soil_prep_date ? '✓ เตรียมดินแล้ว' : '📝 เตรียมดินรอบใหม่'}
                           </span>
                         </button>
 
@@ -1492,6 +1510,54 @@ export default function Plots() {
                         />
                         <span>เปิดบันทึกรดน้ำอัตโนมัติ</span>
                       </label>
+                    </div>
+                  </div>
+
+                  {/* วันที่เตรียมดิน/ปรุงดินสำหรับรอบนี้ (GAP ข้อ 2) */}
+                  <div className="md:col-span-2 bg-amber-50/60 p-3.5 rounded-2xl border border-amber-200/80 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                      <label className="block text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                        <span>วันที่เตรียมดิน / ปรุงดินรอบนี้ (GAP ข้อ 2)</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setForm(prev => ({ ...prev, soil_prep_date: new Date().toISOString().split('T')[0] }))}
+                        className="text-[11px] text-amber-800 hover:text-amber-950 font-bold hover:underline cursor-pointer self-start sm:self-auto"
+                      >
+                        ⚡ ใช้วันนี้ ({format(new Date(), 'dd/MM/yyyy')})
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-1">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-amber-600" />
+                          <span>วันที่เตรียมดิน</span>
+                        </label>
+                        <input
+                          type="date"
+                          required
+                          value={form.soil_prep_date}
+                          onChange={(e) => setForm({ ...form, soil_prep_date: e.target.value })}
+                          className="w-full px-3 py-2 rounded-xl border border-amber-300 bg-white text-slate-900 font-bold focus:border-amber-600 focus:ring-1 focus:ring-amber-600 outline-none text-xs"
+                        />
+                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                          * ตรวจสอบ/ยืนยันเพื่อบันทึก GAP
+                        </span>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          สูตรดินที่ใช้ในแปลงนี้
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={form.soil_recipe}
+                          onChange={(e) => setForm({ ...form, soil_recipe: e.target.value })}
+                          placeholder="เช่น ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)"
+                          className="w-full px-3 py-2 rounded-xl border border-amber-300 bg-white text-slate-900 font-medium placeholder:text-slate-400 focus:border-amber-600 focus:ring-1 focus:ring-amber-600 outline-none text-xs leading-relaxed"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -212,6 +212,7 @@ plotsRouter.post('/:id/reset', async (req, res) => {
            seed_prep_date = NULL,
            seed_notes = NULL,
            seed_crop_id = NULL,
+           soil_prep_date = NULL,
            updated_at = NOW()
        WHERE id = ? AND user_id = ?`,
       [req.params.id, req.user.id]

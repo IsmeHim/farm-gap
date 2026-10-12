@@ -115,7 +115,7 @@ batchesRouter.post('/', async (req, res) => {
 
     // สูตรดินสำหรับรอบนี้ (ถ้าไม่กรอกให้ใช้ของแปลงเดิม)
     const effectiveSoilRecipe = (soil_recipe || '').trim() || plot.soil_recipe || 'ดินผสม 8 กระบะปูน (กากยางพารา 4 กระบะ + แกลบดำ/แกลบดิบ 2 กระบะ + มูลวัวหมัก 2 กระบะ)';
-    const effectiveSoilPrepDate = soil_prep_date || plot.soil_prep_date || null;
+    const effectiveSoilPrepDate = soil_prep_date || plot.soil_prep_date || start_date || new Date().toISOString().split('T')[0];
 
     // คำนวณวันคาดการณ์เก็บเกี่ยว โดยคำนึงถึงวันที่เริ่มเพาะเมล็ดเป็นหลัก
     const growthDays = Number(crop.growth_days || 30);
