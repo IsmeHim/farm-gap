@@ -229,12 +229,14 @@ harvestRouter.post('/smart-record', async (req, res) => {
     }
 
     // บันทึกลง crop_activities (Timeline ตามมาตรฐาน GAP)
+    const harvestBatchId = activeBatch ? activeBatch.id : null;
     await pool.query(
-      `INSERT INTO crop_activities (user_id, plot_id, activity_date, stage, title, details, operator_name)
-       VALUES (?, ?, ?, 'harvest', ?, ?, ?)`,
+      `INSERT INTO crop_activities (user_id, plot_id, batch_id, activity_date, stage, title, details, operator_name)
+       VALUES (?, ?, ?, ?, 'harvest', ?, ?, ?)`,
       [
         req.user.id,
         targetPlotId,
+        harvestBatchId,
         hDate,
         `เก็บเกี่ยวผลผลิต ${plot.crop_name}${partialLabel} (${totalPacks} ถุง)`,
         logNotes,
@@ -244,6 +246,14 @@ harvestRouter.post('/smart-record', async (req, res) => {
 
     // หากเป็นการเก็บเกี่ยวหมดแปลง หรือ ยอดต้นไม้เหลือ 0 ให้รีเซ็ตแปลงเป็น empty
     if (isFullyCompleted) {
+      if (activeBatch?.id) {
+        // ตรวจสอบและผูกกิจกรรมทั้งหมดที่ยังค้าง batch_id = null ในแปลงนี้ เข้ากับ activeBatch.id ก่อนปิดรอบ
+        await pool.query(
+          `UPDATE crop_activities SET batch_id = ? WHERE plot_id = ? AND user_id = ? AND (batch_id IS NULL OR batch_id = 0)`,
+          [activeBatch.id, targetPlotId, req.user.id]
+        );
+      }
+
       await pool.query(
         `UPDATE plots 
          SET status = 'empty', 
@@ -409,12 +419,14 @@ harvestRouter.post('/:id/stock', async (req, res) => {
 
     // บันทึกกิจกรรม GAP Traceability ลง crop_activities
     const lotLabel = harvest.lot_code ? `ล็อต ${harvest.lot_code}` : `รอบวันที่ ${harvest.harvest_date}`;
+    const harvestBatchId = harvest.batch_id || null;
     await pool.query(
-      `INSERT INTO crop_activities (user_id, plot_id, activity_date, stage, title, details, operator_name)
-       VALUES (?, ?, CURDATE(), 'harvest', ?, ?, ?)`,
+      `INSERT INTO crop_activities (user_id, plot_id, batch_id, activity_date, stage, title, details, operator_name)
+       VALUES (?, ?, ?, CURDATE(), 'harvest', ?, ?, ?)`,
       [
         req.user.id,
         harvest.plot_id,
+        harvestBatchId,
         `นำผลผลิตลงสต็อกขาย (${qtyToStock} ถุง)`,
         `นำผลผลิต ${harvest.crop_name || 'ผัก'} ${lotLabel} จำนวน ${qtyToStock} ถุง (สะสม ${newStockedTotal}/${totalPacks} ถุง) ลงสต็อกสินค้าหน้าร้าน LINE Shop เรียบร้อย`,
         req.user.display_name || harvest.worker_name || 'เจ้าของฟาร์ม'

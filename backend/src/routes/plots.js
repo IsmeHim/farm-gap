@@ -50,13 +50,47 @@ plotsRouter.get('/', async (req, res) => {
       [req.user.id]
     );
 
+    const [allBatches] = await pool.query(
+      `SELECT pb.*, c.name AS crop_name 
+       FROM planting_batches pb 
+       LEFT JOIN crops c ON c.id = pb.crop_id 
+       WHERE pb.user_id = ? 
+       ORDER BY pb.id DESC`,
+      [req.user.id]
+    );
+
     const [activities] = await pool.query(
       `SELECT a.* FROM crop_activities a WHERE a.user_id = ? ORDER BY a.activity_date ASC, a.id ASC`,
       [req.user.id]
     );
 
     rows.forEach(p => {
-      p.activities = activities.filter(a => a.plot_id === p.id);
+      const plotBatches = allBatches.filter(b => b.plot_id === p.id);
+      const activeBatch = plotBatches.find(b => b.status === 'growing' || b.status === 'harvest_ready');
+      const activeBatchId = p.current_batch_id || activeBatch?.id || null;
+
+      if (activeBatchId && p.status !== 'empty') {
+        // แปลงกำลังปลูก: ดึงเฉพาะกิจกรรมของรอบปัจจุบันนี้เท่านั้น
+        p.activities = activities.filter(a => 
+          a.batch_id === activeBatchId || 
+          (a.plot_id === p.id && (!a.batch_id || a.batch_id === 0) && (!p.planting_date || a.activity_date >= p.planting_date))
+        );
+      } else {
+        // แปลงว่าง: ดึงเฉพาะกิจกรรมที่ยังไม่เข้า batch (เพาะกล้า/เตรียมดินรอบใหม่)
+        p.activities = activities.filter(a => a.plot_id === p.id && (!a.batch_id || a.batch_id === 0));
+      }
+
+      // แนบประวัติรอบเก่าที่เก็บเกี่ยวไปแล้ว สำหรับใช้ย้อนดูในหน้าต่างไทม์ไลน์
+      p.past_batches = plotBatches
+        .filter(b => b.status === 'harvested')
+        .map(b => ({
+          id: b.id,
+          batch_code: b.batch_code,
+          crop_name: b.crop_name,
+          start_date: b.start_date,
+          actual_harvest_date: b.actual_harvest_date,
+          activities: activities.filter(a => a.batch_id === b.id),
+        }));
     });
 
     res.json(rows);
@@ -267,6 +301,25 @@ plotsRouter.put('/activities/:activityId', async (req, res) => {
         req.user.id
       ]
     );
+
+    // ซิงค์ seed_prep_date ในแปลงว่างถ้ามีการแก้วันที่
+    if (activity_date) {
+      const [actRows] = await pool.query('SELECT plot_id FROM crop_activities WHERE id = ?', [actId]);
+      if (actRows[0]) {
+        const pId = actRows[0].plot_id;
+        const [plotRows] = await pool.query('SELECT status FROM plots WHERE id = ?', [pId]);
+        if (plotRows[0]?.status === 'empty') {
+          const [earliestAct] = await pool.query(
+            `SELECT activity_date FROM crop_activities WHERE plot_id = ? AND (batch_id IS NULL OR batch_id = 0) ORDER BY activity_date ASC LIMIT 1`,
+            [pId]
+          );
+          if (earliestAct[0]) {
+            await pool.query('UPDATE plots SET seed_prep_date = ?, updated_at = NOW() WHERE id = ?', [earliestAct[0].activity_date, pId]);
+          }
+        }
+      }
+    }
+
     const [updated] = await pool.query('SELECT * FROM crop_activities WHERE id = ?', [actId]);
     res.json({
       success: true,
@@ -278,12 +331,61 @@ plotsRouter.put('/activities/:activityId', async (req, res) => {
   }
 });
 
-// 7. ลบกิจกรรมต้นกล้า (Delete Plot Nursery Activity)
+// 7. ลบกิจกรรมต้นกล้า (Delete Plot Nursery Activity with Smart Auto-Clean)
 plotsRouter.delete('/activities/:activityId', async (req, res) => {
   try {
     const actId = Number(req.params.activityId);
+
+    // 1. ดึงข้อมูลกิจกรรมก่อนลบ เพื่อระบุ plot_id
+    const [actRows] = await pool.query('SELECT plot_id, user_id FROM crop_activities WHERE id = ? AND user_id = ?', [actId, req.user.id]);
+    if (!actRows[0]) return res.status(404).json({ error: 'ไม่พบกิจกรรม' });
+    const { plot_id } = actRows[0];
+
+    // 2. ลบกิจกรรม
     await pool.query('DELETE FROM crop_activities WHERE id = ? AND user_id = ?', [actId, req.user.id]);
-    res.json({ success: true, message: 'ลบกิจกรรมเรียบร้อยแล้ว' });
+
+    // 3. ตรวจสอบกิจกรรมต้นกล้าที่ยังเหลืออยู่ในแปลงนี้ (เฉพาะกิจกรรมที่ยังไม่เข้า batch)
+    const [remaining] = await pool.query(
+      `SELECT * FROM crop_activities 
+       WHERE plot_id = ? AND user_id = ? AND (batch_id IS NULL OR batch_id = 0)
+       ORDER BY activity_date ASC, id ASC`,
+      [plot_id, req.user.id]
+    );
+
+    // 4. ตรวจสอบสถานะของแปลง
+    const [plotRows] = await pool.query('SELECT status FROM plots WHERE id = ? AND user_id = ?', [plot_id, req.user.id]);
+    const isPlotEmpty = plotRows[0]?.status === 'empty';
+
+    if (isPlotEmpty) {
+      if (remaining.length === 0) {
+        // หากไม่เหลือกิจกรรมในแปลงว่างแล้ว -> รีเซ็ต seed_crop_id, seed_prep_date, seed_notes ให้กลับมาเป็นว่างสมบูรณ์ 100%
+        await pool.query(
+          `UPDATE plots 
+           SET seed_crop_id = NULL, 
+               seed_prep_date = NULL, 
+               seed_notes = NULL,
+               updated_at = NOW() 
+           WHERE id = ? AND user_id = ?`,
+          [plot_id, req.user.id]
+        );
+      } else {
+        // หากยังมีกิจกรรมต้นกล้าอื่นเหลืออยู่ -> ซิงค์วันเพาะกล้าเป็นวันของกิจกรรมแรกสุดที่เหลืออยู่
+        const earliest = remaining[0];
+        await pool.query(
+          `UPDATE plots 
+           SET seed_prep_date = ?,
+               updated_at = NOW() 
+           WHERE id = ? AND user_id = ?`,
+          [earliest.activity_date, plot_id, req.user.id]
+        );
+      }
+    }
+
+    res.json({ 
+      success: true, 
+      remaining_count: remaining.length,
+      message: 'ลบกิจกรรมเรียบร้อยแล้ว' 
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

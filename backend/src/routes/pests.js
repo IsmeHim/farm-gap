@@ -150,11 +150,12 @@ pestsRouter.post('/', async (req, res) => {
 
       // บันทึกลง crop_activities (GAP ข้อ 4 บันทึกการจัดการศัตรูพืชและความเสียหาย)
       await pool.query(
-        `INSERT INTO crop_activities (user_id, plot_id, activity_date, stage, title, details, operator_name)
-         VALUES (?, ?, ?, 'maintenance', ?, ?, ?)`,
+        `INSERT INTO crop_activities (user_id, plot_id, batch_id, activity_date, stage, title, details, operator_name)
+         VALUES (?, ?, ?, ?, 'maintenance', ?, ?, ?)`,
         [
           req.user.id,
           plot_id,
+          targetBatch.id,
           log_date,
           `บันทึกความเสียหาย/ศัตรูพืช: ${mainTitle} (เสียหาย ${lossCount} ${damage_unit || 'ต้น'})`,
           `สาเหตุ: ${damage_cause || mainTitle} | ความรุนแรง: ${severity || 'น้อย'} | วิธีจัดการ: ${treatment_method || '-'} ${notes ? `| ${notes}` : ''}`,
