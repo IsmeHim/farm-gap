@@ -1,0 +1,530 @@
+import React from 'react';
+import { format } from 'date-fns';
+import {
+  X,
+  Sprout,
+  CheckCircle2,
+  Calendar,
+  Sparkles,
+} from 'lucide-react';
+import { getTodayLocalStr, formatDateForInput } from '../../utils/plotUtils';
+
+export default function NewBatchModal({
+  isOpen,
+  onClose,
+  plantingMode,
+  setPlantingMode,
+  form,
+  setForm,
+  plots,
+  crops,
+  submitting,
+  onSubmit,
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 md:p-6 overflow-hidden">
+      <div className="bg-white rounded-3xl max-w-lg md:max-w-xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 text-slate-900 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 sm:p-5 md:px-6 md:py-4 border-b border-slate-100 shrink-0 bg-white">
+          <div>
+            <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
+              <span>{plantingMode === 'nursery' ? '🌱 บันทึกการเพาะเมล็ด / เพาะกล้า' : '🚜 เริ่มรอบการปลูกใหม่'}</span>
+            </h3>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              {plantingMode === 'nursery'
+                ? 'บันทึกข้อมูลเมล็ดพันธุ์และการเพาะกล้าลงสมุด GAP ข้อ 4 (รอย้ายลงแปลง)'
+                : 'บันทึกลงแปลงปลูกจริงและเปิดรอบการผลิต GAP ข้อ 4'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-sm cursor-pointer transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Scrollable Form Body */}
+        <form onSubmit={onSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="p-4 sm:p-5 md:p-6 overflow-y-auto flex-1 space-y-4">
+            {/* 1. ตัวเลือกรูปแบบการปลูกตามธรรมชาติของผัก (Dynamic Stage Selector) */}
+            <div className="space-y-2">
+              <label className="block text-xs font-black text-slate-800">
+                เลือกลำดับขั้นตอนตามธรรมชาติของผัก:
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Option A: เพาะกล้าก่อน */}
+                <div
+                  onClick={() => {
+                    setPlantingMode('nursery');
+                    const matched = crops.find(c => String(c.id) === String(form.crop_id));
+                    setForm(prev => ({
+                      ...prev,
+                      seed_prep_date: prev.seed_prep_date || getTodayLocalStr(),
+                      notes: (!prev.notes && matched) ? (matched.notes || '') : prev.notes
+                    }));
+                  }}
+                  className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                    plantingMode === 'nursery'
+                      ? 'border-teal-600 bg-teal-50/70 shadow-xs'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="inline-flex items-center gap-1.5 font-black text-xs text-teal-900">
+                        <Sprout className="w-4 h-4 text-teal-600" />
+                        <span>Option A: เพาะกล้าก่อน</span>
+                      </span>
+                      <input
+                        type="radio"
+                        name="plantingMode"
+                        checked={plantingMode === 'nursery'}
+                        onChange={() => {
+                          setPlantingMode('nursery');
+                          const matched = crops.find(c => String(c.id) === String(form.crop_id));
+                          setForm(prev => ({
+                            ...prev,
+                            seed_prep_date: prev.seed_prep_date || getTodayLocalStr(),
+                            notes: (!prev.notes && matched) ? (matched.notes || '') : prev.notes
+                          }));
+                        }}
+                        className="w-4 h-4 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                      />
+                    </div>
+                    <p className="text-[11px] font-bold text-teal-950 mt-1">
+                      🌱 เพาะเมล็ด/ถาดหลุมก่อน 10-15 วัน
+                    </p>
+                    <p className="text-[10.5px] text-slate-500 mt-0.5 leading-snug">
+                      เหมาะสำหรับ: ผักสลัด (กรีนโอ๊ค, เรดโอ๊ค, คอส, ฟิลเล่ย์), มะเขือเทศ ฯลฯ
+                    </p>
+                  </div>
+                  <div className="mt-2.5 pt-2 border-t border-teal-200/50 flex items-center justify-between text-[10px] text-teal-800 font-bold">
+                    <span>สถานะแปลง:</span>
+                    <span className="bg-teal-100/90 text-teal-900 px-2 py-0.5 rounded-md">🌱 กำลังเพาะกล้า (รอลงแปลง)</span>
+                  </div>
+                </div>
+
+                {/* Option B: หยอดเมล็ด / ลงแปลงทันที */}
+                <div
+                  onClick={() => {
+                    setPlantingMode('direct');
+                    const found = plots.find(p => p.id === Number(form.plot_id));
+                    setForm(prev => ({
+                      ...prev,
+                      seed_prep_date: found?.seed_prep_date ? formatDateForInput(found.seed_prep_date) : ''
+                    }));
+                  }}
+                  className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                    plantingMode === 'direct'
+                      ? 'border-emerald-600 bg-emerald-50/70 shadow-xs'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="inline-flex items-center gap-1.5 font-black text-xs text-emerald-900">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span>Option B: หยอดเมล็ด/ลงแปลงทันที</span>
+                      </span>
+                      <input
+                        type="radio"
+                        name="plantingMode"
+                        checked={plantingMode === 'direct'}
+                        onChange={() => {
+                          setPlantingMode('direct');
+                          const found = plots.find(p => p.id === Number(form.plot_id));
+                          setForm(prev => ({
+                            ...prev,
+                            seed_prep_date: found?.seed_prep_date ? formatDateForInput(found.seed_prep_date) : ''
+                          }));
+                        }}
+                        className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                      />
+                    </div>
+                    <p className="text-[11px] font-bold text-emerald-950 mt-1">
+                      🚜 หยอดตรงลงดิน หรือ ย้ายกล้าลงแปลง
+                    </p>
+                    <p className="text-[10.5px] text-slate-500 mt-0.5 leading-snug">
+                      เหมาะสำหรับ: ผักบุ้ง, ผักชี, กวางตุ้ง หรือต้นกล้าที่พร้อมย้ายลงแคร่แล้ว
+                    </p>
+                  </div>
+                  <div className="mt-2.5 pt-2 border-t border-emerald-200/50 flex items-center justify-between text-[10px] text-emerald-800 font-bold">
+                    <span>สถานะแปลง:</span>
+                    <span className="bg-emerald-100/90 text-emerald-900 px-2 py-0.5 rounded-md">🟢 กำลังปลูกในแปลง</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* แถบแจ้งเตือนถ้าแปลงนี้มีประวัติเพาะกล้าอยู่แล้ว */}
+            {(() => {
+              const plotFound = plots.find(p => p.id === Number(form.plot_id));
+              if (!plotFound || (!plotFound.seed_prep_date && !plotFound.seed_crop_id)) return null;
+              return (
+                <div className="p-3 bg-teal-50 border border-teal-200/90 rounded-2xl flex items-center justify-between text-xs text-teal-950">
+                  <div className="flex items-center gap-2">
+                    <Sprout className="w-4 h-4 text-teal-600 shrink-0" />
+                    <div>
+                      <span className="font-bold">แปลงนี้มีต้นกล้าที่เพาะไว้แล้ว:</span>{' '}
+                      <span className="font-extrabold text-teal-900">{plotFound.seed_crop_name || 'ต้นกล้า'}</span>
+                      {plotFound.seed_prep_date && (
+                        <span className="text-teal-700 font-medium"> (เพาะเมื่อ {format(new Date(plotFound.seed_prep_date), 'dd/MM/yyyy')})</span>
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-[10.5px] bg-teal-200/80 text-teal-900 px-2 py-0.5 rounded-lg font-black shrink-0">
+                    พร้อมย้ายลงแปลง
+                  </span>
+                </div>
+              );
+            })()}
+
+            {/* 2. ฟอร์มตาม Option ที่เลือก */}
+            {plantingMode === 'nursery' ? (
+              /* ฟอร์มสำหรับการเพาะเมล็ด / เพาะกล้าก่อนลงแปลง */
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                {/* เลือกแปลงที่จะรองรับ */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                    เลือกแปลง/แคร่ปลูกที่จะรองรับ (จาก {plots.length} แปลง)
+                  </label>
+                  <select
+                    required
+                    value={form.plot_id}
+                    onChange={(e) => {
+                      const selectedId = e.target.value;
+                      const found = plots.find(p => p.id === Number(selectedId));
+                      setForm(prev => ({
+                        ...prev,
+                        plot_id: selectedId,
+                        soil_recipe: found?.soil_recipe || prev.soil_recipe,
+                        soil_prep_date: found?.soil_prep_date
+                          ? formatDateForInput(found.soil_prep_date)
+                          : prev.soil_prep_date
+                      }));
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-teal-300 bg-white text-slate-900 font-bold focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm"
+                  >
+                    <option value="">-- เลือกแปลง --</option>
+                    {plots.map((p) => {
+                      const isBusy = p.status === 'growing' || p.status === 'harvest_ready';
+                      return (
+                        <option key={p.id} value={p.id} disabled={isBusy}>
+                          {p.name} ({p.dimension || 'แคร่ 2 x 6 เมตร'}) {isBusy ? `— กำลังปลูก (${p.crop_name})` : '— ว่าง'}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {/* เลือกชนิดผักที่เพาะ */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5">เลือกชนิดผักที่ต้องการเพาะเมล็ด</label>
+                  <select
+                    required
+                    value={form.crop_id}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const matched = crops.find(c => String(c.id) === String(val));
+                      setForm(prev => ({
+                        ...prev,
+                        crop_id: val,
+                        notes: matched?.notes || prev.notes
+                      }));
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-teal-300 bg-white text-slate-900 font-bold focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm"
+                  >
+                    <option value="">-- เลือกชนิดผัก --</option>
+                    {crops.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.category}) — อายุเต็มวัย {c.growth_days} วัน
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* วันที่เริ่มเพาะเมล็ด */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-teal-600" />
+                    <span>วันที่เริ่มเพาะเมล็ด / เพาะกล้า</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={form.seed_prep_date || form.start_date}
+                    onChange={(e) => setForm({ ...form, seed_prep_date: e.target.value, start_date: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-teal-300 bg-white text-slate-900 font-bold focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm"
+                  />
+                  <span className="text-[10px] text-slate-400 block mt-1">
+                    * บันทึกลงสมุด GAP ข้อ 4 ใช้คำนวณอายุเก็บเกี่ยวเมื่อย้ายลงแปลง
+                  </span>
+                </div>
+
+                {/* ผู้ปฏิบัติงาน */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5">ผู้ปฏิบัติงาน / ผู้บันทึก</label>
+                  <input
+                    type="text"
+                    value={form.operator_name || 'เจ้าของฟาร์ม'}
+                    onChange={(e) => setForm({ ...form, operator_name: e.target.value })}
+                    placeholder="เช่น เจ้าของฟาร์ม"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-teal-300 bg-white text-slate-900 font-bold focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm"
+                  />
+                </div>
+
+                {/* วัสดุอุปกรณ์ที่ใช้เพาะ */}
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5">วัสดุ / ภาชนะที่ใช้เพาะเมล็ด</label>
+                  <input
+                    type="text"
+                    value={form.materials_used || 'กล่องพลาสติก, กระดาษทิชชู, ฟ็อกกี้พ่นน้ำ, ถาดเพาะ 200 หลุม'}
+                    onChange={(e) => setForm({ ...form, materials_used: e.target.value })}
+                    placeholder="เช่น กล่องพลาสติก, กระดาษทิชชู, ฟ็อกกี้พ่นน้ำ, ถาดเพาะ 200 หลุม"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-teal-300 bg-white text-slate-900 font-medium focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm"
+                  />
+                </div>
+
+                {/* รายละเอียด / วิธีการเพาะ */}
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                    วิธีการเพาะเมล็ด / บันทึกการจัดการกล้า (GAP ข้อ 4)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={form.notes}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                    placeholder="เพาะเมล็ดในกล่องพลาสติกที่มีฝาปิดมิดชิด วางกระดาษทิชชูในกล่องพลาสติก พ่นน้ำให้ทั่วกระดาษทิชชูหมาดๆ โรยเมล็ดบางๆ ปิดทับด้วยกระดาษทิชชูแล้วพ่นน้ำให้หมาดๆ เสร็จแล้วปิดฝากล่อง"
+                    className="w-full px-3.5 py-2 rounded-xl border border-teal-300 bg-white text-slate-900 font-medium placeholder:text-slate-400 focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-xs leading-relaxed"
+                  />
+                </div>
+              </div>
+            ) : (
+              /* ฟอร์มสำหรับการหยอดเมล็ด / ลงแปลงปลูกทันที */
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5">เลือกแปลงปลูก (จาก {plots.length} แปลง)</label>
+                  <select
+                    required
+                    value={form.plot_id}
+                    onChange={(e) => {
+                      const selectedId = e.target.value;
+                      const found = plots.find(p => p.id === Number(selectedId));
+                      setForm(prev => ({
+                        ...prev,
+                        plot_id: selectedId,
+                        crop_id: found?.seed_crop_id || prev.crop_id,
+                        seed_prep_date: found?.seed_prep_date
+                          ? formatDateForInput(found.seed_prep_date)
+                          : '',
+                        soil_recipe: found?.soil_recipe || prev.soil_recipe || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)',
+                        soil_prep_date: found?.soil_prep_date
+                          ? formatDateForInput(found.soil_prep_date)
+                          : (prev.soil_prep_date || getTodayLocalStr())
+                      }));
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"
+                  >
+                    <option value="">-- เลือกแปลง --</option>
+                    {plots.map((p) => {
+                      const isBusy = p.status === 'growing' || p.status === 'harvest_ready';
+                      return (
+                        <option key={p.id} value={p.id} disabled={isBusy}>
+                          {p.name} ({p.dimension || 'แคร่ 2 x 6 เมตร'}) {isBusy ? `— กำลังปลูก (${p.crop_name})` : '— ว่าง'}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5">เลือกชนิดผัก</label>
+                  <select
+                    required
+                    value={form.crop_id}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setForm(prev => ({
+                        ...prev,
+                        crop_id: val,
+                        notes: ''
+                      }));
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"
+                  >
+                    <option value="">-- เลือกชนิดผัก --</option>
+                    {crops.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.category}) — โตเต็มวัย {c.growth_days} วัน
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* จำนวนต้นที่ลงปลูก */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                    จำนวนที่ลงปลูก (ทางเลือก)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="เช่น 200"
+                    value={form.initial_count}
+                    onChange={(e) => setForm({ ...form, initial_count: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"
+                  />
+                  <span className="text-[10px] text-slate-400 block mt-1">
+                    * เช่น 200 ต้น/หลุม (ตัดยอดความเสียหายอัตโนมัติ)
+                  </span>
+                </div>
+
+                {/* หน่วยนับ */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5">หน่วยนับ</label>
+                  <select
+                    value={form.planting_unit}
+                    onChange={(e) => setForm({ ...form, planting_unit: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"
+                  >
+                    <option value="ต้น">ต้น</option>
+                    <option value="หลุม">หลุม</option>
+                    <option value="กรัม">กรัม</option>
+                    <option value="ขีด">ขีด</option>
+                  </select>
+                </div>
+
+                {/* วันที่เริ่มปลูกลงแปลง */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5">วันที่เริ่มลงแปลงปลูก</label>
+                  <input
+                    type="date"
+                    required
+                    value={form.start_date}
+                    onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"
+                  />
+                </div>
+
+                {/* ระบบรดน้ำประจำวัน */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5">ระบบรดน้ำประจำวัน</label>
+                  <div className="h-10.5 px-3.5 flex items-center rounded-xl bg-slate-50 border border-slate-200">
+                    <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
+                      <input
+                        type="checkbox"
+                        checked={form.auto_water}
+                        onChange={(e) => setForm({ ...form, auto_water: e.target.checked })}
+                        className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                      />
+                      <span>เปิดบันทึกรดน้ำอัตโนมัติ</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* วันที่เพาะเมล็ด (ถ้ามี) */}
+                {form.seed_prep_date && (
+                  <div className="md:col-span-2 bg-teal-50/70 p-3 rounded-2xl border border-teal-200/80 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <Sprout className="w-4 h-4 text-teal-600 shrink-0" />
+                      <div>
+                        <span className="font-bold text-teal-900">วันที่เพาะกล้าที่บันทึกไว้:</span>{' '}
+                        <span className="font-extrabold text-teal-950">{format(new Date(form.seed_prep_date), 'dd/MM/yyyy')}</span>
+                        <span className="text-[10px] text-teal-700 block mt-0.5">* คำนวณวันเก็บเกี่ยวร่วมกับอายุต้นกล้าอัตโนมัติ</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, seed_prep_date: '' }))}
+                      className="text-[11px] text-rose-600 hover:text-rose-800 font-bold hover:underline cursor-pointer"
+                    >
+                      ล้างวันเพาะกล้า
+                    </button>
+                  </div>
+                )}
+
+                {/* วันที่เตรียมดิน/ปรุงดินสำหรับรอบนี้ (GAP ข้อ 2) */}
+                <div className="md:col-span-2 bg-amber-50/60 p-3.5 rounded-2xl border border-amber-200/80 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                    <label className="block text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                      <span>วันที่เตรียมดิน / ปรุงดินรอบนี้ (GAP ข้อ 2)</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, soil_prep_date: getTodayLocalStr() }))}
+                      className="text-[11px] text-amber-800 hover:text-amber-950 font-bold hover:underline cursor-pointer self-start sm:self-auto"
+                    >
+                      ⚡ ใช้วันนี้ ({format(new Date(), 'dd/MM/yyyy')})
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-1">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-amber-600" />
+                        <span>วันที่เตรียมดิน</span>
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={form.soil_prep_date}
+                        onChange={(e) => setForm({ ...form, soil_prep_date: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-amber-300 bg-white text-slate-900 font-bold focus:border-amber-600 focus:ring-1 focus:ring-amber-600 outline-none text-xs"
+                      />
+                      <span className="text-[10px] text-slate-400 block mt-0.5">
+                        * ตรวจสอบ/ยืนยันเพื่อบันทึก GAP
+                      </span>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        สูตรดินที่ใช้ในแปลงนี้
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={form.soil_recipe}
+                        onChange={(e) => setForm({ ...form, soil_recipe: e.target.value })}
+                        placeholder="เช่น ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)"
+                        className="w-full px-3 py-2 rounded-xl border border-amber-300 bg-white text-slate-900 font-medium placeholder:text-slate-400 focus:border-amber-600 focus:ring-1 focus:ring-amber-600 outline-none text-xs leading-relaxed"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Fixed Footer Buttons */}
+          <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50 flex gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 sm:py-3 rounded-xl border border-slate-300 font-bold text-xs sm:text-sm text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors"
+            >
+              ยกเลิก
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className={`flex-1 py-2.5 sm:py-3 rounded-xl text-white font-black text-xs sm:text-sm shadow-md disabled:opacity-50 cursor-pointer transition-colors ${
+                plantingMode === 'nursery'
+                  ? 'bg-teal-600 hover:bg-teal-700 shadow-teal-600/20'
+                  : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
+              }`}
+            >
+              {submitting
+                ? 'กำลังบันทึก...'
+                : plantingMode === 'nursery'
+                ? '🌱 บันทึกการเพาะกล้า (รอลงแปลง)'
+                : '✓ เริ่มรอบการปลูก'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

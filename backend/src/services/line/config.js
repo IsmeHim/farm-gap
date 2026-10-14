@@ -56,8 +56,10 @@ client.replyMessage = async function (params) {
   throw lastError;
 };
 
-// Auto-initialize line_chat_sessions table
-export async function initSessionTable() {
+// Auto-initialize line_chat_sessions table with retry
+let tableInitialized = false;
+export async function initSessionTable(retries = 3) {
+  if (tableInitialized) return;
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS line_chat_sessions (
@@ -78,8 +80,13 @@ export async function initSessionTable() {
     await pool.query(`
       ALTER TABLE orders ADD COLUMN tracking_number VARCHAR(100) NULL
     `).catch(() => {});
+    tableInitialized = true;
   } catch (err) {
-    console.error('Failed to init line_chat_sessions table:', err.message);
+    if (retries > 0) {
+      setTimeout(() => initSessionTable(retries - 1), 1500);
+    } else {
+      console.error('⚠️ Failed to init line_chat_sessions table:', err?.message || err);
+    }
   }
 }
 initSessionTable();

@@ -201,6 +201,13 @@ plotsRouter.post('/:id/reset', async (req, res) => {
       [req.params.id, req.user.id]
     );
 
+    // ลบกิจกรรมต้นกล้าที่ยังไม่เคยผูกกับ batch ใดๆ ของแปลงนี้ (ถ้ามี)
+    await pool.query(
+      `DELETE FROM crop_activities
+       WHERE plot_id = ? AND user_id = ? AND (batch_id IS NULL OR batch_id = 0)`,
+      [req.params.id, req.user.id]
+    );
+
     // รีเซ็ตสถานะแปลงให้กลับมาว่าง
     await pool.query(
       `UPDATE plots 

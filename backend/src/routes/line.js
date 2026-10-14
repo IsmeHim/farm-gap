@@ -1,9 +1,6 @@
 import { Router } from 'express';
-import { signatureVerifier, initSessionTable } from '../services/line/config.js';
+import { signatureVerifier } from '../services/line/config.js';
 import { handleEvent } from '../services/line/eventHandler.js';
-
-// Auto-initialize line_chat_sessions table
-initSessionTable();
 
 export const lineRouter = Router();
 

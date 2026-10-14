@@ -103,11 +103,11 @@ batchesRouter.post('/', async (req, res) => {
     if (!crops[0]) return res.status(404).json({ error: 'ไม่พบชนิดผักที่เลือก' });
     const crop = crops[0];
 
-    // 1. ตรวจสอบกิจกรรมเพาะกล้าล่าสุด หรือ seed_prep_date ของแปลง
+    // 1. ตรวจสอบกิจกรรมเพาะกล้าล่าสุด หรือ seed_prep_date ของแปลง (ต้องเป็นของรอบปัจจุบันเท่านั้น ไม่ดึงของรอบเก่าที่เก็บเกี่ยวไปแล้ว)
     const [preActivities] = await pool.query(
       `SELECT MIN(activity_date) AS earliest_seed_date
        FROM crop_activities
-       WHERE plot_id = ? AND user_id = ? AND stage IN ('seeding', 'nursery')`,
+       WHERE plot_id = ? AND user_id = ? AND stage IN ('seeding', 'nursery') AND (batch_id IS NULL OR batch_id = 0)`,
       [plot_id, req.user.id]
     );
     const earliestSeedActDate = preActivities[0]?.earliest_seed_date;

@@ -123,12 +123,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     (async () => {
-      const [plots, harvest, costs, chems, water, products, batches] = await Promise.all([
+      const [plots, harvest, costs, chems, products, batches] = await Promise.all([
         api.get('/api/plots'),
         api.get('/api/harvest'),
         api.get('/api/costs'),
         api.get('/api/chemicals'),
-        api.get('/api/water'),
         api.get('/api/products').catch(() => ({ data: [] })),
         api.get('/api/batches').catch(() => ({ data: [] })),
       ]);
