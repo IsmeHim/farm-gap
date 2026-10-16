@@ -519,6 +519,7 @@ export default function Orders() {
         onOpenSlipModal={(img) => setSlipModalImage(img)}
         onUpdateStatus={handleUpdateStatus}
         onOpenDispatchModal={openDispatchModal}
+        updatingId={updatingId}
       />
 
       {/* Slip Fullscreen Preview Modal */}

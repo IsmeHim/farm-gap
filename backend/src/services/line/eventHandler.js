@@ -2,7 +2,14 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { pool } from '../../db.js';
-import { client, lineConfig, getChatSession, setChatSession, clearChatSession } from './config.js';
+import {
+  client,
+  lineConfig,
+  getChatSession,
+  setChatSession,
+  clearChatSession,
+  fetchLineMessageContentBuffer,
+} from './config.js';
 import { askGemini, isCancelWithGemini } from './ai/gemini.js';
 import { getFarmContext, getOwnerContactInfo } from './ai/farmContext.js';
 import { extractOrderIntent, getProductWeightInKg } from './parsers/orderIntent.js';
@@ -20,7 +27,14 @@ import { replyCartSummary, replyCartClearedCard } from './flex/cartSummaryCard.j
 import { replyProductQuantityCard } from './flex/productQtyCard.js';
 import { sendSmartOrderDraftConfirmation } from './flex/orderDraftCard.js';
 import { createChatOrder, cancelChatOrder } from './orderService.js';
-import { notifyAdminNewOrder } from './notifications/adminNotifier.js';
+import {
+  notifyAdminNewOrder,
+  buildAdminShippingStepBubble,
+  buildAdminCompletedStepBubble,
+  getAdminFrontendBase,
+} from './notifications/adminNotifier.js';
+import { notifyCustomerOrderStatus } from './notifications/customerNotifier.js';
+import { syncOrderToStorageLog } from '../../routes/orders.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -174,29 +188,16 @@ export async function handleEvent(event) {
       let slipDataUrl = null;
 
       try {
-        if (lineConfig.channelAccessToken && lineConfig.channelAccessToken !== 'dummy_token') {
-          const contentRes = await fetch(
-            `https://api-data.line.me/v2/bot/message/${event.message.id}/content`,
-            {
-              headers: { Authorization: `Bearer ${lineConfig.channelAccessToken}` },
-            }
-          );
-          if (contentRes.ok) {
-            const arrayBuffer = await contentRes.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-            const filename = `slip-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}.jpg`;
-            const targetPath = path.join(uploadsDir, filename);
-            fs.writeFileSync(targetPath, buffer);
-            slipDataUrl = `/uploads/${filename}`;
-          }
+        const buffer = await fetchLineMessageContentBuffer(event.message.id);
+        if (buffer && buffer.length > 0) {
+          const filename = `slip-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}.jpg`;
+          const targetPath = path.join(uploadsDir, filename);
+          fs.writeFileSync(targetPath, buffer);
+          slipDataUrl = `/uploads/${filename}`;
+          console.log(`✅ [Slip Upload] บันทึกรูปสลิปจากลูกค้าสำเร็จ: ${slipDataUrl} (${buffer.length} bytes)`);
         }
       } catch (imgErr) {
-        console.warn('Failed to fetch image from LINE Content API:', imgErr.message);
-      }
-
-      // Fallback placeholder if token is dummy or download failed
-      if (!slipDataUrl) {
-        slipDataUrl = 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?q=80&w=600&auto=format&fit=crop';
+        console.warn('Failed to save image from LINE Content API:', imgErr.message);
       }
 
       await pool.query('UPDATE orders SET slip_image_url = ?, status = "paid" WHERE id = ?', [
@@ -227,7 +228,7 @@ export async function handleEvent(event) {
             [orderIdForNotify]
           );
           oRows[0].items = itemsRows;
-          notifyAdminNewOrder(oRows[0], 'ORDER_COMPLETED').catch(e => console.error('notifyAdminNewOrder slip error:', e.message));
+          notifyAdminNewOrder(oRows[0], 'SLIP_UPLOADED').catch(e => console.error('notifyAdminNewOrder slip error:', e.message));
         }
       } catch (err) {
         console.error('Error in notifyAdminNewOrder for chat slip:', err.message);
@@ -368,6 +369,205 @@ export async function handleEvent(event) {
     // 3.6 แสดงเมนูผัก
     if (action === 'show_menu') {
       return replyVegMenu(event.replyToken, userId);
+    }
+
+    // 3.7 คำสั่งจัดการออเดอร์สำหรับเจ้าของฟาร์มเท่านั้น (Owner-Only In-Chat Order Management)
+    if (action === 'admin_dispatch' || action === 'admin_complete' || action === 'admin_cancel') {
+      const orderId = params.get('order_id');
+      if (!orderId) return;
+
+      // ตรวจสอบสิทธิ์ Owner/Admin จากตาราง users ด้วย line_user_id
+      const [ownerRows] = await pool.query(
+        "SELECT id, email, display_name, role, line_user_id FROM users WHERE (role = 'owner' OR role = 'admin') AND TRIM(line_user_id) = ? LIMIT 1",
+        [userId.trim()]
+      );
+
+      if (ownerRows.length === 0) {
+        return client.replyMessage({
+          replyToken: event.replyToken,
+          messages: [
+            {
+              type: 'text',
+              text: '⛔ ขออภัยครับ คำสั่งจัดการออเดอร์นี้สงวนสิทธิ์เฉพาะเจ้าของฟาร์มเท่านั้น',
+            },
+          ],
+        });
+      }
+
+      const adminUser = ownerRows[0];
+      const { frontendBase } = await getAdminFrontendBase();
+
+      // ดึงข้อมูลออเดอร์และรายการสินค้า
+      const [orderRows] = await pool.query(
+        `SELECT o.*, 
+                COALESCE(o.recipient_name, c.display_name) AS customer_name, 
+                COALESCE(o.recipient_phone, c.phone) AS customer_phone, 
+                COALESCE(o.recipient_address, c.address) AS customer_address
+         FROM orders o
+         LEFT JOIN customers c ON o.customer_id = c.id
+         WHERE o.id = ?`,
+        [orderId]
+      );
+
+      if (orderRows.length === 0) {
+        return client.replyMessage({
+          replyToken: event.replyToken,
+          messages: [{ type: 'text', text: '⚠️ ไม่พบข้อมูลคำสั่งซื้อนี้ในระบบครับ' }],
+        });
+      }
+
+      const order = orderRows[0];
+      const [itemRows] = await pool.query(
+        `SELECT oi.*, p.name AS product_name, p.unit
+         FROM order_items oi
+         LEFT JOIN products p ON oi.product_id = p.id
+         WHERE oi.order_id = ?`,
+        [orderId]
+      );
+
+      // Step 1 -> Step 2: กดจัดส่งสินค้า (บันทึกสมุด GAP #6 + แจ้งเตือนลูกค้า + ส่งการ์ด Step 2 ให้เจ้าของ)
+      if (action === 'admin_dispatch') {
+        if (order.status === 'cancelled') {
+          return client.replyMessage({
+            replyToken: event.replyToken,
+            messages: [{ type: 'text', text: `⚠️ ออเดอร์ #${order.order_code} ถูกยกเลิกไปแล้ว ไม่สามารถจัดส่งได้ครับ` }],
+          });
+        }
+        if (order.status === 'completed') {
+          return client.replyMessage({
+            replyToken: event.replyToken,
+            messages: [{ type: 'text', text: `ℹ️ ออเดอร์ #${order.order_code} จัดส่งสำเร็จและปิดออเดอร์เรียบร้อยแล้วครับ 🎉` }],
+          });
+        }
+        if (order.status === 'shipping') {
+          const shippingBubble = buildAdminShippingStepBubble(order, itemRows, frontendBase);
+          return client.replyMessage({
+            replyToken: event.replyToken,
+            messages: [
+              {
+                type: 'text',
+                text: `ℹ️ ออเดอร์ #${order.order_code} อยู่ในสถานะ "กำลังจัดส่ง" แล้วครับ สามารถกดปุ่มยืนยันเมื่อส่งถึงมือลูกค้าที่การ์ดด้านล่างได้เลยครับ 👇`,
+              },
+              {
+                type: 'flex',
+                altText: `🚚 กำลังจัดส่งออเดอร์ ${order.order_code}`,
+                contents: shippingBubble,
+              },
+            ],
+          });
+        }
+
+        // อัปเดตสถานะเป็น shipping
+        await pool.query("UPDATE orders SET status = 'shipping' WHERE id = ?", [orderId]);
+        order.status = 'shipping';
+
+        // บันทึกลงสมุด ขนส่ง/เก็บรักษา (GAP #6) อัตโนมัติ
+        const storageLogId = await syncOrderToStorageLog(
+          orderId,
+          {
+            worker_name: adminUser.display_name || 'เจ้าของฟาร์ม',
+          },
+          adminUser.id || 1,
+          adminUser.email || 'admin@farmgap.com'
+        );
+
+        // แจ้งเตือน LINE ลูกค้าว่ากำลังจัดส่ง
+        notifyCustomerOrderStatus(orderId, 'shipping', {
+          vehicle: 'รถจักรยานยนต์ส่วนตัว (เจ้าของฟาร์มส่งเอง)',
+          storage_conditions: 'บรรจุในกล่อง/ถุงเก็บความสด ป้องกันแสงแดดและความร้อน',
+          worker_name: adminUser.display_name || 'เจ้าของฟาร์ม',
+        }).catch(e => console.error('❌ [Admin LINE Dispatch -> Notify Customer Error]:', e.message));
+
+        // ตอบกลับเจ้าของฟาร์มด้วยการ์ด Step 2 (พร้อมปุ่มยืนยันจัดส่งสำเร็จ)
+        const shippingBubble = buildAdminShippingStepBubble(order, itemRows, frontendBase, storageLogId);
+        return client.replyMessage({
+          replyToken: event.replyToken,
+          messages: [
+            {
+              type: 'flex',
+              altText: `🚚 เริ่มจัดส่งออเดอร์ ${order.order_code} เรียบร้อยแล้ว! (กดยืนยันเมื่อส่งถึงมือลูกค้า)`,
+              contents: shippingBubble,
+            },
+          ],
+        });
+      }
+
+      // Step 2 -> Completed: ยืนยันจัดส่งถึงมือลูกค้าสำเร็จ
+      if (action === 'admin_complete') {
+        if (order.status === 'cancelled') {
+          return client.replyMessage({
+            replyToken: event.replyToken,
+            messages: [{ type: 'text', text: `⚠️ ออเดอร์ #${order.order_code} ถูกยกเลิกไปแล้วครับ` }],
+          });
+        }
+        if (order.status === 'completed') {
+          return client.replyMessage({
+            replyToken: event.replyToken,
+            messages: [{ type: 'text', text: `ℹ️ ออเดอร์ #${order.order_code} ถูกบันทึกว่าจัดส่งสำเร็จเรียบร้อยแล้วครับ 🎉` }],
+          });
+        }
+
+        // หากเจ้าของกดข้ามมา 완료 เลยโดยยังไม่ได้สร้าง GAP #6 log ให้สร้างให้อัตโนมัติด้วย
+        await syncOrderToStorageLog(
+          orderId,
+          {
+            worker_name: adminUser.display_name || 'เจ้าของฟาร์ม',
+          },
+          adminUser.id || 1,
+          adminUser.email || 'admin@farmgap.com'
+        );
+
+        await pool.query("UPDATE orders SET status = 'completed' WHERE id = ?", [orderId]);
+        order.status = 'completed';
+
+        // แจ้งเตือนขอบคุณลูกค้าใน LINE
+        notifyCustomerOrderStatus(orderId, 'completed').catch(e =>
+          console.error('❌ [Admin LINE Complete -> Notify Customer Error]:', e.message)
+        );
+
+        const completedBubble = buildAdminCompletedStepBubble(order, frontendBase);
+        return client.replyMessage({
+          replyToken: event.replyToken,
+          messages: [
+            {
+              type: 'flex',
+              altText: `🎉 ปิดออเดอร์ ${order.order_code} สำเร็จเรียบร้อย!`,
+              contents: completedBubble,
+            },
+          ],
+        });
+      }
+
+      // ยกเลิกออเดอร์ + คืนสต็อกผักอัตโนมัติ
+      if (action === 'admin_cancel') {
+        if (order.status === 'cancelled') {
+          return client.replyMessage({
+            replyToken: event.replyToken,
+            messages: [{ type: 'text', text: `ℹ️ ออเดอร์ #${order.order_code} ถูกยกเลิกและคืนสต็อกเรียบร้อยแล้วครับ` }],
+          });
+        }
+        if (order.status === 'completed') {
+          return client.replyMessage({
+            replyToken: event.replyToken,
+            messages: [{ type: 'text', text: `⚠️ ออเดอร์ #${order.order_code} จัดส่งสำเร็จไปแล้ว ไม่สามารถยกเลิกได้ครับ` }],
+          });
+        }
+
+        await cancelChatOrder(orderId);
+        notifyCustomerOrderStatus(orderId, 'cancelled').catch(e =>
+          console.error('❌ [Admin LINE Cancel -> Notify Customer Error]:', e.message)
+        );
+
+        return client.replyMessage({
+          replyToken: event.replyToken,
+          messages: [
+            {
+              type: 'text',
+              text: `❌ ยกเลิกออเดอร์ #${order.order_code} เรียบร้อยแล้วครับ\n🔄 ระบบได้คืนสต็อกผักกลับเข้าคลังสินค้า และแจ้งเตือนให้ลูกค้าทราบแล้วครับ`,
+            },
+          ],
+        });
+      }
     }
 
     return;

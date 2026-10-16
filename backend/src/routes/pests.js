@@ -5,6 +5,10 @@ import { authRequired } from '../middleware/auth.js';
 export const pestsRouter = Router();
 pestsRouter.use(authRequired);
 
+// Ensure source_type and source_id exist on crop_activities
+pool.query('ALTER TABLE crop_activities ADD COLUMN source_type VARCHAR(32) NULL').catch(() => {});
+pool.query('ALTER TABLE crop_activities ADD COLUMN source_id INT NULL').catch(() => {});
+
 const logAudit = async (action, recordId, userEmail, oldRow, newRow) => {
   try {
     await pool.query(
@@ -15,6 +19,79 @@ const logAudit = async (action, recordId, userEmail, oldRow, newRow) => {
     console.warn('Failed to write audit log in pestsRouter:', e.message);
   }
 };
+
+function formatPestActivity(row) {
+  const mainTitle = row.pest_or_disease || row.damage_cause || 'สำรวจแปลง/ศัตรูพืช';
+  const lossCount = Number(row.damaged_count) || 0;
+  const unit = row.damage_unit || 'ต้น';
+  const severity = row.severity || 'น้อย';
+
+  const title =
+    lossCount > 0
+      ? `บันทึกความเสียหาย/ศัตรูพืช: ${mainTitle} (เสียหาย ${lossCount} ${unit})`
+      : `สำรวจ/จัดการศัตรูพืชและโรค: ${mainTitle} (ความรุนแรง: ${severity})`;
+
+  const detailParts = [
+    `สาเหตุ/อาการ: ${row.damage_cause || mainTitle}`,
+    `ความรุนแรง: ${severity}`,
+    lossCount > 0 ? `จำนวนที่เสียหาย: ${lossCount} ${unit}` : 'ไม่พบต้นเสียหาย (0 ต้น)',
+  ];
+  if (row.notes) detailParts.push(`หมายเหตุ: ${row.notes}`);
+
+  const details = detailParts.join(' | ');
+  const materials_used = row.treatment_method
+    ? `วิธีจัดการ/การรักษา: ${row.treatment_method}`
+    : null;
+
+  return { title, details, materials_used };
+}
+
+// Backfill existing pest_logs into crop_activities on startup if not yet synced
+export async function syncExistingPestLogsToActivities() {
+  try {
+    // 1. Link legacy crop_activities that were created from pest_logs before source_type existed
+    await pool.query(`
+      UPDATE crop_activities a
+      INNER JOIN pest_logs p
+        ON a.plot_id = p.plot_id
+       AND a.activity_date = p.log_date
+       AND a.title LIKE CONCAT('บันทึกความเสียหาย/ศัตรูพืช: ', p.pest_or_disease, '%')
+      SET a.source_type = 'pest', a.source_id = p.id
+      WHERE a.source_type IS NULL
+    `);
+
+    // 2. Insert any remaining unlinked pest_logs into crop_activities
+    const [unlinked] = await pool.query(`
+      SELECT p.*
+      FROM pest_logs p
+      LEFT JOIN crop_activities a
+        ON a.source_type = 'pest' AND a.source_id = p.id
+      WHERE a.id IS NULL AND p.plot_id IS NOT NULL
+    `);
+
+    for (const row of unlinked) {
+      const { title, details, materials_used } = formatPestActivity(row);
+      await pool.query(
+        `INSERT INTO crop_activities
+          (user_id, plot_id, batch_id, activity_date, stage, title, details, materials_used, operator_name, source_type, source_id)
+         VALUES (?, ?, ?, ?, 'maintenance', ?, ?, ?, ?, 'pest', ?)`,
+        [
+          row.user_id,
+          row.plot_id,
+          row.batch_id || null,
+          row.log_date,
+          title,
+          details,
+          materials_used,
+          row.worker_name || 'เจ้าของฟาร์ม',
+          row.id,
+        ]
+      );
+    }
+  } catch (err) {
+    console.warn('Backfill pest_logs to crop_activities warning:', err.message);
+  }
+}
 
 // GET /api/pests - ดึงรายการบันทึกศัตรูพืชและผลผลิตเสียหาย
 pestsRouter.get('/', async (req, res) => {
@@ -64,7 +141,7 @@ pestsRouter.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/pests - บันทึกโรค/ศัตรูพืช/ความเสียหาย พร้อมตัดยอดจำนวนต้นในรอบปลูกอัตโนมัติ
+// POST /api/pests - บันทึกโรค/ศัตรูพืช/ความเสียหาย พร้อมตัดยอดจำนวนต้นในรอบปลูกอัตโนมัติ และ Sync ลงไทม์ไลน์กิจกรรมทุกครั้ง
 pestsRouter.post('/', async (req, res) => {
   try {
     const {
@@ -97,7 +174,10 @@ pestsRouter.post('/', async (req, res) => {
     let targetBatch = null;
 
     if (targetBatchId) {
-      const [bRows] = await pool.query('SELECT * FROM planting_batches WHERE id = ? AND user_id = ?', [targetBatchId, req.user.id]);
+      const [bRows] = await pool.query(
+        'SELECT * FROM planting_batches WHERE id = ? AND user_id = ?',
+        [targetBatchId, req.user.id]
+      );
       if (bRows[0]) targetBatch = bRows[0];
     }
 
@@ -137,7 +217,7 @@ pestsRouter.post('/', async (req, res) => {
       ]
     );
 
-    // 3. หากมีความเสียหายและพบ active batch ให้ตัดยอดคงเหลือใน planting_batches ทันที!
+    // 3. หากมีความเสียหายและพบ active batch ให้ตัดยอดคงเหลือใน planting_batches ทันที
     if (lossCount > 0 && targetBatch) {
       await pool.query(
         `UPDATE planting_batches
@@ -147,43 +227,53 @@ pestsRouter.post('/', async (req, res) => {
          WHERE id = ?`,
         [lossCount, lossCount, targetBatch.id]
       );
-
-      // บันทึกลง crop_activities (GAP ข้อ 4 บันทึกการจัดการศัตรูพืชและความเสียหาย)
-      await pool.query(
-        `INSERT INTO crop_activities (user_id, plot_id, batch_id, activity_date, stage, title, details, operator_name)
-         VALUES (?, ?, ?, ?, 'maintenance', ?, ?, ?)`,
-        [
-          req.user.id,
-          plot_id,
-          targetBatch.id,
-          log_date,
-          `บันทึกความเสียหาย/ศัตรูพืช: ${mainTitle} (เสียหาย ${lossCount} ${damage_unit || 'ต้น'})`,
-          `สาเหตุ: ${damage_cause || mainTitle} | ความรุนแรง: ${severity || 'น้อย'} | วิธีจัดการ: ${treatment_method || '-'} ${notes ? `| ${notes}` : ''}`,
-          worker,
-        ]
-      );
     }
 
     const [newRow] = await pool.query('SELECT * FROM pest_logs WHERE id = ?', [result.insertId]);
+
+    // 4. บันทึกลง crop_activities ทุกครั้ง (ไม่ว่าจะมีต้นเสียหาย > 0 หรือ = 0 ก็ตาม)
+    const { title, details, materials_used } = formatPestActivity(newRow[0]);
+    await pool.query(
+      `INSERT INTO crop_activities (
+        user_id, plot_id, batch_id, activity_date, stage,
+        title, details, materials_used, operator_name, source_type, source_id
+      ) VALUES (?, ?, ?, ?, 'maintenance', ?, ?, ?, ?, 'pest', ?)`,
+      [
+        req.user.id,
+        plot_id,
+        targetBatchId || null,
+        log_date,
+        title,
+        details,
+        materials_used,
+        worker,
+        result.insertId,
+      ]
+    );
+
     await logAudit('insert', result.insertId, req.user.email, null, newRow[0]);
 
     res.status(201).json({
       success: true,
       log: newRow[0],
       auto_deducted: lossCount > 0 && !!targetBatch,
-      message: lossCount > 0 && targetBatch
-        ? `บันทึกสำเร็จ และตัดยอดความเสียหาย ${lossCount} ${damage_unit || 'ต้น'} ออกจากรอบปลูก ${targetBatch.batch_code} เรียบร้อยแล้ว`
-        : 'บันทึกข้อมูลศัตรูพืช/โรคสำเร็จ',
+      message:
+        lossCount > 0 && targetBatch
+          ? `บันทึกสำเร็จ ซิงค์ลงไทม์ไลน์กิจกรรม และตัดยอดความเสียหาย ${lossCount} ${damage_unit || 'ต้น'} ออกจากรอบปลูก ${targetBatch.batch_code} เรียบร้อยแล้ว`
+          : 'บันทึกข้อมูลศัตรูพืช/โรค และซิงค์ลงไทม์ไลน์กิจกรรมแปลงปลูกสำเร็จ',
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// PUT /api/pests/:id - แก้ไขบันทึก พร้อมปรับยอดส่วนต่างอัตโนมัติ
+// PUT /api/pests/:id - แก้ไขบันทึก พร้อมปรับยอดส่วนต่างและ Sync ไทม์ไลน์กิจกรรมอัตโนมัติ
 pestsRouter.put('/:id', async (req, res) => {
   try {
-    const [oldRows] = await pool.query('SELECT * FROM pest_logs WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+    const [oldRows] = await pool.query(
+      'SELECT * FROM pest_logs WHERE id = ? AND user_id = ?',
+      [req.params.id, req.user.id]
+    );
     if (!oldRows[0]) return res.status(404).json({ error: 'ไม่พบบันทึกนี้' });
     const oldRow = oldRows[0];
 
@@ -253,23 +343,72 @@ pestsRouter.put('/:id', async (req, res) => {
       );
     }
 
-    const [updatedRow] = await pool.query('SELECT * FROM pest_logs WHERE id = ?', [req.params.id]);
-    await logAudit('update', req.params.id, req.user.email, oldRow, updatedRow[0]);
+    const [updatedRows] = await pool.query('SELECT * FROM pest_logs WHERE id = ?', [req.params.id]);
+    const updatedRow = updatedRows[0];
+
+    // Sync update to crop_activities
+    const { title, details, materials_used } = formatPestActivity(updatedRow);
+    const [existingAct] = await pool.query(
+      "SELECT id FROM crop_activities WHERE source_type = 'pest' AND source_id = ? AND user_id = ?",
+      [updatedRow.id, req.user.id]
+    );
+
+    if (existingAct[0]) {
+      await pool.query(
+        `UPDATE crop_activities
+         SET plot_id = ?, batch_id = ?, activity_date = ?, title = ?, details = ?, materials_used = ?, operator_name = ?
+         WHERE id = ? AND user_id = ?`,
+        [
+          updatedRow.plot_id,
+          effectiveBatchId || null,
+          updatedRow.log_date,
+          title,
+          details,
+          materials_used,
+          updatedRow.worker_name || 'เจ้าของฟาร์ม',
+          existingAct[0].id,
+          req.user.id,
+        ]
+      );
+    } else if (updatedRow.plot_id) {
+      await pool.query(
+        `INSERT INTO crop_activities (
+          user_id, plot_id, batch_id, activity_date, stage,
+          title, details, materials_used, operator_name, source_type, source_id
+        ) VALUES (?, ?, ?, ?, 'maintenance', ?, ?, ?, ?, 'pest', ?)`,
+        [
+          req.user.id,
+          updatedRow.plot_id,
+          effectiveBatchId || null,
+          updatedRow.log_date,
+          title,
+          details,
+          materials_used,
+          updatedRow.worker_name || 'เจ้าของฟาร์ม',
+          updatedRow.id,
+        ]
+      );
+    }
+
+    await logAudit('update', req.params.id, req.user.email, oldRow, updatedRow);
 
     res.json({
       success: true,
-      log: updatedRow[0],
-      message: 'แก้ไขบันทึกสำเร็จ',
+      log: updatedRow,
+      message: 'แก้ไขบันทึกและอัปเดตไทม์ไลน์กิจกรรมสำเร็จ',
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// DELETE /api/pests/:id - ลบบันทึก พร้อมคืนยอดจำนวนต้นกลับเข้ารอบปลูก
+// DELETE /api/pests/:id - ลบบันทึก พร้อมคืนยอดจำนวนต้นกลับเข้ารอบปลูก และลบจากไทม์ไลน์กิจกรรม
 pestsRouter.delete('/:id', async (req, res) => {
   try {
-    const [oldRows] = await pool.query('SELECT * FROM pest_logs WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+    const [oldRows] = await pool.query(
+      'SELECT * FROM pest_logs WHERE id = ? AND user_id = ?',
+      [req.params.id, req.user.id]
+    );
     if (!oldRows[0]) return res.status(404).json({ error: 'ไม่พบบันทึกนี้' });
     const oldRow = oldRows[0];
 
@@ -286,7 +425,17 @@ pestsRouter.delete('/:id', async (req, res) => {
       );
     }
 
-    await pool.query('DELETE FROM pest_logs WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+    await pool.query('DELETE FROM pest_logs WHERE id = ? AND user_id = ?', [
+      req.params.id,
+      req.user.id,
+    ]);
+
+    // ลบรายการที่ซิงค์ไว้ใน crop_activities ด้วย
+    await pool.query(
+      "DELETE FROM crop_activities WHERE source_type = 'pest' AND source_id = ? AND user_id = ?",
+      [req.params.id, req.user.id]
+    );
+
     await logAudit('delete', req.params.id, req.user.email, oldRow, null);
 
     res.json({ success: true, message: 'ลบบันทึกเรียบร้อย' });

@@ -30,31 +30,72 @@ export const client = new MessagingApiClient({
 });
 
 // Auto-retry wrapper against Undici idle keep-alive socket drops & DNS hiccup
-const _originalReplyMessage = client.replyMessage.bind(client);
-client.replyMessage = async function (params) {
-  let lastError = null;
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      return await _originalReplyMessage(params);
-    } catch (err) {
-      lastError = err;
-      const isRetryable = (
-        err?.message?.includes('fetch failed') ||
-        err?.message?.includes('EAI_AGAIN') ||
-        err?.code === 'EAI_AGAIN' ||
-        err?.cause?.code === 'EAI_AGAIN' ||
-        err?.cause?.message?.includes('EAI_AGAIN')
-      );
-      if (isRetryable && attempt < 3) {
-        console.warn(`⚠️ LINE API attempt ${attempt} failed (${err.cause?.code || err.message}). Retrying in ${attempt * 300}ms...`);
-        await new Promise(r => setTimeout(r, attempt * 300));
-        continue;
+function withLineRetry(fn, label = 'LINE API') {
+  return async function (params) {
+    let lastError = null;
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      try {
+        return await fn(params);
+      } catch (err) {
+        lastError = err;
+        const isRetryable = (
+          err?.message?.includes('fetch failed') ||
+          err?.message?.includes('EAI_AGAIN') ||
+          err?.message?.includes('ECONNRESET') ||
+          err?.message?.includes('ETIMEDOUT') ||
+          err?.code === 'EAI_AGAIN' ||
+          err?.cause?.code === 'EAI_AGAIN' ||
+          err?.cause?.code === 'ECONNRESET' ||
+          err?.cause?.message?.includes('EAI_AGAIN')
+        );
+        if (isRetryable && attempt < 4) {
+          console.warn(`⚠️ ${label} attempt ${attempt} failed (${err.cause?.code || err.message}). Retrying in ${attempt * 350}ms...`);
+          await new Promise(r => setTimeout(r, attempt * 350));
+          continue;
+        }
+        throw err;
       }
-      throw err;
+    }
+    throw lastError;
+  };
+}
+
+client.replyMessage = withLineRetry(client.replyMessage.bind(client), 'LINE replyMessage');
+client.pushMessage = withLineRetry(client.pushMessage.bind(client), 'LINE pushMessage');
+
+// Helper: ดึงไฟล์รูปภาพจาก LINE Content API (api-data.line.me) พร้อมระบบ Auto-Retry ป้องกัน DNS/Network สะดุดใน Docker
+export async function fetchLineMessageContentBuffer(messageId) {
+  if (!lineConfig.channelAccessToken || lineConfig.channelAccessToken === 'dummy_token') {
+    return null;
+  }
+
+  const url = `https://api-data.line.me/v2/bot/message/${messageId}/content`;
+  let lastErr = null;
+
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      const contentRes = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${lineConfig.channelAccessToken}`,
+        },
+      });
+      if (!contentRes.ok) {
+        throw new Error(`HTTP ${contentRes.status} ${contentRes.statusText}`);
+      }
+      const arrayBuffer = await contentRes.arrayBuffer();
+      return Buffer.from(arrayBuffer);
+    } catch (err) {
+      lastErr = err;
+      console.warn(`⚠️ [LINE Content API] ดึงรูปสลิปครั้งที่ ${attempt}/4 ไม่สำเร็จ (${err.cause?.code || err.message})`);
+      if (attempt < 4) {
+        await new Promise(r => setTimeout(r, attempt * 400));
+      }
     }
   }
-  throw lastError;
-};
+
+  console.error('❌ [LINE Content API] ไม่สามารถดึงรูปสลิปจาก LINE ได้หลังจากพยายาม 4 ครั้ง:', lastErr?.message);
+  return null;
+}
 
 // Auto-initialize line_chat_sessions table with retry
 let tableInitialized = false;

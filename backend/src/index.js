@@ -30,7 +30,8 @@ import { uploadRouter } from './routes/upload.js';
 import { salesRouter } from './routes/sales.js';
 import { cropsRouter } from './routes/crops.js';
 import { batchesRouter } from './routes/batches.js';
-import { pestsRouter } from './routes/pests.js';
+import { pestsRouter, syncExistingPestLogsToActivities } from './routes/pests.js';
+import { chemicalsRouter, syncExistingChemicalLogsToActivities } from './routes/chemicals.js';
 
 import compression from 'compression';
 
@@ -58,7 +59,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/plots', plotsRouter);
 app.use('/api/water', waterRouter);
-app.use('/api/chemicals', crudRouter('chemical_logs', ['plot_id','log_date','chem_type','product_name','amount','unit','reason','application_method','safety_ppe','manufacturer','chemical_label','phi_days','worker_name','notes']));
+app.use('/api/chemicals', chemicalsRouter);
 app.use('/api/pests', pestsRouter);
 app.use('/api/harvest', harvestRouter);
 app.use('/api/storage', crudRouter('storage_logs', ['harvest_id','order_id','log_date','storage_location','shipped_to','buyer','vehicle','vehicle_clean_status','storage_conditions','transport_time','delivery_condition','worker_name','notes']));
@@ -117,6 +118,12 @@ if (fs.existsSync(frontendDistPath)) {
 const port = process.env.PORT || 4000;
 app.listen(port, () => {
   console.log(`🌱 FarmGAP API on : http://localhost:${port}/api/health`);
+
+  // Auto-sync any historical chemical_logs & pest_logs into crop_activities
+  setTimeout(async () => {
+    await syncExistingChemicalLogsToActivities();
+    await syncExistingPestLogsToActivities();
+  }, 2000);
 
   // Auto-Watering Background Daemon (every 15 minutes)
   setTimeout(() => {

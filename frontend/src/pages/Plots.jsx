@@ -722,31 +722,36 @@ export default function Plots() {
       )}
 
       {/* Batches Table (ประวัติรอบการปลูกทั้งหมด & GAP Tracing) */}
-      <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs">
-        <h2 className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
-          <Sprout className="w-5 h-5 text-emerald-600" />
-          ประวัติรอบการปลูกทั้งหมด (Planting History & GAP Tracing)
-        </h2>
+      <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-2xs">
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <Sprout className="w-5 h-5 text-emerald-600" />
+            <span>ประวัติรอบการปลูกทั้งหมด (Planting History & GAP Tracing)</span>
+          </h2>
+          <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
+            ทั้งหมด {batches.length} รอบปลูก
+          </span>
+        </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead className="bg-slate-50/90 text-slate-600 border-y border-slate-200">
               <tr>
-                <th className="py-3 px-4 font-semibold">รหัสรอบ (Batch)</th>
-                <th className="py-3 px-4 font-semibold">ชนิดผัก</th>
-                <th className="py-3 px-4 font-semibold">แปลงปลูก</th>
-                <th className="py-3 px-4 font-semibold">วันที่เริ่มปลูก</th>
-                <th className="py-3 px-4 font-semibold">วันเก็บเกี่ยว</th>
-                <th className="py-3 px-4 font-semibold min-w-32.5">ความคืบหน้า</th>
-                <th className="py-3 px-4 font-semibold">สถานะ</th>
-                <th className="py-3 px-4 font-semibold">ระบบรดน้ำ</th>
-                <th className="py-3 px-4 font-semibold text-right">จัดการ</th>
+                <th className="py-3 px-3.5 font-bold whitespace-nowrap">รหัสรอบ (Batch)</th>
+                <th className="py-3 px-3.5 font-bold whitespace-nowrap">ชนิดผัก</th>
+                <th className="py-3 px-3.5 font-bold whitespace-nowrap">แปลงปลูก</th>
+                <th className="py-3 px-3.5 font-bold whitespace-nowrap">วันที่เริ่มปลูก</th>
+                <th className="py-3 px-3.5 font-bold whitespace-nowrap">วันเก็บผลผลิต</th>
+                <th className="py-3 px-3.5 font-bold whitespace-nowrap min-w-[130px]">ความคืบหน้า</th>
+                <th className="py-3 px-3.5 font-bold whitespace-nowrap text-center">สถานะ</th>
+                <th className="py-3 px-3.5 font-bold whitespace-nowrap">ระบบรดน้ำ</th>
+                <th className="py-3 px-3.5 font-bold whitespace-nowrap text-right">จัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {batches.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-slate-400">
+                  <td colSpan={9} className="py-10 text-center text-slate-400">
                     ยังไม่มีประวัติรอบการปลูก
                   </td>
                 </tr>
@@ -763,15 +768,23 @@ export default function Plots() {
                     !bIsHarvestReady &&
                     b.status === 'growing' &&
                     (bProg?.daysPlanted ?? 0) <= 2;
+
                   return (
                     <tr key={b.id} className="hover:bg-slate-50/80 transition">
-                      <td className="py-3 px-4 font-mono font-bold text-slate-900">
-                        {b.batch_code}
+                      {/* 1. Batch Code */}
+                      <td className="py-3.5 px-3.5 align-middle whitespace-nowrap">
+                        <span className="font-mono font-bold text-slate-800 bg-slate-100/80 px-2 py-1 rounded-lg border border-slate-200/80 text-[11px]">
+                          {b.batch_code}
+                        </span>
                       </td>
-                      <td className="py-3 px-4">
-                        <span className="font-bold text-emerald-800 block">{b.crop_name}</span>
+
+                      {/* 2. Crop Name & Remaining Count */}
+                      <td className="py-3.5 px-3.5 align-middle min-w-[140px]">
+                        <span className="font-bold text-emerald-800 block leading-snug">
+                          {b.crop_name}
+                        </span>
                         {b.initial_count ? (
-                          <span className="text-[11px] text-slate-500 font-medium block">
+                          <span className="text-[11px] text-slate-500 font-medium block mt-0.5 whitespace-nowrap">
                             เหลือ{' '}
                             {Number(b.remaining_count ?? b.initial_count).toLocaleString()}/
                             {Number(b.initial_count).toLocaleString()} {b.planting_unit || 'ต้น'}
@@ -783,49 +796,68 @@ export default function Plots() {
                           </span>
                         ) : null}
                       </td>
-                      <td className="py-3 px-4 text-slate-600">{b.plot_name}</td>
-                      <td className="py-3 px-4 text-slate-500">
+
+                      {/* 3. Plot Name */}
+                      <td className="py-3.5 px-3.5 align-middle text-slate-700 font-medium whitespace-nowrap">
+                        {b.plot_name}
+                      </td>
+
+                      {/* 4. Start Date */}
+                      <td className="py-3.5 px-3.5 align-middle text-slate-600 font-mono whitespace-nowrap">
                         {b.start_date ? format(new Date(b.start_date), 'dd/MM/yyyy') : '-'}
                       </td>
-                      <td className="py-3 px-4 text-slate-500">
-                        {b.actual_harvest_date
-                          ? `${format(new Date(b.actual_harvest_date), 'dd/MM/yyyy')} (เก็บแล้ว)`
-                          : b.expected_harvest_date
-                          ? format(new Date(b.expected_harvest_date), 'dd/MM/yyyy')
-                          : '-'}
+
+                      {/* 5. Harvest Date */}
+                      <td className="py-3.5 px-3.5 align-middle whitespace-nowrap">
+                        {b.actual_harvest_date ? (
+                          <div className="font-mono text-slate-700 font-semibold">
+                            {format(new Date(b.actual_harvest_date), 'dd/MM/yyyy')}
+                          </div>
+                        ) : b.expected_harvest_date ? (
+                          <div>
+                            <span className="font-mono text-slate-600">
+                              {format(new Date(b.expected_harvest_date), 'dd/MM/yyyy')}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block">กำหนดเก็บ</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
                       </td>
-                      <td className="py-3 px-4">
+
+                      {/* 6. Progress Bar */}
+                      <td className="py-3.5 px-3.5 align-middle whitespace-nowrap">
                         {isHarvested ? (
-                          <div className="space-y-1">
+                          <div className="space-y-1 w-28">
                             <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500">
                               <span>100%</span>
-                              <span className="text-[10px] text-slate-400">เก็บเกี่ยวแล้ว</span>
+                              <span className="text-[10px] text-slate-400">ครบกำหนด</span>
                             </div>
-                            <div className="w-24 bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                              <div className="bg-slate-400 h-full rounded-full w-full" />
+                            <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                              <div className="bg-emerald-500 h-full rounded-full w-full" />
                             </div>
                           </div>
                         ) : bIsHarvestReady ? (
-                          <div className="space-y-1">
+                          <div className="space-y-1 w-28">
                             <div className="flex items-center justify-between text-[11px] font-black text-amber-800">
                               <span>100%</span>
-                              <span className="text-[10px] bg-amber-100 text-amber-900 px-1 rounded font-bold">
+                              <span className="text-[10px] bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded font-bold">
                                 พร้อมตัด
                               </span>
                             </div>
-                            <div className="w-24 bg-amber-100 h-1.5 rounded-full overflow-hidden">
+                            <div className="w-full bg-amber-100 h-1.5 rounded-full overflow-hidden">
                               <div className="bg-amber-500 h-full rounded-full w-full animate-pulse" />
                             </div>
                           </div>
                         ) : (
-                          <div className="space-y-1">
+                          <div className="space-y-1 w-28">
                             <div className="flex items-center justify-between text-[11px]">
                               <span className="font-bold text-emerald-800">{bProg.percent}%</span>
                               <span className="text-[10px] text-slate-500">
                                 {bProg.daysPlanted}/{bProg.growthDays} วัน
                               </span>
                             </div>
-                            <div className="w-24 bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                            <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
                               <div
                                 className="bg-emerald-500 h-full rounded-full transition-all"
                                 style={{ width: `${bProg.percent}%` }}
@@ -834,39 +866,50 @@ export default function Plots() {
                           </div>
                         )}
                       </td>
-                      <td className="py-3 px-4">
+
+                      {/* 7. Status Badge (Single Line, No Wrapping) */}
+                      <td className="py-3.5 px-3.5 align-middle text-center whitespace-nowrap">
                         <span
-                          className={`px-2.5 py-0.5 rounded-full font-semibold text-[10px] ${
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-bold text-[11px] whitespace-nowrap ${
                             isHarvested
-                              ? 'bg-blue-100 text-blue-800'
+                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                               : bIsHarvestReady
-                              ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                              ? 'bg-amber-100 text-amber-900 border border-amber-300'
                               : b.status === 'growing'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-slate-100 text-slate-600'
+                              ? 'bg-sky-50 text-sky-800 border border-sky-200'
+                              : 'bg-slate-100 text-slate-600 border border-slate-200'
                           }`}
                         >
-                          {isHarvested
-                            ? '✓ เก็บเกี่ยวแล้ว'
-                            : bIsHarvestReady
-                            ? '🔔 พร้อมเก็บเกี่ยว'
-                            : b.status === 'growing'
-                            ? '🌱 กำลังปลูก'
-                            : b.status}
+                          {isHarvested ? (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span>เก็บผลผลิตแล้ว</span>
+                            </>
+                          ) : bIsHarvestReady ? (
+                            <span>🔔 พร้อมเก็บผลผลิต</span>
+                          ) : b.status === 'growing' ? (
+                            <span>🌱 กำลังปลูก</span>
+                          ) : (
+                            <span>{b.status}</span>
+                          )}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-slate-500">
-                        <span className="flex items-center gap-1 text-[11px]">
-                          <Droplets className="w-3.5 h-3.5 text-blue-500" />
-                          {b.auto_water ? 'รดน้ำอัตโนมัติ' : 'แมนนวล'}
+
+                      {/* 8. Watering Mode */}
+                      <td className="py-3.5 px-3.5 align-middle text-slate-600 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium">
+                          <Droplets className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                          <span>{b.auto_water ? 'รดน้ำอัตโนมัติ' : 'รดน้ำเอง'}</span>
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-right">
+
+                      {/* 9. Actions */}
+                      <td className="py-3.5 px-3.5 align-middle text-right whitespace-nowrap">
                         {!isHarvested &&
                         (b.status === 'growing' ||
                           b.status === 'harvest_ready' ||
                           bIsHarvestReady) ? (
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="inline-flex items-center justify-end gap-1.5">
                             {bIsEarlyStage && (
                               <>
                                 <button
@@ -890,33 +933,28 @@ export default function Plots() {
                             )}
                             <button
                               onClick={() => navigate(`/harvest?plot_id=${b.plot_id}&smart=true`)}
-                              className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap ${
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap ${
                                 bIsHarvestReady
                                   ? 'bg-amber-400 hover:bg-amber-500 text-slate-950 font-black border border-amber-300'
                                   : 'bg-emerald-600 hover:bg-emerald-700 text-white'
                               }`}
                             >
-                              <ShoppingBag className="w-3.5 h-3.5" />
-                              <span>เก็บเกี่ยว</span>
+                              <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
+                              <span>บันทึกเก็บผลผลิต</span>
                             </button>
                           </div>
                         ) : isHarvested ? (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-100/90 px-2.5 py-1 rounded-xl border border-slate-200 shadow-2xs">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>เก็บเกี่ยวแล้ว</span>
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => navigate(`/harvest?batch_id=${b.id}`)}
-                              className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-xl border border-emerald-200 transition cursor-pointer shadow-2xs active:scale-95"
-                              title="ดูประวัติการเก็บเกี่ยวและสต็อกสินค้าในหน้าผลผลิต"
-                            >
-                              <span>ดูผลผลิต</span>
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/harvest?batch_id=${b.id}`)}
+                            className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-xl border border-emerald-200 transition cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap"
+                            title="ดูประวัติการเก็บเกี่ยวและสต็อกสินค้าในหน้าผลผลิต"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>ดูผลผลิต</span>
+                          </button>
                         ) : (
-                          <span className="text-[11px] text-slate-400 font-medium">
+                          <span className="text-[11px] text-slate-400 font-medium whitespace-nowrap">
                             บันทึกเรียบร้อย
                           </span>
                         )}

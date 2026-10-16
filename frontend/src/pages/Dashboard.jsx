@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { format } from 'date-fns';
 import {
   ArrowUpRight,
   BadgeCheck,
+  BarChart3,
   Bot,
   CheckCircle2,
   ClipboardList,
@@ -20,11 +21,27 @@ import {
   ShoppingBag,
   Sparkles,
   Sprout,
+  TrendingUp,
   Users,
   Wallet,
   Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
+
+const THAI_MONTHS_SHORT = [
+  'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+  'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
+];
+
+const formatThaiMonthKey = (yyyyMm) => {
+  if (!yyyyMm || !yyyyMm.includes('-')) return yyyyMm;
+  const [yStr, mStr] = yyyyMm.split('-');
+  const y = parseInt(yStr, 10);
+  const m = parseInt(mStr, 10);
+  if (isNaN(y) || isNaN(m) || m < 1 || m > 12) return yyyyMm;
+  const buddhistYearShort = String((y < 2400 ? y + 543 : y)).slice(-2);
+  return `${THAI_MONTHS_SHORT[m - 1]} ${buddhistYearShort}`;
+};
 
 const getClusterBadgeStyle = (clusterName = '') => {
   const name = String(clusterName || '');
@@ -43,11 +60,19 @@ const getClusterBadgeStyle = (clusterName = '') => {
 const CustomChartTooltip = ({ active, payload, label, prefix = '', suffix = '' }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="rounded-2xl border border-emerald-900/10 bg-white/95 p-3 shadow-xl backdrop-blur-md">
-        <p className="text-xs font-bold text-slate-500">{label}</p>
-        <p className="mt-1 text-sm font-black text-[#173f2a]">
-          {prefix}{Number(payload[0].value || 0).toLocaleString()}{suffix}
-        </p>
+      <div className="rounded-2xl border border-slate-200 bg-white/95 p-3.5 shadow-xl backdrop-blur-md space-y-1.5 min-w-[160px]">
+        <p className="text-xs font-black text-slate-700 border-b border-slate-100 pb-1">ประจำเดือน {label}</p>
+        {payload.map((entry, idx) => (
+          <div key={idx} className="flex items-center justify-between gap-4 text-xs">
+            <span className="font-semibold text-slate-500 flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.color || '#173f2a' }} />
+              {entry.name || 'ข้อมูล'}:
+            </span>
+            <span className="font-black text-slate-900">
+              {prefix}{Number(entry.value || 0).toLocaleString()}{suffix}
+            </span>
+          </div>
+        ))}
       </div>
     );
   }
@@ -101,6 +126,7 @@ export default function Dashboard() {
   const [todayWater, setTodayWater] = useState({ wateredPlotIds: [] });
   const [activePlots, setActivePlots] = useState([]);
   const [wateringLoading, setWateringLoading] = useState(false);
+  const [revChartMode, setRevChartMode] = useState('bar'); // 'bar' | 'area'
 
   const fetchAiData = async () => {
     try {
@@ -146,15 +172,40 @@ export default function Dashboard() {
       const stockValue = products.data.reduce((s, p) => s + Number(p.price || 0) * Number(p.stock_quantity || 0), 0);
       setStats({ plots: plots.data.length, harvest: qty, revenue: rev, cost, products: availableProducts.length, stockValue });
 
-      const harvestByMonth = {};
-      const revenueByMonth = {};
+      const monthlyMap = {};
       harvest.data.forEach(h => {
-        const key = format(new Date(h.harvest_date), 'MM/yy');
-        harvestByMonth[key] = (harvestByMonth[key] || 0) + Number(h.quantity || 0);
-        revenueByMonth[key] = (revenueByMonth[key] || 0) + Number(h.revenue || 0);
+        if (!h.harvest_date) return;
+        const d = new Date(h.harvest_date);
+        if (isNaN(d.getTime())) return;
+        const ym = format(d, 'yyyy-MM');
+        if (!monthlyMap[ym]) monthlyMap[ym] = { ym, qty: 0, revenue: 0, cost: 0, count: 0 };
+        monthlyMap[ym].qty += Number(h.quantity || 0);
+        monthlyMap[ym].revenue += Number(h.revenue || 0);
+        monthlyMap[ym].count += 1;
       });
-      setChart(Object.entries(harvestByMonth).map(([month, qty]) => ({ month, qty })).reverse());
-      setRevenueChart(Object.entries(revenueByMonth).map(([month, revenue]) => ({ month, revenue })).reverse());
+
+      costs.data.forEach(c => {
+        if (!c.log_date) return;
+        const d = new Date(c.log_date);
+        if (isNaN(d.getTime())) return;
+        const ym = format(d, 'yyyy-MM');
+        if (!monthlyMap[ym]) monthlyMap[ym] = { ym, qty: 0, revenue: 0, cost: 0, count: 0 };
+        monthlyMap[ym].cost += Number(c.amount || 0);
+      });
+
+      const sortedMonthly = Object.values(monthlyMap)
+        .sort((a, b) => a.ym.localeCompare(b.ym))
+        .map(item => ({
+          month: formatThaiMonthKey(item.ym),
+          qty: Number(item.qty.toFixed(1)),
+          revenue: Math.round(item.revenue),
+          cost: Math.round(item.cost),
+          profit: Math.round(item.revenue - item.cost),
+          count: item.count,
+        }));
+
+      setChart(sortedMonthly.filter(m => m.qty > 0 || m.revenue > 0));
+      setRevenueChart(sortedMonthly);
 
       fetchAiData();
       fetchWaterStatus();
@@ -699,59 +750,335 @@ export default function Dashboard() {
       </section>
 
       {/* Charts Section */}
-      <section className="grid gap-6 lg:grid-cols-2 xl:grid-cols-[1.2fr_.8fr]">
-        <div className="premium-panel rounded-3xl p-6 shadow-xs">
-          <div className="mb-5 flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-black text-[#173f2a]">ผลผลิตรายเดือน</h2>
-              <p className="text-sm text-slate-500">น้ำหนักเก็บผลผลิตเทียบตามเดือน</p>
+      <section className="grid gap-6 lg:grid-cols-2">
+        {/* 1. Monthly Yield Chart */}
+        <div className="premium-panel rounded-3xl p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg sm:text-xl font-black text-[#173f2a] flex items-center gap-2">
+                  <span>ผลผลิตรายเดือน</span>
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+                  เปรียบเทียบน้ำหนักผลผลิตที่เก็บเกี่ยวได้ในแต่ละเดือน (กิโลกรัม)
+                </p>
+              </div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 shrink-0">
+                <Leaf className="h-5 w-5" />
+              </div>
             </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
-              <Leaf className="h-5 w-5" />
+
+            {/* Quick Yield Summary Pills */}
+            <div className="grid grid-cols-3 gap-2.5 mb-4">
+              <div className="bg-emerald-50/70 border border-emerald-200/70 rounded-2xl px-3 py-2">
+                <div className="text-[11px] font-bold text-slate-500">ผลผลิตรวมสะสม</div>
+                <div className="text-sm sm:text-base font-black text-[#173f2a] mt-0.5">
+                  {stats.harvest.toFixed(1)} กก.
+                </div>
+              </div>
+              <div className="bg-slate-50 border border-slate-200/70 rounded-2xl px-3 py-2">
+                <div className="text-[11px] font-bold text-slate-500">เฉลี่ยต่อเดือน</div>
+                <div className="text-sm sm:text-base font-black text-slate-800 mt-0.5">
+                  {chart.length > 0 ? (stats.harvest / chart.length).toFixed(1) : '0.0'} กก.
+                </div>
+              </div>
+              <div className="bg-lime-50/80 border border-lime-200/80 rounded-2xl px-3 py-2">
+                <div className="text-[11px] font-bold text-slate-500">
+                  เดือนล่าสุด ({chart[chart.length - 1]?.month || '-'})
+                </div>
+                <div className="text-sm sm:text-base font-black text-emerald-800 mt-0.5">
+                  {chart[chart.length - 1]?.qty ?? 0} กก.
+                </div>
+              </div>
+            </div>
+
+            <div className="h-[250px]">
+              {chart.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-sm text-slate-400">
+                  ยังไม่มีข้อมูลเก็บผลผลิต
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chart} margin={{ top: 24, right: 16, left: -10, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                    <XAxis
+                      dataKey="month"
+                      tickLine={false}
+                      axisLine={{ stroke: '#cbd5e1' }}
+                      tick={{ fontSize: 12, fontWeight: 700, fill: '#334155' }}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      unit=" กก."
+                    />
+                    <Tooltip content={<CustomChartTooltip suffix=" กก." />} />
+                    <Bar
+                      name="น้ำหนักผลผลิต"
+                      dataKey="qty"
+                      fill="#1f6a43"
+                      radius={[10, 10, 0, 0]}
+                      maxBarSize={68}
+                    >
+                      <LabelList
+                        dataKey="qty"
+                        position="top"
+                        formatter={(val) => `${val} กก.`}
+                        style={{ fill: '#173f2a', fontSize: 12, fontWeight: 800 }}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
-          <div className="h-[300px]">
-            {chart.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-sm text-slate-400">ยังไม่มีข้อมูลเก็บผลผลิต</div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chart}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#dfe8da" vertical={false} />
-                  <XAxis dataKey="month" tickLine={false} axisLine={{ stroke: '#dfe8da' }} />
-                  <YAxis tickLine={false} axisLine={{ stroke: '#dfe8da' }} />
-                  <Tooltip content={<CustomChartTooltip suffix=" kg" />} />
-                  <Bar dataKey="qty" fill="#236c45" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
+
+          {/* Bottom Monthly Breakdown Strip */}
+          {chart.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                {chart.slice(-3).map((m) => (
+                  <span
+                    key={m.month}
+                    className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg font-semibold"
+                  >
+                    <span className="font-bold text-slate-900">{m.month}:</span>
+                    <span className="text-emerald-800 font-black">{m.qty} กก.</span>
+                  </span>
+                ))}
+              </div>
+              <Link
+                to="/harvest"
+                className="font-bold text-emerald-700 hover:text-emerald-800 hover:underline inline-flex items-center gap-0.5"
+              >
+                <span>ดูประวัติเก็บเกี่ยว</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          )}
         </div>
 
-        <div className="premium-panel rounded-3xl p-6 shadow-xs">
-          <div className="mb-5 flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-black text-[#173f2a]">รายได้จากการเก็บผลผลิต</h2>
-              <p className="text-sm text-slate-500">ดูแนวโน้มเงินสดจากผลผลิต</p>
+        {/* 2. Monthly Revenue, Cost & Profit Chart (Redesigned for clarity) */}
+        <div className="premium-panel rounded-3xl p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg sm:text-xl font-black text-[#173f2a] flex items-center gap-2">
+                  <span>สรุปรายได้และกำไรรายเดือน</span>
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+                  เปรียบเทียบรายรับจากผลผลิต ต้นทุน และกำไรสุทธิในแต่ละเดือน
+                </p>
+              </div>
+
+              {/* View Mode Toggle: Bar (Easy comparison) vs Area (Trend line) */}
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setRevChartMode('bar')}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                    revChartMode === 'bar'
+                      ? 'bg-white text-[#173f2a] shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <BarChart3 className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>แท่งเปรียบเทียบ</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRevChartMode('area')}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                    revChartMode === 'area'
+                      ? 'bg-white text-[#173f2a] shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
+                  <span>เส้นแนวโน้ม</span>
+                </button>
+              </div>
             </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-100 text-[#b5812d]">
-              <Wallet className="h-5 w-5" />
+
+            {/* 3 Financial Summary Boxes */}
+            <div className="grid grid-cols-3 gap-2.5 mb-4">
+              <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-2xl px-3 py-2">
+                <div className="text-[11px] font-bold text-emerald-900 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                  <span>รายได้รวม</span>
+                </div>
+                <div className="text-sm sm:text-base font-black text-emerald-800 mt-0.5">
+                  ฿{stats.revenue.toLocaleString()}
+                </div>
+              </div>
+              <div className="bg-amber-50/80 border border-amber-200/80 rounded-2xl px-3 py-2">
+                <div className="text-[11px] font-bold text-amber-900 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  <span>ต้นทุนรวม</span>
+                </div>
+                <div className="text-sm sm:text-base font-black text-amber-800 mt-0.5">
+                  ฿{stats.cost.toLocaleString()}
+                </div>
+              </div>
+              <div
+                className={`rounded-2xl px-3 py-2 border ${
+                  profit >= 0
+                    ? 'bg-teal-50/80 border-teal-200/80'
+                    : 'bg-rose-50/80 border-rose-200/80'
+                }`}
+              >
+                <div className="text-[11px] font-bold text-slate-600">กำไรสุทธิ</div>
+                <div
+                  className={`text-sm sm:text-base font-black mt-0.5 ${
+                    profit >= 0 ? 'text-[#173f2a]' : 'text-rose-700'
+                  }`}
+                >
+                  {profit >= 0 ? '+' : ''}฿{profit.toLocaleString()}
+                </div>
+              </div>
+            </div>
+
+            {/* Chart Area */}
+            <div className="h-[250px]">
+              {revenueChart.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-sm text-slate-400">
+                  ยังไม่มีข้อมูลรายได้
+                </div>
+              ) : revChartMode === 'bar' ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={revenueChart}
+                    margin={{ top: 24, right: 16, left: -5, bottom: 4 }}
+                    barGap={8}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                    <XAxis
+                      dataKey="month"
+                      tickLine={false}
+                      axisLine={{ stroke: '#cbd5e1' }}
+                      tick={{ fontSize: 12, fontWeight: 700, fill: '#334155' }}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      tickFormatter={(v) => `฿${v.toLocaleString()}`}
+                    />
+                    <Tooltip content={<CustomChartTooltip prefix="฿" />} />
+                    <Bar
+                      name="รายได้จากผลผลิต"
+                      dataKey="revenue"
+                      fill="#10b981"
+                      radius={[10, 10, 0, 0]}
+                      maxBarSize={56}
+                    >
+                      <LabelList
+                        dataKey="revenue"
+                        position="top"
+                        formatter={(val) => (val > 0 ? `฿${Number(val).toLocaleString()}` : '')}
+                        style={{ fill: '#065f46', fontSize: 11, fontWeight: 800 }}
+                      />
+                    </Bar>
+                    {stats.cost > 0 && (
+                      <Bar
+                        name="ต้นทุนการผลิต"
+                        dataKey="cost"
+                        fill="#f59e0b"
+                        radius={[10, 10, 0, 0]}
+                        maxBarSize={56}
+                      >
+                        <LabelList
+                          dataKey="cost"
+                          position="top"
+                          formatter={(val) => (val > 0 ? `฿${Number(val).toLocaleString()}` : '')}
+                          style={{ fill: '#92400e', fontSize: 11, fontWeight: 800 }}
+                        />
+                      </Bar>
+                    )}
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={revenueChart}
+                    margin={{ top: 28, right: 32, left: 0, bottom: 4 }}
+                  >
+                    <defs>
+                      <linearGradient id="revGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.03} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                    <XAxis
+                      dataKey="month"
+                      tickLine={false}
+                      axisLine={{ stroke: '#cbd5e1' }}
+                      padding={{ left: 36, right: 36 }}
+                      tick={{ fontSize: 12, fontWeight: 700, fill: '#334155' }}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      tickFormatter={(v) => `฿${v.toLocaleString()}`}
+                    />
+                    <Tooltip content={<CustomChartTooltip prefix="฿" />} />
+                    <Area
+                      name="รายได้จากผลผลิต"
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="#059669"
+                      fill="url(#revGradient)"
+                      strokeWidth={3}
+                      dot={{ r: 6, fill: '#059669', stroke: '#ffffff', strokeWidth: 2 }}
+                      activeDot={{ r: 8 }}
+                    >
+                      <LabelList
+                        dataKey="revenue"
+                        position="top"
+                        offset={10}
+                        formatter={(val) => `฿${Number(val).toLocaleString()}`}
+                        style={{ fill: '#065f46', fontSize: 12, fontWeight: 800 }}
+                      />
+                    </Area>
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
-          <div className="h-[300px]">
-            {revenueChart.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-sm text-slate-400">ยังไม่มีข้อมูลรายได้</div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={revenueChart}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#dfe8da" vertical={false} />
-                  <XAxis dataKey="month" tickLine={false} axisLine={{ stroke: '#dfe8da' }} />
-                  <YAxis tickLine={false} axisLine={{ stroke: '#dfe8da' }} />
-                  <Tooltip content={<CustomChartTooltip prefix="฿" />} />
-                  <Area type="monotone" dataKey="revenue" stroke="#b5812d" fill="#f4d27a" fillOpacity={0.4} strokeWidth={2.5} />
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
-          </div>
+
+          {/* Bottom Monthly Breakdown Strip */}
+          {revenueChart.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                {revenueChart.slice(-3).map((m) => (
+                  <span
+                    key={m.month}
+                    className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg font-semibold"
+                  >
+                    <span className="font-bold text-slate-900">{m.month}:</span>
+                    <span className="text-emerald-800 font-black">
+                      ฿{m.revenue.toLocaleString()}
+                    </span>
+                    {m.cost > 0 && (
+                      <span className="text-[11px] text-slate-500">
+                        (กำไร {m.profit >= 0 ? '+' : ''}฿{m.profit.toLocaleString()})
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </div>
+              <Link
+                to="/sales-report"
+                className="font-bold text-emerald-700 hover:text-emerald-800 hover:underline inline-flex items-center gap-0.5"
+              >
+                <span>รายงานยอดขาย</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          )}
         </div>
       </section>
 

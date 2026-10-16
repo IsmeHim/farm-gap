@@ -344,10 +344,34 @@ plotsRouter.delete('/activities/:activityId', async (req, res) => {
   try {
     const actId = Number(req.params.activityId);
 
-    // 1. ดึงข้อมูลกิจกรรมก่อนลบ เพื่อระบุ plot_id
-    const [actRows] = await pool.query('SELECT plot_id, user_id FROM crop_activities WHERE id = ? AND user_id = ?', [actId, req.user.id]);
+    // 1. ดึงข้อมูลกิจกรรมก่อนลบ เพื่อระบุ plot_id และ source_type/source_id
+    const [actRows] = await pool.query(
+      'SELECT plot_id, user_id, source_type, source_id FROM crop_activities WHERE id = ? AND user_id = ?',
+      [actId, req.user.id]
+    );
     if (!actRows[0]) return res.status(404).json({ error: 'ไม่พบกิจกรรม' });
-    const { plot_id } = actRows[0];
+    const { plot_id, source_type, source_id } = actRows[0];
+
+    // หากเป็นกิจกรรมที่ซิงค์มาจากหน้าปุ๋ย/สารเคมี หรือหน้าศัตรูพืช ให้ลบต้นทางและคืนยอดต้นคงเหลือด้วย
+    if (source_type === 'chemical' && source_id) {
+      await pool.query('DELETE FROM chemical_logs WHERE id = ? AND user_id = ?', [source_id, req.user.id]);
+    } else if (source_type === 'pest' && source_id) {
+      const [pestRows] = await pool.query('SELECT * FROM pest_logs WHERE id = ? AND user_id = ?', [source_id, req.user.id]);
+      if (pestRows[0]) {
+        const lossCount = Number(pestRows[0].damaged_count) || 0;
+        if (lossCount > 0 && pestRows[0].batch_id) {
+          await pool.query(
+            `UPDATE planting_batches
+             SET total_damaged_count = GREATEST(0, COALESCE(total_damaged_count, 0) - ?),
+                 remaining_count = COALESCE(remaining_count, 0) + ?,
+                 updated_at = NOW()
+             WHERE id = ?`,
+            [lossCount, lossCount, pestRows[0].batch_id]
+          );
+        }
+        await pool.query('DELETE FROM pest_logs WHERE id = ? AND user_id = ?', [source_id, req.user.id]);
+      }
+    }
 
     // 2. ลบกิจกรรม
     await pool.query('DELETE FROM crop_activities WHERE id = ? AND user_id = ?', [actId, req.user.id]);

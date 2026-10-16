@@ -501,326 +501,318 @@ export default function Report() {
         </div>
       </div>
 
-      {/* Printable GAP Official Report Document (100% Thai Content) */}
-      <div className="overflow-x-auto bg-slate-200/50 p-2 sm:p-6 rounded-3xl print:p-0 print:bg-white print:overflow-visible">
+      {/* Printable GAP Official Report Document (Formal A4 TAS 9001-2556 Inspection Layout) */}
+      <div className="overflow-x-auto bg-slate-200/60 p-2 sm:p-6 rounded-3xl print:p-0 print:bg-white print:overflow-visible">
         <div
           ref={reportRef}
           id="gap-report-print-container"
-          className="bg-white text-slate-800 p-8 sm:p-12 max-w-4xl mx-auto shadow-xl rounded-2xl print:shadow-none print:rounded-none print:p-0 space-y-6 text-xs font-sans"
+          className="bg-white text-slate-900 p-8 sm:p-11 max-w-4xl mx-auto shadow-xl rounded-xl border border-slate-300 print:border-none print:shadow-none print:rounded-none print:p-0 space-y-5 text-xs font-sans"
         >
-          {/* Header Banner */}
-          <div className="border-b-2 border-emerald-800 pb-4 gap-section">
-            <div className="flex justify-between items-start">
-              <div>
-                <div className="inline-flex items-center gap-1.5 text-emerald-800 font-bold text-xs uppercase tracking-widest bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200 mb-2">
-                  <Leaf className="w-3.5 h-3.5 text-emerald-600" />
-                  {selectedCycleScope !== 'all' 
-                    ? `แบบบันทึกมาตรฐาน GAP ประจำรอบการปลูก (Crop Cycle GAP Report)`
-                    : `แบบบันทึกมาตรฐานการปฏิบัติทางการเกษตรที่ดี (Good Agricultural Practices)`}
+          {/* =========================================================================
+              HEADER: Official Document Title & Farm Registration Metadata Box
+             ========================================================================= */}
+          <div className="border-b-2 border-slate-900 pb-3.5 gap-section">
+            <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 text-slate-800 font-bold text-[10px] uppercase tracking-widest bg-slate-100 px-2.5 py-0.5 rounded border border-slate-400">
+                  <Leaf className="w-3 h-3 text-emerald-700" />
+                  <span>เอกสารประกอบการตรวจประเมินแหล่งผลิตพืช GAP (มกษ. 9001-2556)</span>
                 </div>
-                <h1 className="text-xl sm:text-2xl font-black text-[#173f2a]">
-                  {selectedCycleScope !== 'all' ? (
-                    <>
-                      รายงานมาตรฐาน GAP ประจำรอบการปลูกที่ {selectedCycleScope}
-                      <span className="block text-sm sm:text-base font-bold text-emerald-700 mt-1">
-                        รหัสรอบการปลูก: Crop Cycle #{selectedCycleScope} (ครอบคลุมทุกแปลงในรอบนี้ • ประจำปี {year + 543})
-                      </span>
-                    </>
-                  ) : (
-                    <>รายงานการผลิตพืชปลอดภัยตามมาตรฐาน GAP ประจำปี {year + 543} ({year})</>
-                  )}
-                </h1>
-                <p className="text-[11px] text-slate-500 mt-1">
+                <h1 className="text-xl sm:text-2xl font-black text-slate-900 leading-tight pt-0.5">
                   {selectedCycleScope !== 'all'
-                    ? `เอกสารแบบบันทึกมาตรฐาน GAP รวบรวมข้อมูลทุกแปลงเพาะปลูกในรอบการปลูกที่ ${selectedCycleScope} (${displayPlots.length} แคร่) • ระบบบริหารจัดการ FarmGAP`
-                    : 'ระบบบริหารจัดการฟาร์มผักและสั่งซื้อออนไลน์ด้วยปัญญาประดิษฐ์ (FarmGAP AI Management System)'}
-                </p>
-              </div>
-              <div className="text-right text-[11px] text-slate-600 space-y-0.5">
-                <div className="font-bold text-emerald-900 text-sm">{reportData?.profile?.farm_name || 'ฟาร์มผักปลอดภัย FarmGAP'}</div>
-                <div>เจ้าของแปลง: {reportData?.profile?.display_name || 'เจ้าของฟาร์ม'}</div>
-                <div>วันที่ออกเอกสาร: {format(new Date(), 'dd/MM/yyyy HH:mm')}</div>
-                <div className="text-emerald-700 font-semibold">สถานะมาตรฐาน: ได้รับการรับรอง GAP</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Section 1: ข้อมูลแปลงปลูก */}
-          <div className="gap-section space-y-2">
-            <h2 className="font-bold text-sm text-emerald-900 flex items-center gap-1.5 border-l-4 border-emerald-700 pl-2">
-              หมวดที่ 1: ข้อมูลแปลงเพาะปลูก (Plots Management)
-            </h2>
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <table className="w-full table-fixed text-[11px]">
-                <colgroup>
-                  <col className="w-[12%]" />
-                  <col className="w-[14%]" />
-                  <col className="w-[9%]" />
-                  <col className="w-[12%]" />
-                  <col className="w-[13%]" />
-                  <col className="w-[29%]" />
-                  <col className="w-[11%]" />
-                </colgroup>
-                <thead className="bg-emerald-800 text-white font-bold">
-                  <tr>
-                    <th className="py-2 px-2.5 text-left">ชื่อแปลง</th>
-                    <th className="py-2 px-2.5 text-left">ชนิดผัก/พืช</th>
-                    <th className="py-2 px-2 text-right">พื้นที่ (ตร.ม.)</th>
-                    <th className="py-2 px-2.5 text-left">วันที่เริ่มปลูก</th>
-                    <th className="py-2 px-2.5 text-left">แหล่งน้ำ</th>
-                    <th className="py-2 px-2.5 text-left">การเตรียมดิน/สูตรดิน</th>
-                    <th className="py-2 px-2 text-center">สถานะความปลอดภัย</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {!displayPlots.length ? (
-                    <tr><td colSpan={7} className="text-center py-4 text-slate-400">ไม่มีข้อมูลแปลงปลูกตามเงื่อนไขที่เลือก</td></tr>
-                  ) : (
-                    displayPlots.map(p => (
-                      <tr key={p.id} className="hover:bg-slate-50">
-                        <td className="py-2 px-2.5 font-semibold text-slate-800 break-words">{p.name}</td>
-                        <td className="py-2 px-2.5 text-emerald-800 font-bold break-words">{p.crop_name}</td>
-                        <td className="py-2 px-2 text-right font-mono">{Number(p.area_sqm || 0).toLocaleString()}</td>
-                        <td className="py-2 px-2.5 font-mono text-[10px] break-words">{p.planting_date ? format(new Date(p.planting_date), 'dd/MM/yyyy') : '-'}</td>
-                        <td className="py-2 px-2.5 break-words">{p.water_source || '-'}</td>
-                        <td className="py-2 px-2.5 text-slate-700 break-words leading-tight">
-                          <div className="font-medium text-slate-900 leading-snug text-[10.5px]">{p.effective_soil_recipe || p.soil_recipe || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบ)'}</div>
-                          {p.soil_test_date && (
-                            <div className="text-[9.5px] text-slate-400">
-                              (ตรวจ: {format(new Date(p.soil_test_date), 'dd/MM/yy')})
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-2 px-2 text-center">
-                          <span className="bg-green-100 text-green-800 px-1.5 py-0.5 rounded text-[9.5px] font-bold inline-block">
-                            {p.field_safety_status || 'ปลอดภัย'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Section: บันทึกประวัติการเพาะปลูกรายแปลงและลำดับขั้นตอนตามมาตรฐาน GAP (Crop Activity Diary & Timeline) */}
-          <div className="gap-section space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-l-4 border-emerald-700 pl-2">
-              <div>
-                <h2 className="font-extrabold text-sm sm:text-base text-emerald-950 flex items-center gap-1.5">
-                  <Leaf className="w-4 h-4 text-emerald-700" />
-                  หมวดพิเศษ: สมุดบันทึกประวัติการเพาะปลูกรายแปลง (GAP Crop Activity Diary & Production Timeline)
-                </h2>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  บันทึกลำดับขั้นตอนการปฏิบัติงานจริงในแปลงปลูกตั้งแต่เตรียมดิน เพาะเมล็ด ย้ายปลูก บำรุงรักษา จนถึงการเก็บเกี่ยวผลผลิตและบรรจุหีบห่อ
-                </p>
-              </div>
-              <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 shrink-0 self-start sm:self-auto">
-                มาตรฐาน GAP มกษ. 9001-2556
-              </span>
-            </div>
-
-            {/* List of Plots with Clean Narrative Timeline Style */}
-            <div className="space-y-4">
-              {!groupedActivities.length ? (
-                <div className="border border-slate-200 rounded-xl p-6 text-center text-slate-400 text-xs">
-                  ไม่มีข้อมูลบันทึกกิจกรรมในรอบ/แปลงที่เลือก
+                    ? `แบบบันทึกข้อมูลการผลิตพืชปลอดภัย GAP (รอบการปลูกที่ ${selectedCycleScope})`
+                    : `สมุดบันทึกการปฏิบัติทางการเกษตรที่ดีสำหรับพืช (GAP) ประจำปี พ.ศ. ${year + 543}`}
+                </h1>
+                <div className="text-[11px] text-slate-700 space-y-0.5 pt-0.5">
+                  <div>
+                    <strong>ชื่อแหล่งผลิต / ฟาร์ม:</strong>{' '}
+                    <span className="font-bold text-slate-900">{reportData?.profile?.farm_name || 'ฟาร์มเกษตรปลอดภัย มาตรฐาน GAP'}</span>
+                    {' '}•{' '}
+                    <strong>ผู้ควบคุมการผลิต:</strong> {reportData?.profile?.display_name || 'เจ้าของฟาร์ม'}
+                  </div>
+                  <div>
+                    <strong>ที่ตั้งแหล่งผลิต:</strong> {reportData?.profile?.location || 'แปลงเกษตรปลอดภัยในโรงเรือนยกแคร่'}
+                    {reportData?.profile?.gap_code && (
+                      <> • <strong>รหัสรับรอง GAP:</strong> <span className="font-mono font-bold">{reportData.profile.gap_code}</span></>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                groupedActivities.map(group => (
-                  <div key={group.plot_id} className="border border-slate-300 rounded-2xl overflow-hidden bg-white shadow-2xs break-inside-avoid">
-                    {/* Crop & Bed Header Bar */}
-                    <div className="bg-emerald-900 text-white p-3 sm:px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-950">
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-7 h-7 rounded-lg bg-emerald-800 text-emerald-200 font-extrabold text-xs flex items-center justify-center shrink-0 border border-emerald-700">
-                          #{group.plot_number}
-                        </span>
-                        <div>
-                          <h3 className="font-extrabold text-sm sm:text-base text-white flex items-center gap-2 flex-wrap">
-                            <span className="text-amber-300 font-bold">ชนิดผัก: {group.crop_name}</span>
-                            <span className="text-xs font-semibold text-emerald-300">({group.plot_name})</span>
-                          </h3>
-                          <div className="text-[10.5px] text-emerald-200/90 font-medium flex items-center gap-2.5 mt-0.5 flex-wrap">
-                            <span>ขนาด: {group.dimension}</span>
-                            <span>•</span>
-                            <span>แหล่งน้ำ: {group.water_source}</span>
-                            {group.soil_recipe && (
-                              <>
-                                <span>•</span>
-                                <span className="truncate max-w-sm" title={group.soil_recipe}>สูตรดิน: {group.soil_recipe}</span>
-                              </>
-                            )}
+              </div>
+
+              <div className="text-right text-[10.5px] border border-slate-800 px-3 py-2 rounded bg-slate-50 shrink-0 min-w-[215px]">
+                <div className="font-bold text-slate-900 border-b border-slate-400 pb-1 mb-1">
+                  เลขที่เอกสาร: GAP-{year + 543}-{selectedCycleScope === 'all' ? 'ALL' : `C${selectedCycleScope}`}
+                </div>
+                <div><strong>ปี พ.ศ. ที่บันทึก:</strong> {year + 543} ({year})</div>
+                <div>
+                  <strong>ขอบเขตรอบปลูก:</strong>{' '}
+                  {selectedCycleScope === 'all' ? `ทุกรอบการปลูก (${displayPlots.length} แปลง)` : `รอบการปลูกที่ ${selectedCycleScope} (${displayPlots.length} แปลง)`}
+                </div>
+                <div><strong>วันที่พิมพ์เอกสาร:</strong> {format(new Date(), 'dd/MM/yyyy HH:mm น.')}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* =========================================================================
+              SECTION 1: ข้อมูลแปลงเพาะปลูกและการเตรียมดิน (Plots & Soil Management)
+             ========================================================================= */}
+          <div className="gap-section space-y-1.5">
+            <div className="flex items-center justify-between">
+              <h2 className="font-black text-xs text-slate-900 uppercase tracking-wide">
+                หมวดที่ 1: ทะเบียนแปลงเพาะปลูก แหล่งน้ำ และการจัดการดิน (Plot Registration & Soil Management)
+              </h2>
+              <span className="text-[10px] font-semibold text-slate-600">มกษ. 9001-2556 (ข้อ 1 และ ข้อ 2)</span>
+            </div>
+            <table className="w-full table-fixed border-collapse border border-slate-800 text-[10.5px]">
+              <colgroup>
+                <col className="w-[12%]" />
+                <col className="w-[15%]" />
+                <col className="w-[9%]" />
+                <col className="w-[11%]" />
+                <col className="w-[13%]" />
+                <col className="w-[30%]" />
+                <col className="w-[10%]" />
+              </colgroup>
+              <thead>
+                <tr className="bg-slate-100 text-slate-900 font-bold border-b border-slate-800">
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">ชื่อแปลง/แคร่</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">ชนิดพืชที่ปลูก</th>
+                  <th className="border border-slate-800 py-1.5 px-1.5 text-right">พื้นที่ (ตร.ม.)</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-center">วันเริ่มปลูก</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">แหล่งน้ำที่ใช้</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">การเตรียมดิน / สูตรวัสดุปลูก</th>
+                  <th className="border border-slate-800 py-1.5 px-1.5 text-center">ผลประเมินพื้นที่</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!displayPlots.length ? (
+                  <tr>
+                    <td colSpan={7} className="border border-slate-800 text-center py-4 text-slate-500">
+                      — ไม่มีข้อมูลแปลงเพาะปลูกตามเงื่อนไขที่เลือก —
+                    </td>
+                  </tr>
+                ) : (
+                  displayPlots.map(p => (
+                    <tr key={p.id}>
+                      <td className="border border-slate-800 py-1.5 px-2 font-bold text-slate-900 break-words align-top">
+                        {p.name}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 font-semibold text-slate-900 break-words align-top">
+                        {p.crop_name || '-'}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-1.5 text-right font-mono align-top">
+                        {Number(p.area_sqm || 0).toLocaleString()}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 text-center font-mono text-[10px] align-top">
+                        {p.planting_date ? format(new Date(p.planting_date), 'dd/MM/yyyy') : '-'}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 break-words align-top">
+                        {p.water_source || '-'}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 text-slate-800 break-words leading-snug align-top">
+                        <div>{p.effective_soil_recipe || p.soil_recipe || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบ)'}</div>
+                        {p.soil_test_date && (
+                          <div className="text-[9.5px] text-slate-500 font-mono">
+                            วันที่ตรวจดิน: {format(new Date(p.soil_test_date), 'dd/MM/yyyy')}
                           </div>
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-left sm:text-right">
-                        <span className="bg-emerald-800/90 text-emerald-100 text-[10px] font-bold px-2.5 py-1 rounded-md border border-emerald-700 inline-block">
-                          บันทึกสะสม {group.items.length} รายการ
-                        </span>
-                      </div>
+                        )}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-1.5 text-center font-bold text-slate-900 align-top">
+                        ✓ {p.field_safety_status || 'ปลอดภัย'}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* =========================================================================
+              SECTION 2: บันทึกประวัติการปฏิบัติงานรายแปลง (GAP Crop Activity Diary Table)
+             ========================================================================= */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-300 pb-1">
+              <div>
+                <h2 className="font-black text-xs text-slate-900 uppercase tracking-wide">
+                  หมวดที่ 2: สมุดบันทึกการปฏิบัติงานในแปลงเพาะปลูกรายแปลง (Crop Activity & Production Logbook)
+                </h2>
+                <p className="text-[10px] text-slate-600">
+                  บันทึกลำดับขั้นตอนตั้งแต่การเตรียมดิน เพาะเมล็ด ย้ายปลูก การดูแลรักษา การใส่ปุ๋ยอินทรีย์ จนถึงการเก็บเกี่ยวผลผลิต
+                </p>
+              </div>
+              <span className="text-[10px] font-semibold text-slate-600 shrink-0">บันทึกการจัดการกระบวนการผลิต</span>
+            </div>
+
+            {!groupedActivities.length ? (
+              <div className="border border-slate-800 p-4 text-center text-slate-500 text-[11px]">
+                — ไม่มีข้อมูลบันทึกกิจกรรมในรอบ/แปลงที่เลือก —
+              </div>
+            ) : (
+              groupedActivities.map(group => (
+                <div key={group.plot_id} className="gap-section space-y-0">
+                  {/* Plot Subheader Banner */}
+                  <div className="bg-slate-200/80 border border-b-0 border-slate-800 px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                    <div className="font-bold text-slate-900">
+                      <span>แปลงที่ {group.plot_number}: {group.plot_name}</span>
+                      <span className="mx-2 text-slate-500">|</span>
+                      <span>ชนิดพืช: <strong className="underline">{group.crop_name}</strong></span>
+                      <span className="mx-2 text-slate-500">|</span>
+                      <span className="font-normal text-slate-700">ขนาดแคร่: {group.dimension} • แหล่งน้ำ: {group.water_source}</span>
                     </div>
-
-                    {/* Timeline Entries (ตรงตามโครงสร้างที่เจ้าของฟาร์มบันทึก อ่านง่าย สบายตา เป็นลำดับชัดเจน) */}
-                    <div className="p-3.5 sm:p-4 divide-y divide-slate-100 bg-slate-50/30">
-                      <div className="space-y-2.5">
-                        {group.items.map((act, idx) => (
-                          <div key={act.id || idx} className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3.5 p-2.5 rounded-xl hover:bg-white transition border border-transparent hover:border-slate-200 hover:shadow-2xs">
-                            {/* Date Badge */}
-                            <div className="sm:w-28 shrink-0 flex sm:flex-col items-baseline sm:items-start justify-between sm:justify-start gap-0.5">
-                              <div className="inline-flex items-center gap-1 font-mono font-black text-xs text-emerald-950 bg-emerald-100/90 border border-emerald-300 px-2 py-0.5 rounded-md shadow-2xs">
-                                <Calendar className="w-3 h-3 text-emerald-700" />
-                                <span>{formatThaiShortDate(act.date)}</span>
-                              </div>
-                              <span className="text-[9.5px] text-slate-500 font-medium hidden sm:block">
-                                {formatThaiFullDate(act.date)}
-                              </span>
-                            </div>
-
-                            {/* Content & Details */}
-                            <div className="flex-1 space-y-1.5 min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-white border border-slate-300 text-slate-800 shadow-2xs">
-                                  {act.stage === 'soil_prep' ? '🪴 เตรียมดิน/แคร่' :
-                                   act.stage === 'seeding' ? '🌰 เพาะเมล็ดพันธุ์' :
-                                   act.stage === 'nursery' ? '🌱 ย้ายลงถาดหลุม' :
-                                   act.stage === 'planting' ? '🌿 ย้ายปลูกลงแปลง' :
-                                   act.stage === 'growing' ? '🌿 ดูแลรอบปลูก' :
-                                   act.stage === 'maintenance' ? '💧 ให้น้ำ/บำรุง' :
-                                   act.stage === 'fertilizing' ? '💩 ใส่ปุ๋ยอินทรีย์' :
-                                   act.stage === 'harvest' ? '🧺 เก็บเกี่ยวผลผลิต' : act.stage}
-                                </span>
-                                <span className="font-bold text-slate-900 text-xs">
-                                  {act.title}
-                                </span>
-                              </div>
-
-                              {/* Real Detailed Record Text */}
-                              <div className="text-xs text-slate-800 leading-relaxed font-normal bg-white p-2.5 rounded-lg border border-slate-200">
-                                {act.details}
-                              </div>
-
-                              {/* Footer Tags: Materials & Operator */}
-                              <div className="flex flex-wrap items-center gap-3 text-[10.5px] text-slate-500 pt-0.5">
-                                {act.materials_used && act.materials_used !== '-' && (
-                                  <span className="font-medium text-amber-900 bg-amber-50/90 border border-amber-200 px-2 py-0.5 rounded-md">
-                                    📦 วัสดุ/อุปกรณ์: <strong>{act.materials_used}</strong>
-                                  </span>
-                                )}
-                                {act.operator_name && (
-                                  <span className="text-slate-600 flex items-center gap-1">
-                                    <User className="w-3 h-3 text-slate-400" />
-                                    ผู้ปฏิบัติงาน: <span className="font-semibold text-slate-800">{act.operator_name}</span>
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                    <div className="font-mono text-[10px] font-bold text-slate-800">
+                      รวม {group.items.length} กิจกรรม
                     </div>
                   </div>
-                ))
-              )}
-            </div>
+
+                  {/* Formal Activity Table for this Plot */}
+                  <table className="w-full table-fixed border-collapse border border-slate-800 text-[10.5px]">
+                    <colgroup>
+                      <col className="w-[12%]" />
+                      <col className="w-[16%]" />
+                      <col className="w-[44%]" />
+                      <col className="w-[16%]" />
+                      <col className="w-[12%]" />
+                    </colgroup>
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-900 font-bold border-b border-slate-800">
+                        <th className="border border-slate-800 py-1 px-2 text-center">วัน/เดือน/ปี</th>
+                        <th className="border border-slate-800 py-1 px-2 text-left">ขั้นตอนการผลิต</th>
+                        <th className="border border-slate-800 py-1 px-2 text-left">รายละเอียดการปฏิบัติงานจริง</th>
+                        <th className="border border-slate-800 py-1 px-2 text-left">ปัจจัยการผลิต/วัสดุ</th>
+                        <th className="border border-slate-800 py-1 px-2 text-left">ผู้ปฏิบัติงาน</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.items.map((act, idx) => (
+                        <tr key={act.id || idx}>
+                          <td className="border border-slate-800 py-1.5 px-2 text-center font-mono text-[10px] align-top">
+                            <div className="font-bold text-slate-900">{formatThaiShortDate(act.date)}</div>
+                            <div className="text-[9px] text-slate-500">{formatThaiFullDate(act.date)}</div>
+                          </td>
+                          <td className="border border-slate-800 py-1.5 px-2 font-bold text-slate-900 align-top break-words">
+                            <div>
+                              {act.stage === 'soil_prep' ? '1. เตรียมดิน/แคร่' :
+                               act.stage === 'seeding' ? '2. เพาะเมล็ดพันธุ์' :
+                               act.stage === 'nursery' ? '3. อนุบาลถาดหลุม' :
+                               act.stage === 'planting' ? '4. ย้ายปลูกลงแปลง' :
+                               act.stage === 'growing' ? '5. ดูแลระยะเติบโต' :
+                               act.stage === 'maintenance' ? '5. ให้น้ำ/บำรุงรักษา' :
+                               act.stage === 'fertilizing' ? '6. ใส่ปุ๋ยบำรุงดิน' :
+                               act.stage === 'harvest' ? '7. เก็บเกี่ยวผลผลิต' : act.stage}
+                            </div>
+                            <div className="text-[9.5px] font-normal text-slate-600 mt-0.5 leading-tight">
+                              {act.title}
+                            </div>
+                          </td>
+                          <td className="border border-slate-800 py-1.5 px-2 text-slate-800 leading-snug align-top break-words">
+                            {act.details}
+                          </td>
+                          <td className="border border-slate-800 py-1.5 px-2 text-slate-800 align-top break-words text-[10px]">
+                            {act.materials_used && act.materials_used !== '-' ? act.materials_used : '-'}
+                          </td>
+                          <td className="border border-slate-800 py-1.5 px-2 text-slate-800 align-top break-words text-[10px]">
+                            {act.operator_name || '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))
+            )}
           </div>
 
-          {/* Section 2: แหล่งน้ำและการให้น้ำ (GAP #1) */}
-          <div className="gap-section space-y-2">
+          {/* =========================================================================
+              SECTION 3: แหล่งน้ำและการให้น้ำ (GAP #1 Water Management)
+             ========================================================================= */}
+          <div className="gap-section space-y-1.5">
             <div className="flex items-center justify-between">
-              <h2 className="font-bold text-sm text-emerald-900 flex items-center gap-1.5 border-l-4 border-emerald-700 pl-2">
-                หมวดที่ 2: บันทึกการใช้น้ำและการจัดการแหล่งน้ำในแปลงปลูก (GAP #1 - Water Management)
+              <h2 className="font-black text-xs text-slate-900 uppercase tracking-wide">
+                หมวดที่ 3: บันทึกการจัดการน้ำและการให้น้ำในแปลงเพาะปลูก (Water Source & Irrigation Control)
               </h2>
-              <button
-                type="button"
-                onClick={() => setShowDetailedWaterLogs(v => !v)}
-                className="print:hidden text-[11px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
-              >
-                {showDetailedWaterLogs ? '[-] ซ่อนบันทึกย่อยรายวัน' : `[+] แสดงบันทึกย่อยรายวัน (${displayWaterLogs.length} รายการ)`}
-              </button>
-            </div>
-
-            {/* GAP Official Water Safety & Policy Profile */}
-            <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3 text-[11px] text-slate-700 space-y-1.5 leading-relaxed">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 font-bold text-emerald-900 text-xs">
-                <span className="flex items-center gap-1.5">
-                  💧 ข้อมูลจำเพาะระบบน้ำและแนวปฏิบัติการจัดการน้ำปลอดภัย (GAP Water Safety Profile)
-                </span>
-                <span className="bg-emerald-200/80 text-emerald-900 px-2 py-0.5 rounded text-[10px] font-semibold w-fit">
-                  มกษ. 9001-2556 ข้อ 1
-                </span>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDetailedWaterLogs(v => !v)}
+                  className="print:hidden text-[10.5px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
+                >
+                  {showDetailedWaterLogs ? '[-] ซ่อนบันทึกย่อยรายวัน' : `[+] ดูบันทึกย่อยรายวัน (${displayWaterLogs.length} รายการ)`}
+                </button>
+                <span className="text-[10px] font-semibold text-slate-600">มกษ. 9001-2556 (ข้อ 1)</span>
               </div>
-              <p>
-                <strong>• แหล่งน้ำและการควบคุมความปลอดภัย:</strong> ใช้น้ำสะอาดปราศจากการปนเปื้อนของสารเคมีและโลหะหนัก มีการตรวจวิเคราะห์คุณภาพน้ำผ่านเกณฑ์มาตรฐานความปลอดภัยทางจุลชีววิทยา (ไม่พบเชื้อก่อโรคเกินเกณฑ์)
-              </p>
-              <p>
-                <strong>• โรงเรือนยกพื้นและการให้น้ำ:</strong> ปลูกบนแคร่ยกพื้นสูง 80 ซม. ภายใต้โรงเรือนหลังคาพลาสติกใสกันฝน (Rain-Cover Shelter) รดน้ำตามรอบมาตรฐานสม่ำเสมอวันละ 2 ครั้ง (รอบเช้า 07:00 น. และรอบเย็น 16:30 น.)
-              </p>
-              <p>
-                <strong>• การจัดการในสภาวะฝนตก/ความชื้นสูง:</strong> ในช่วงฝนตกหรือความชื้นสัมพัทธ์สูง ระบบควบคุมให้ปรับลดปริมาณน้ำหรือพรมน้ำเฉพาะหน้าดินเพื่อคุมความชื้นอย่างเหมาะสม
-              </p>
             </div>
 
-            {/* Smart Summary Table per Plot/Bed */}
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <table className="w-full table-fixed text-[11px]">
-                <colgroup>
-                  <col className="w-[11%]" />
-                  <col className="w-[13%]" />
-                  <col className="w-[13%]" />
-                  <col className="w-[33%]" />
-                  <col className="w-[17%]" />
-                  <col className="w-[6.5%]" />
-                  <col className="w-[6.5%]" />
-                </colgroup>
-                <thead className="bg-emerald-800 text-white font-bold">
+            <div className="border border-slate-800 bg-slate-50 px-3 py-2 text-[10.5px] text-slate-800 leading-snug">
+              <strong>เกณฑ์การควบคุมคุณภาพน้ำในฟาร์ม:</strong> ใช้น้ำสะอาดปราศจากสารเคมีและโลหะหนัก ปลูกบนแคร่ยกพื้นสูง 80 ซม. ภายใต้โรงเรือนหลังคาพลาสติกใสกันฝน รดน้ำสม่ำเสมอวันละ 2 รอบ (เช้า 07:00 น. / เย็น 16:30 น.) และลดปริมาณน้ำในช่วงฝนตกหรือความชื้นสูงเพื่อป้องกันโรครากเน่าโคนเน่า
+            </div>
+
+            <table className="w-full table-fixed border-collapse border border-slate-800 text-[10.5px]">
+              <colgroup>
+                <col className="w-[12%]" />
+                <col className="w-[14%]" />
+                <col className="w-[13%]" />
+                <col className="w-[33%]" />
+                <col className="w-[14%]" />
+                <col className="w-[7%]" />
+                <col className="w-[7%]" />
+              </colgroup>
+              <thead>
+                <tr className="bg-slate-100 text-slate-900 font-bold border-b border-slate-800">
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">แปลง/แคร่</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">ชนิดพืช</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">แหล่งน้ำ</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">วิธีการให้น้ำและการควบคุมความชื้น</th>
+                  <th className="border border-slate-800 py-1.5 px-1.5 text-center">ความถี่ / รอบสะสม</th>
+                  <th className="border border-slate-800 py-1.5 px-1 text-center">ผล GAP</th>
+                  <th className="border border-slate-800 py-1.5 px-1.5 text-left">ผู้ดูแล</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!displayWaterSummaries.length ? (
                   <tr>
-                    <th className="py-2 px-2 text-left">แปลง / แคร่</th>
-                    <th className="py-2 px-2 text-left">ชนิดพืช</th>
-                    <th className="py-2 px-2 text-left">แหล่งน้ำ</th>
-                    <th className="py-2 px-2.5 text-left">ลักษณะการให้น้ำในโรงเรือน</th>
-                    <th className="py-2 px-2 text-center">ความถี่และเวลา</th>
-                    <th className="py-2 px-1 text-center">ผล GAP</th>
-                    <th className="py-2 px-1 text-left">ผู้ดูแล</th>
+                    <td colSpan={7} className="border border-slate-800 text-center py-4 text-slate-500">
+                      — ไม่มีข้อมูลการให้น้ำตามเงื่อนไขที่เลือก —
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {!displayWaterSummaries.length ? (
-                    <tr><td colSpan={7} className="text-center py-4 text-slate-400">ไม่มีข้อมูลแปลงปลูกตามเงื่อนไขที่เลือก</td></tr>
-                  ) : (
-                    displayWaterSummaries.map(s => (
-                      <tr key={s.plot_id} className="hover:bg-slate-50">
-                        <td className="py-2 px-2 font-semibold text-slate-800 break-words">{s.plot_name}</td>
-                        <td className="py-2 px-2 text-emerald-800 font-bold break-words">{s.crop_name || '-'}</td>
-                        <td className="py-2 px-2 break-words">{s.water_source}</td>
-                        <td className="py-2 px-2.5 text-slate-700 break-words leading-tight text-[10.5px]">
-                          {s.routine_desc}
-                        </td>
-                        <td className="py-2 px-2 text-center break-words leading-tight">
-                          <div className="font-bold text-slate-900 text-[11px]">วันละ 2 รอบ สม่ำเสมอ</div>
-                          <div className="text-[10px] text-emerald-800 font-medium">07:00 และ 16:30 น.</div>
-                          <div className="text-[9px] text-slate-400 font-mono mt-0.5">สะสม {s.total_logs} รอบ (เช้า {s.morning_count}/เย็น {s.evening_count})</div>
-                        </td>
-                        <td className="py-2 px-1 text-center">
-                          <span className="bg-green-100 text-green-800 px-1 py-0.5 rounded text-[9.5px] font-bold inline-block">
-                            ✓ ผ่าน
-                          </span>
-                        </td>
-                        <td className="py-2 px-1 text-slate-700 break-words text-[10px]">{s.worker_name}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                ) : (
+                  displayWaterSummaries.map(s => (
+                    <tr key={s.plot_id}>
+                      <td className="border border-slate-800 py-1.5 px-2 font-bold text-slate-900 break-words align-top">
+                        {s.plot_name}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 font-semibold text-slate-900 break-words align-top">
+                        {s.crop_name || '-'}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 break-words align-top">
+                        {s.water_source}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 text-slate-800 break-words leading-snug align-top">
+                        {s.routine_desc}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-1.5 text-center align-top leading-tight">
+                        <div className="font-bold text-slate-900">2 รอบ/วัน (07:00, 16:30)</div>
+                        <div className="text-[9.5px] text-slate-600 font-mono">
+                          รวม {s.total_logs} รอบ (เช้า {s.morning_count}/เย็น {s.evening_count})
+                        </div>
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-1 text-center font-bold text-slate-900 align-top">
+                        ✓ ผ่าน
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-1.5 text-slate-800 break-words text-[10px] align-top">
+                        {s.worker_name}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
 
-            {/* Optional Collapsed Raw Detailed Water Logs */}
             {showDetailedWaterLogs && (
               <div className="print:hidden space-y-1 pt-2">
                 <div className="text-[11px] font-bold text-slate-600">ประวัติบันทึกการรดน้ำรายวันแบบละเอียด (Expanded Raw Log):</div>
-                <div className="border border-slate-200 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
+                <div className="border border-slate-300 rounded overflow-hidden max-h-60 overflow-y-auto">
                   <table className="min-w-full text-[10px]">
-                    <thead className="bg-slate-100 text-slate-700 font-bold sticky top-0">
+                    <thead className="bg-slate-100 text-slate-800 font-bold sticky top-0">
                       <tr>
                         <th className="py-1.5 px-3 text-left">วันที่</th>
                         <th className="py-1.5 px-3 text-left">รอบ</th>
@@ -831,13 +823,13 @@ export default function Report() {
                         <th className="py-1.5 px-3 text-left">หมายเหตุ</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 bg-white">
+                    <tbody className="divide-y divide-slate-200 bg-white">
                       {displayWaterLogs.map(w => (
                         <tr key={w.id} className="hover:bg-slate-50">
                           <td className="py-1 px-3 font-mono">{format(new Date(w.log_date), 'dd/MM/yyyy')}</td>
                           <td className="py-1 px-3 font-bold">{w.session || 'เช้า'}</td>
                           <td className="py-1 px-3">{plotName(w.plot_id)}</td>
-                          <td className="py-1 px-3">{w.climate_condition === 'rainy_humidity' ? '🌧️ ฝนตก/คุมชื้น' : '☀️ แดดปกติ'}</td>
+                          <td className="py-1 px-3">{w.climate_condition === 'rainy_humidity' ? 'ฝนตก/คุมชื้น' : 'แดดปกติ'}</td>
                           <td className="py-1 px-3">{w.water_source}</td>
                           <td className="py-1 px-3">{w.worker_name}</td>
                           <td className="py-1 px-3 text-slate-500">{w.notes || '-'}</td>
@@ -850,239 +842,303 @@ export default function Report() {
             )}
           </div>
 
-          {/* Section 3: ปุ๋ยและสารเคมี/ชีวภัณฑ์ (GAP #3) */}
-          <div className="gap-section space-y-2">
-            <h2 className="font-bold text-sm text-emerald-900 flex items-center gap-1.5 border-l-4 border-emerald-700 pl-2">
-              หมวดที่ 3: บันทึกการใช้ปุ๋ยและสารชีวภัณฑ์ป้องกันกำจัดศัตรูพืช (GAP #3 - Inputs)
-            </h2>
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <table className="w-full table-fixed text-[11px]">
-                <colgroup>
-                  <col className="w-[11%]" />
-                  <col className="w-[11%]" />
-                  <col className="w-[23%]" />
-                  <col className="w-[11%]" />
-                  <col className="w-[22%]" />
-                  <col className="w-[10%]" />
-                  <col className="w-[12%]" />
-                </colgroup>
-                <thead className="bg-slate-100 text-slate-700 font-bold">
-                  <tr>
-                    <th className="py-2 px-2.5 text-left">วันที่</th>
-                    <th className="py-2 px-2.5 text-left">แปลง</th>
-                    <th className="py-2 px-2.5 text-left">ประเภท/ชื่อสารที่ใช้</th>
-                    <th className="py-2 px-2 text-right">ปริมาณ</th>
-                    <th className="py-2 px-2.5 text-left">วัตถุประสงค์</th>
-                    <th className="py-2 px-2 text-center">ระยะหยุดใช้</th>
-                    <th className="py-2 px-2.5 text-left">ผู้ปฏิบัติงาน</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {!displayChems.length ? (
-                    <tr><td colSpan={7} className="text-center py-4 text-slate-400">ไม่มีข้อมูลการใช้สารชีวภัณฑ์ตามเงื่อนไขที่เลือก</td></tr>
-                  ) : (
-                    displayChems.map(c => (
-                      <tr key={c.id}>
-                        <td className="py-1.5 px-2.5 font-mono text-[10.5px] break-words">{format(new Date(c.log_date), 'dd/MM/yyyy')}</td>
-                        <td className="py-1.5 px-2.5 font-medium break-words">{plotName(c.plot_id)}</td>
-                        <td className="py-1.5 px-2.5 font-bold text-slate-800 break-words leading-tight">{c.product_name}</td>
-                        <td className="py-1.5 px-2 text-right font-mono">{c.amount} {c.unit}</td>
-                        <td className="py-1.5 px-2.5 text-slate-600 break-words leading-tight">{c.reason || '-'}</td>
-                        <td className="py-1.5 px-2 text-center break-words">{c.phi_days} วัน</td>
-                        <td className="py-1.5 px-2.5 text-slate-700 break-words">{c.worker_name}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+          {/* =========================================================================
+              SECTION 4: ปุ๋ยและสารชีวภัณฑ์ป้องกันกำจัดศัตรูพืช (GAP #3 Inputs)
+             ========================================================================= */}
+          <div className="gap-section space-y-1.5">
+            <div className="flex items-center justify-between">
+              <h2 className="font-black text-xs text-slate-900 uppercase tracking-wide">
+                หมวดที่ 4: บันทึกการใช้ปุ๋ยอินทรีย์และสารชีวภัณฑ์ป้องกันกำจัดศัตรูพืช (Fertilizer & Bio-Agent Record)
+              </h2>
+              <span className="text-[10px] font-semibold text-slate-600">มกษ. 9001-2556 (ข้อ 3)</span>
             </div>
-          </div>
-
-          {/* Section 4: การเก็บเกี่ยวผลผลิต (GAP #5) */}
-          <div className="gap-section space-y-2">
-            <h2 className="font-bold text-sm text-emerald-900 flex items-center gap-1.5 border-l-4 border-emerald-700 pl-2">
-              หมวดที่ 4: บันทึกการเก็บเกี่ยวผลผลิตและรหัสล็อตตรวจสอบย้อนกลับ (GAP #5 - Harvest & Traceability)
-            </h2>
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <table className="w-full table-fixed text-[11px]">
-                <colgroup>
-                  <col className="w-[11%]" />
-                  <col className="w-[11%]" />
-                  <col className="w-[17%]" />
-                  <col className="w-[12%]" />
-                  <col className="w-[8%]" />
-                  <col className="w-[28%]" />
-                  <col className="w-[13%]" />
-                </colgroup>
-                <thead className="bg-slate-100 text-slate-700 font-bold">
+            <table className="w-full table-fixed border-collapse border border-slate-800 text-[10.5px]">
+              <colgroup>
+                <col className="w-[11%]" />
+                <col className="w-[12%]" />
+                <col className="w-[24%]" />
+                <col className="w-[11%]" />
+                <col className="w-[22%]" />
+                <col className="w-[9%]" />
+                <col className="w-[11%]" />
+              </colgroup>
+              <thead>
+                <tr className="bg-slate-100 text-slate-900 font-bold border-b border-slate-800">
+                  <th className="border border-slate-800 py-1.5 px-2 text-center">วัน/เดือน/ปี</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">แปลงที่ใช้</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">ชื่อปุ๋ย / สารชีวภัณฑ์ที่ใช้</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-right">อัตราที่ใช้</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">วัตถุประสงค์ / สาเหตุ</th>
+                  <th className="border border-slate-800 py-1.5 px-1.5 text-center">ระยะปลอดภัย</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">ผู้ปฏิบัติงาน</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!displayChems.length ? (
                   <tr>
-                    <th className="py-2 px-2.5 text-left">วันที่เก็บผลผลิต</th>
-                    <th className="py-2 px-2.5 text-left">แปลง</th>
-                    <th className="py-2 px-2.5 text-left">รหัสล็อต (Lot Code)</th>
-                    <th className="py-2 px-2 text-right">ปริมาณ</th>
-                    <th className="py-2 px-1.5 text-center">เกรด</th>
-                    <th className="py-2 px-2.5 text-left">สุขอนามัยหลังเก็บผลผลิต</th>
-                    <th className="py-2 px-2 text-right">มูลค่า (บาท)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {!displayHarvest.length ? (
-                    <tr><td colSpan={7} className="text-center py-4 text-slate-400">ไม่มีข้อมูลการเก็บผลผลิตตามเงื่อนไขที่เลือก</td></tr>
-                  ) : (
-                    displayHarvest.map(h => (
-                      <tr key={h.id}>
-                        <td className="py-1.5 px-2.5 font-mono text-[10.5px] break-words">{format(new Date(h.harvest_date), 'dd/MM/yyyy')}</td>
-                        <td className="py-1.5 px-2.5 font-medium break-words">{plotName(h.plot_id)}</td>
-                        <td className="py-1.5 px-2.5 font-mono font-bold text-emerald-800 break-words">{h.lot_code || '-'}</td>
-                        <td className="py-1.5 px-2 text-right font-bold">{Number(h.quantity).toLocaleString()} {h.unit}</td>
-                        <td className="py-1.5 px-1.5 text-center font-bold text-amber-700">{h.quality_grade}</td>
-                        <td className="py-1.5 px-2.5 text-slate-600 break-words leading-tight">{h.postharvest_handling || h.harvest_hygiene}</td>
-                        <td className="py-1.5 px-2 text-right font-semibold">฿{Number(h.revenue || 0).toLocaleString()}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Section 5: การเก็บรักษาและการขนส่ง (GAP #6) */}
-          <div className="gap-section space-y-2">
-            <h2 className="font-bold text-sm text-emerald-900 flex items-center gap-1.5 border-l-4 border-emerald-700 pl-2">
-              หมวดที่ 5: บันทึกการเก็บรักษาและการขนส่งผลผลิต (GAP #6 - Storage & Logistics)
-            </h2>
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <table className="w-full table-fixed text-[11px]">
-                <colgroup>
-                  <col className="w-[12%]" />
-                  <col className="w-[19%]" />
-                  <col className="w-[21%]" />
-                  <col className="w-[18%]" />
-                  <col className="w-[18%]" />
-                  <col className="w-[12%]" />
-                </colgroup>
-                <thead className="bg-slate-100 text-slate-700 font-bold">
-                  <tr>
-                    <th className="py-2 px-2.5 text-left">วันที่</th>
-                    <th className="py-2 px-2.5 text-left">สถานที่จัดเก็บ/ห้องเย็น</th>
-                    <th className="py-2 px-2.5 text-left">สถานที่ส่งมอบ (ปลายทาง)</th>
-                    <th className="py-2 px-2.5 text-left">ผู้รับซื้อ</th>
-                    <th className="py-2 px-2.5 text-left">ยานพาหนะขนส่ง</th>
-                    <th className="py-2 px-2 text-center">ความสะอาดรถ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {!reportData?.storage?.length ? (
-                    <tr><td colSpan={6} className="text-center py-4 text-slate-400">ไม่มีข้อมูลการขนส่ง</td></tr>
-                  ) : (
-                    reportData.storage.map(s => (
-                      <tr key={s.id}>
-                        <td className="py-1.5 px-2.5 font-mono text-[10.5px] break-words">{format(new Date(s.log_date), 'dd/MM/yyyy')}</td>
-                        <td className="py-1.5 px-2.5 break-words leading-tight">{s.storage_location}</td>
-                        <td className="py-1.5 px-2.5 font-medium text-emerald-900 break-words leading-tight">{s.shipped_to}</td>
-                        <td className="py-1.5 px-2.5 break-words">{s.buyer}</td>
-                        <td className="py-1.5 px-2.5 break-words">{s.vehicle}</td>
-                        <td className="py-1.5 px-2 text-center">
-                          <span className="bg-green-100 text-green-800 px-1.5 py-0.5 rounded text-[9.5px] font-bold inline-block">
-                            {s.vehicle_clean_status ? 'สะอาด/ผ่าน' : 'รอตรวจ'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Section 6: ข้อมูลผู้ควบคุมการผลิตและสุขอนามัย */}
-          <div className="gap-section space-y-2">
-            <h2 className="font-bold text-sm text-emerald-900 flex items-center gap-1.5 border-l-4 border-emerald-700 pl-2">
-              หมวดที่ 6: ข้อมูลผู้ควบคุมการผลิตและสุขอนามัย (GAP Operator & Hygiene Standard)
-            </h2>
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <table className="w-full table-fixed text-[11px]">
-                <colgroup>
-                  <col className="w-[23%]" />
-                  <col className="w-[20%]" />
-                  <col className="w-[21%]" />
-                  <col className="w-[12%]" />
-                  <col className="w-[12%]" />
-                  <col className="w-[12%]" />
-                </colgroup>
-                <thead className="bg-slate-100 text-slate-700 font-bold">
-                  <tr>
-                    <th className="py-2 px-2.5 text-left">ชื่อ-นามสกุล (ผู้ควบคุม)</th>
-                    <th className="py-2 px-2.5 text-left">ตำแหน่ง/หน้าที่</th>
-                    <th className="py-2 px-2.5 text-left">ฟาร์มที่สังกัด</th>
-                    <th className="py-2 px-2 text-center">การอบรม GAP</th>
-                    <th className="py-2 px-2 text-center">สุขอนามัย</th>
-                    <th className="py-2 px-2 text-center">สถานะสุขภาพ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  <tr className="hover:bg-slate-50">
-                    <td className="py-2 px-2.5 font-semibold text-slate-800 break-words">{reportData?.profile?.display_name || 'เจ้าของฟาร์ม'}</td>
-                    <td className="py-2 px-2.5 text-slate-600 break-words">เจ้าของฟาร์ม / ผู้จัดการแปลง</td>
-                    <td className="py-2 px-2.5 text-slate-600 break-words">{reportData?.profile?.farm_name || '-'}</td>
-                    <td className="py-2 px-2 text-center">
-                      <span className="bg-green-100 text-green-800 px-1.5 py-0.5 rounded text-[9.5px] font-bold inline-block">
-                        ผ่านการรับรอง
-                      </span>
-                    </td>
-                    <td className="py-2 px-2 text-center">
-                      <span className="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded text-[9.5px] font-bold inline-block">
-                        ผ่านเกณฑ์
-                      </span>
-                    </td>
-                    <td className="py-2 px-2 text-center">
-                      <span className="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-[9.5px] font-bold inline-block">
-                        สมบูรณ์แข็งแรง
-                      </span>
+                    <td colSpan={7} className="border border-slate-800 text-center py-4 text-slate-500">
+                      — ไม่มีการใช้สารเคมีสังเคราะห์ (ใช้เฉพาะปุ๋ยหมักอินทรีย์ตามสูตรเตรียมดิน) —
                     </td>
                   </tr>
-                </tbody>
-              </table>
-            </div>
+                ) : (
+                  displayChems.map(c => (
+                    <tr key={c.id}>
+                      <td className="border border-slate-800 py-1.5 px-2 text-center font-mono text-[10px] align-top">
+                        {format(new Date(c.log_date), 'dd/MM/yyyy')}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 font-semibold break-words align-top">
+                        {plotName(c.plot_id)}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 font-bold text-slate-900 break-words leading-snug align-top">
+                        {c.product_name}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 text-right font-mono align-top">
+                        {c.amount} {c.unit}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 text-slate-800 break-words leading-snug align-top">
+                        {c.reason || '-'}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-1.5 text-center font-mono align-top">
+                        {c.phi_days} วัน
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 text-slate-800 break-words align-top">
+                        {c.worker_name}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
 
-          {/* Section 7: สรุปภาพรวมและลงนามรับรอง */}
-          <div className="gap-section bg-emerald-50/60 border border-emerald-200 rounded-xl p-4 space-y-3">
-            <h3 className="font-bold text-sm text-emerald-900">สรุปภาพรวมผลการดำเนินงานและผลผลิตประจำปี</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-              <div className="bg-white p-3 rounded-lg border border-emerald-100">
-                <div className="text-slate-400">ผลผลิตผักสดรวม</div>
-                <div className="text-base font-black text-emerald-800">{totalQty.toLocaleString()} กก.</div>
-              </div>
-              <div className="bg-white p-3 rounded-lg border border-emerald-100">
-                <div className="text-slate-400">รายได้รวมจากการขาย</div>
-                <div className="text-base font-black text-blue-800">฿{totalRev.toLocaleString()}</div>
-              </div>
-              <div className="bg-white p-3 rounded-lg border border-emerald-100">
-                <div className="text-slate-400">ต้นทุนการผลิตรวม</div>
-                <div className="text-base font-black text-amber-800">฿{totalCost.toLocaleString()}</div>
-              </div>
-              <div className="bg-white p-3 rounded-lg border border-emerald-100">
-                <div className="text-slate-400">กำไรสุทธิจากการผลิต</div>
-                <div className="text-base font-black text-green-800">฿{profit.toLocaleString()}</div>
-              </div>
+          {/* =========================================================================
+              SECTION 5: การเก็บเกี่ยวผลผลิตและรหัสล็อต (GAP #5 Harvest & Traceability)
+             ========================================================================= */}
+          <div className="gap-section space-y-1.5">
+            <div className="flex items-center justify-between">
+              <h2 className="font-black text-xs text-slate-900 uppercase tracking-wide">
+                หมวดที่ 5: บันทึกการเก็บเกี่ยวผลผลิต การคัดบรรจุ และรหัสล็อตตรวจสอบย้อนกลับ (Harvest & Lot Traceability)
+              </h2>
+              <span className="text-[10px] font-semibold text-slate-600">มกษ. 9001-2556 (ข้อ 5 และ ข้อ 8)</span>
             </div>
+            <table className="w-full table-fixed border-collapse border border-slate-800 text-[10.5px]">
+              <colgroup>
+                <col className="w-[11%]" />
+                <col className="w-[11%]" />
+                <col className="w-[18%]" />
+                <col className="w-[12%]" />
+                <col className="w-[7%]" />
+                <col className="w-[28%]" />
+                <col className="w-[13%]" />
+              </colgroup>
+              <thead>
+                <tr className="bg-slate-100 text-slate-900 font-bold border-b border-slate-800">
+                  <th className="border border-slate-800 py-1.5 px-2 text-center">วันที่เก็บเกี่ยว</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">แปลงที่เก็บ</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">รหัสล็อต (Lot Code)</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-right">ปริมาณที่ได้</th>
+                  <th className="border border-slate-800 py-1.5 px-1 text-center">เกรด</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">การปฏิบัติหลังการเก็บเกี่ยว / สุขอนามัย</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-right">มูลค่า (บาท)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!displayHarvest.length ? (
+                  <tr>
+                    <td colSpan={7} className="border border-slate-800 text-center py-4 text-slate-500">
+                      — ไม่มีข้อมูลการเก็บเกี่ยวผลผลิตตามเงื่อนไขที่เลือก —
+                    </td>
+                  </tr>
+                ) : (
+                  displayHarvest.map(h => (
+                    <tr key={h.id}>
+                      <td className="border border-slate-800 py-1.5 px-2 text-center font-mono text-[10px] align-top">
+                        {format(new Date(h.harvest_date), 'dd/MM/yyyy')}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 font-semibold break-words align-top">
+                        {plotName(h.plot_id)}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 font-mono font-bold text-slate-900 break-words align-top">
+                        {h.lot_code || '-'}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 text-right font-mono font-bold align-top">
+                        {Number(h.quantity).toLocaleString()} {h.unit}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-1 text-center font-bold align-top">
+                        {h.quality_grade || 'A'}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 text-slate-800 break-words leading-snug align-top">
+                        {h.postharvest_handling || h.harvest_hygiene || 'คัดตัดแต่งใบเสีย ล้างน้ำสะอาด บรรจุถุงใสเกรดอาหาร'}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 text-right font-mono font-semibold align-top">
+                        ฿{Number(h.revenue || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {displayHarvest.length > 0 && (
+                <tfoot>
+                  <tr className="bg-slate-100 font-bold border-t-2 border-slate-800">
+                    <td colSpan={3} className="border border-slate-800 py-1.5 px-2 text-right">
+                      รวมผลผลิตที่เก็บเกี่ยวและมูลค่าจำหน่ายทั้งสิ้น
+                    </td>
+                    <td className="border border-slate-800 py-1.5 px-2 text-right font-mono">
+                      {totalQty.toLocaleString()} กก.
+                    </td>
+                    <td colSpan={2} className="border border-slate-800 py-1.5 px-2"></td>
+                    <td className="border border-slate-800 py-1.5 px-2 text-right font-mono text-slate-900">
+                      ฿{totalRev.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
           </div>
 
-          {/* Signatures */}
-          <div className="gap-section pt-8 grid grid-cols-2 gap-8 text-center text-xs">
-            <div className="space-y-6">
-              <div className="border-b border-slate-400 w-48 mx-auto"></div>
-              <div>
-                <p className="font-bold text-slate-800">( {reportData?.profile?.display_name || 'เจ้าของฟาร์ม'} )</p>
-                <p className="text-[11px] text-slate-500">ผู้ขอรับการรับรอง / เจ้าของฟาร์ม</p>
-              </div>
+          {/* =========================================================================
+              SECTION 6: การเก็บรักษาและการขนส่งผลผลิต (GAP #6 Storage & Logistics)
+             ========================================================================= */}
+          <div className="gap-section space-y-1.5">
+            <div className="flex items-center justify-between">
+              <h2 className="font-black text-xs text-slate-900 uppercase tracking-wide">
+                หมวดที่ 6: บันทึกการพักผลผลิตและการขนส่งปลอดการปนเปื้อน (Storage & Clean Transport Log)
+              </h2>
+              <span className="text-[10px] font-semibold text-slate-600">มกษ. 9001-2556 (ข้อ 6)</span>
             </div>
-            <div className="space-y-6">
-              <div className="border-b border-slate-400 w-48 mx-auto"></div>
-              <div>
-                <p className="font-bold text-slate-800">( ............................................................ )</p>
-                <p className="text-[11px] text-slate-500">ผู้ตรวจประเมินมาตรฐาน GAP (Inspector)</p>
+            <table className="w-full table-fixed border-collapse border border-slate-800 text-[10.5px]">
+              <colgroup>
+                <col className="w-[11%]" />
+                <col className="w-[19%]" />
+                <col className="w-[23%]" />
+                <col className="w-[17%]" />
+                <col className="w-[18%]" />
+                <col className="w-[12%]" />
+              </colgroup>
+              <thead>
+                <tr className="bg-slate-100 text-slate-900 font-bold border-b border-slate-800">
+                  <th className="border border-slate-800 py-1.5 px-2 text-center">วันที่ขนส่ง</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">สถานที่พัก/บรรจุสินค้า</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">สถานที่ส่งมอบปลายทาง</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">ชื่อผู้รับซื้อ / ลูกค้า</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">ยานพาหนะที่ใช้ขนส่ง</th>
+                  <th className="border border-slate-800 py-1.5 px-1.5 text-center">ความสะอาดพาหนะ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!reportData?.storage?.length ? (
+                  <tr>
+                    <td colSpan={6} className="border border-slate-800 text-center py-4 text-slate-500">
+                      — ไม่มีข้อมูลการขนส่งผลผลิต —
+                    </td>
+                  </tr>
+                ) : (
+                  reportData.storage.map(s => (
+                    <tr key={s.id}>
+                      <td className="border border-slate-800 py-1.5 px-2 text-center font-mono text-[10px] align-top">
+                        {format(new Date(s.log_date), 'dd/MM/yyyy')}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 break-words leading-snug align-top">
+                        {s.storage_location}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 font-semibold text-slate-900 break-words leading-snug align-top">
+                        {s.shipped_to}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 break-words align-top">
+                        {s.buyer}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-2 break-words align-top">
+                        {s.vehicle}
+                      </td>
+                      <td className="border border-slate-800 py-1.5 px-1.5 text-center font-bold text-slate-900 align-top">
+                        {s.vehicle_clean_status ? '✓ สะอาด/ผ่าน' : 'รอตรวจ'}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* =========================================================================
+              SECTION 7: สุขอนามัยส่วนบุคคล และสรุปผลการดำเนินงาน (Personnel Hygiene & Summary)
+             ========================================================================= */}
+          <div className="gap-section space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-black text-xs text-slate-900 uppercase tracking-wide">
+                หมวดที่ 7: ข้อมูลผู้ปฏิบัติงาน สุขอนามัยส่วนบุคคล และสรุปผลการผลิต (Operator Hygiene & Farm Summary)
+              </h2>
+              <span className="text-[10px] font-semibold text-slate-600">มกษ. 9001-2556 (ข้อ 7 และ ข้อ 8)</span>
+            </div>
+
+            <table className="w-full table-fixed border-collapse border border-slate-800 text-[10.5px]">
+              <colgroup>
+                <col className="w-[22%]" />
+                <col className="w-[18%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+              </colgroup>
+              <thead>
+                <tr className="bg-slate-100 text-slate-900 font-bold border-b border-slate-800">
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">ผู้ควบคุมการผลิต / สุขอนามัย</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-center">สถานะการอบรม GAP</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-right">ผลผลิตผักสดรวม</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-right">รายรับจากการจำหน่าย</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-right">ต้นทุนการผลิตรวม</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-right">กำไรสุทธิจากการผลิต</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="border border-slate-800 py-2 px-2 align-middle">
+                    <div className="font-bold text-slate-900">{reportData?.profile?.display_name || 'เจ้าของฟาร์ม'}</div>
+                    <div className="text-[9.5px] text-slate-600">สุขภาพแข็งแรง • สุขอนามัยผ่านเกณฑ์</div>
+                  </td>
+                  <td className="border border-slate-800 py-2 px-2 text-center font-bold text-slate-900 align-middle">
+                    ✓ ผ่านเกณฑ์มาตรฐาน GAP
+                  </td>
+                  <td className="border border-slate-800 py-2 px-2 text-right font-mono font-bold text-slate-900 align-middle">
+                    {totalQty.toLocaleString()} กก.
+                  </td>
+                  <td className="border border-slate-800 py-2 px-2 text-right font-mono font-bold text-slate-900 align-middle">
+                    ฿{totalRev.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td className="border border-slate-800 py-2 px-2 text-right font-mono text-slate-800 align-middle">
+                    ฿{totalCost.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td className="border border-slate-800 py-2 px-2 text-right font-mono font-black text-slate-900 bg-slate-50 align-middle">
+                    ฿{profit.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* =========================================================================
+              SIGNATURES: คำรับรองและลายมือชื่อผู้ตรวจประเมิน (Official Certification)
+             ========================================================================= */}
+          <div className="gap-section pt-5 mt-4 border-t border-slate-800 space-y-6">
+            <div className="text-[10px] text-slate-700 leading-relaxed">
+              <strong>คำรับรองของผู้ผลิต:</strong> ข้าพเจ้าขอรับรองว่าข้อมูลการจัดการแปลงเพาะปลูก การใช้น้ำ ปัจจัยการผลิต การเก็บเกี่ยว และการขนส่งผลผลิตที่บันทึกไว้ในเอกสารฉบับนี้ เป็นความจริงจากการปฏิบัติงานจริงทุกประการ ตามข้อกำหนดมาตรฐานสินค้าเกษตร มกษ. 9001-2556 (การปฏิบัติทางการเกษตรที่ดีสำหรับพืชอาหาร)
+            </div>
+            <div className="grid grid-cols-2 gap-12 text-center text-xs pt-2">
+              <div className="space-y-5">
+                <div>ลงชื่อ .......................................................................... ผู้ขอรับการรับรอง / เกษตรกร</div>
+                <div>
+                  <p className="font-bold text-slate-900">( {reportData?.profile?.display_name || '............................................................'} )</p>
+                  <p className="text-[10.5px] text-slate-600 mt-0.5">ตำแหน่ง: เจ้าของฟาร์ม / ผู้ควบคุมการผลิตมาตรฐาน GAP</p>
+                  <p className="text-[10.5px] text-slate-600 mt-0.5">วันที่ ........../........../..........</p>
+                </div>
+              </div>
+              <div className="space-y-5">
+                <div>ลงชื่อ .......................................................................... ผู้ตรวจประเมิน</div>
+                <div>
+                  <p className="font-bold text-slate-900">( .......................................................................... )</p>
+                  <p className="text-[10.5px] text-slate-600 mt-0.5">ตำแหน่ง: เจ้าหน้าที่ผู้ตรวจประเมินแหล่งผลิต GAP (Auditor)</p>
+                  <p className="text-[10.5px] text-slate-600 mt-0.5">วันที่ ........../........../..........</p>
+                </div>
               </div>
             </div>
           </div>

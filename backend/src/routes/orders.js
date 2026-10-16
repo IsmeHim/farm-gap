@@ -376,9 +376,9 @@ export async function syncOrderToStorageLog(orderId, customData = {}, userId = 1
   }
 }
 
-// แนบสลิปชำระเงิน
+// แนบสลิปชำระเงิน (รองรับทั้ง URL และ Base64 Data URI โดยแปลงเป็นไฟล์ใน /uploads อัตโนมัติเพื่อให้ส่งรูปเข้า LINE ได้)
 ordersRouter.post('/:id/slip', async (req, res) => {
-  const { slip_image_url } = req.body;
+  let { slip_image_url } = req.body;
   if (!slip_image_url) {
     return res.status(400).json({ error: 'slip_image_url is required' });
   }
@@ -386,6 +386,31 @@ ordersRouter.post('/:id/slip', async (req, res) => {
   try {
     const [existing] = await pool.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
     if (existing.length === 0) return res.status(404).json({ error: 'Order not found' });
+
+    // หากส่งมาเป็น Base64 Data URI ให้บันทึกเป็นไฟล์จริงลง /uploads เพื่อให้ LINE Image Message แสดงผลได้
+    if (typeof slip_image_url === 'string' && slip_image_url.startsWith('data:image/')) {
+      try {
+        const matches = slip_image_url.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const fs = await import('fs');
+          const path = await import('path');
+          const { fileURLToPath } = await import('url');
+          const __dirname = path.dirname(fileURLToPath(import.meta.url));
+          const uploadsDir = path.join(__dirname, '../../uploads');
+          if (!fs.existsSync(uploadsDir)) {
+            fs.mkdirSync(uploadsDir, { recursive: true });
+          }
+          let ext = matches[1].toLowerCase();
+          if (ext === 'jpeg') ext = 'jpg';
+          const buffer = Buffer.from(matches[2], 'base64');
+          const filename = `slip-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}.${ext}`;
+          fs.writeFileSync(path.join(uploadsDir, filename), buffer);
+          slip_image_url = `/uploads/${filename}`;
+        }
+      } catch (fileErr) {
+        console.warn('Failed to convert base64 slip to file:', fileErr.message);
+      }
+    }
 
     await pool.query('UPDATE orders SET slip_image_url = ?, status = "paid" WHERE id = ?', [slip_image_url, req.params.id]);
     const [updated] = await pool.query(
@@ -399,7 +424,7 @@ ordersRouter.post('/:id/slip', async (req, res) => {
     if (updated[0]) {
       const [itemsRows] = await pool.query(orderItemsSelectSql, [req.params.id]);
       updated[0].items = itemsRows;
-      notifyAdminNewOrder(updated[0], 'ORDER_COMPLETED').catch(e => console.error('notifyAdmin slip error:', e.message));
+      notifyAdminNewOrder(updated[0], 'SLIP_UPLOADED').catch(e => console.error('notifyAdmin slip error:', e.message));
     }
 
     res.json(updated[0]);
