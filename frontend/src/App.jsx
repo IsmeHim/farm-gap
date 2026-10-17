@@ -7,7 +7,6 @@ const Login = lazy(() => import('./pages/Login.jsx'));
 const Dashboard = lazy(() => import('./pages/Dashboard.jsx'));
 const Plots = lazy(() => import('./pages/Plots.jsx'));
 const Crops = lazy(() => import('./pages/Crops.jsx'));
-const Water = lazy(() => import('./pages/Water.jsx'));
 const Chemicals = lazy(() => import('./pages/Chemicals.jsx'));
 const Pests = lazy(() => import('./pages/Pests.jsx'));
 const Harvest = lazy(() => import('./pages/Harvest.jsx'));
@@ -59,7 +58,6 @@ export default function App() {
           <Route path="plots" element={<Plots />} />
           <Route path="crops" element={<Crops />} />
           <Route path="diary" element={<Navigate to="/plots" replace />} />
-          <Route path="water" element={<Water />} />
           <Route path="chemicals" element={<Chemicals />} />
           <Route path="pests" element={<Pests />} />
           <Route path="harvest" element={<Harvest />} />

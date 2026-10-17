@@ -11,7 +11,7 @@ r.get('/:year', async (req, res) => {
   const start = `${year}-01-01`, end = `${year}-12-31`;
   const uid = req.user.id;
   const q = (sql, params) => pool.query(sql, params).then(([rows]) => rows);
-  const [plots, batches, water, chems, pests, harvest, storage, costs, profile, activities, crops] = await Promise.all([
+  const [plots, batches, chems, pests, harvest, storage, costs, profile, activities, crops] = await Promise.all([
     q(`SELECT p.*, 
               COALESCE(NULLIF(b.soil_recipe, ''), p.soil_recipe) AS effective_soil_recipe,
               COALESCE(NULLIF(b.soil_recipe, ''), p.soil_recipe) AS soil_recipe
@@ -21,13 +21,12 @@ r.get('/:year', async (req, res) => {
        ORDER BY p.plot_number ASC, p.id ASC`, [uid]),
     q(`SELECT b.*, 
               COALESCE(NULLIF(b.soil_recipe, ''), p.soil_recipe) AS soil_recipe,
-              p.name AS plot_name, c.name AS crop_name 
+              p.name AS plot_name, p.plot_number, p.dimension, c.name AS crop_name 
        FROM planting_batches b 
        JOIN plots p ON p.id = b.plot_id 
        LEFT JOIN crops c ON c.id = b.crop_id 
        WHERE b.user_id=? 
-       ORDER BY b.id DESC`, [uid]).catch(() => []),
-    q('SELECT * FROM water_logs WHERE user_id=? AND log_date BETWEEN ? AND ? ORDER BY log_date ASC', [uid, start, end]),
+       ORDER BY b.start_date ASC, b.id ASC`, [uid]).catch(() => []),
     q('SELECT * FROM chemical_logs WHERE user_id=? AND log_date BETWEEN ? AND ? ORDER BY log_date ASC', [uid, start, end]),
     q('SELECT * FROM pest_logs WHERE user_id=? AND log_date BETWEEN ? AND ? ORDER BY log_date ASC', [uid, start, end]),
     q('SELECT * FROM harvest_logs WHERE user_id=? AND harvest_date BETWEEN ? AND ? ORDER BY harvest_date ASC', [uid, start, end]),
@@ -68,7 +67,7 @@ r.get('/:year', async (req, res) => {
     notes: b.notes
   }));
 
-  res.json({ year, profile: profile[0], plots, batches, water, chems, pests, harvest, storage, workers: [], costs, activities, cycles, crops });
+  res.json({ year, profile: profile[0], plots, batches, chems, pests, harvest, storage, workers: [], costs, activities, cycles, crops });
 });
 
 export default r;

@@ -24,7 +24,6 @@ const frontendDistPath = fs.existsSync('/frontend/dist')
   : path.join(__dirname, '../../frontend/dist');
 
 import { plotsRouter } from './routes/plots.js';
-import { waterRouter, processAutoWaterRoutineForAllUsers } from './routes/water.js';
 import { harvestRouter } from './routes/harvest.js';
 import { uploadRouter } from './routes/upload.js';
 import { salesRouter } from './routes/sales.js';
@@ -58,7 +57,6 @@ app.get('/api/health', (_, res) => res.json({ ok: true }));
 app.use('/api/auth', authRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/plots', plotsRouter);
-app.use('/api/water', waterRouter);
 app.use('/api/chemicals', chemicalsRouter);
 app.use('/api/pests', pestsRouter);
 app.use('/api/harvest', harvestRouter);
@@ -124,14 +122,6 @@ app.listen(port, () => {
     await syncExistingChemicalLogsToActivities();
     await syncExistingPestLogsToActivities();
   }, 2000);
-
-  // Auto-Watering Background Daemon (every 15 minutes)
-  setTimeout(() => {
-    processAutoWaterRoutineForAllUsers().catch(err => console.error('Initial auto-water failed:', err.message));
-  }, 5000);
-  setInterval(() => {
-    processAutoWaterRoutineForAllUsers().catch(err => console.error('Scheduled auto-water failed:', err.message));
-  }, 15 * 60 * 1000);
 });
 
 

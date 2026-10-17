@@ -83,24 +83,11 @@ export default function AddPlotModal({
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                  แหล่งน้ำที่ใช้ (GAP ข้อ 3)
-                </label>
-                <input
-                  type="text"
-                  value={addPlotForm.water_source}
-                  onChange={(e) => setAddPlotForm({ ...addPlotForm, water_source: e.target.value })}
-                  placeholder="เช่น น้ำประปา/บ่อพักน้ำมาตรฐาน GAP"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-medium focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"
-                />
-              </div>
-
-              <div>
+              <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-slate-800 mb-1.5">หมายเหตุเพิ่มเติม</label>
                 <input
                   type="text"
-                  placeholder="เช่น ติดตั้งระบบหัวสปริงเกลอร์ใหม่"
+                  placeholder="เช่น แปลงในโรงเรือนยกแคร่"
                   value={addPlotForm.notes}
                   onChange={(e) => setAddPlotForm({ ...addPlotForm, notes: e.target.value })}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-medium focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"

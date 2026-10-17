@@ -21,7 +21,6 @@ async function seed() {
     await pool.query('DELETE FROM harvest_logs WHERE user_id = ?', [userId]);
     await pool.query('DELETE FROM pest_logs WHERE user_id = ?', [userId]);
     await pool.query('DELETE FROM chemical_logs WHERE user_id = ?', [userId]);
-    await pool.query('DELETE FROM water_logs WHERE user_id = ?', [userId]);
     await pool.query('DELETE FROM crop_activities WHERE user_id = ?', [userId]);
     await pool.query('DELETE FROM planting_batches WHERE user_id = ?', [userId]);
     await pool.query('DELETE FROM plots WHERE user_id = ?', [userId]);
@@ -56,19 +55,19 @@ async function seed() {
     // 3. Insert Plots (6 แคร่ตามจริงขนาด 2 x 6 เมตร)
     console.log('📦 Seeding Plots (6 แคร่ตามจริง)...');
     const plotsData = [
-      [userId, 1, 'แปลง/แคร่ที่ 1', 'แคร่ 2 x 6 เมตร', 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)', '-', 12, null, null, 'น้ำประปาเกษตรสะอาด', 'น้ำประปาเกษตรสะอาด', 'ปลอดภัย', 'empty', 'แปลงว่าง พร้อมเริ่มรอบปลูกใหม่'],
-      [userId, 2, 'แปลง/แคร่ที่ 2', 'แคร่ 2 x 6 เมตร', 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)', '-', 12, null, null, 'น้ำประปาเกษตรสะอาด', 'น้ำประปาเกษตรสะอาด', 'ปลอดภัย', 'empty', 'แปลงว่าง พร้อมเริ่มรอบปลูกใหม่'],
-      [userId, 3, 'แปลง/แคร่ที่ 3', 'แคร่ 2 x 6 เมตร', 'ดินปรุงพิเศษ + พีทมอส + มูลไส้เดือน สำหรับผักสลัด', 'ผักบุ้งจีน', 12, '2026-09-19', '2026-10-09', 'น้ำสะอาดมาตรฐาน GAP', 'น้ำสะอาดมาตรฐาน GAP', 'ปลอดภัย', 'growing', 'กำลังเจริญเติบโตสม่ำเสมอ'],
-      [userId, 4, 'แปลง/แคร่ที่ 4', 'แคร่ 2 x 6 เมตร', 'ดินปรุงพิเศษ + พีทมอส + มูลไส้เดือน สำหรับผักสลัด', 'ฟิลเล่ย์ ไอซ์เบิร์ก (Frillice Iceberg)', 12, '2026-03-01', '2026-04-15', 'น้ำสะอาดมาตรฐาน GAP', 'น้ำสะอาดมาตรฐาน GAP', 'ปลอดภัย', 'harvest_ready', 'ใบหยิกหนากรอบมาก พร้อมเก็บเกี่ยว'],
-      [userId, 5, 'แปลง/แคร่ที่ 5', 'แคร่ 2 x 6 เมตร', 'ดินผสมกากยาง + ปุ๋ยหมักชีวภาพ', 'ผักบุ้งจีน', 12, '2026-09-19', '2026-10-09', 'น้ำสะอาดมาตรฐาน GAP', 'น้ำสะอาดมาตรฐาน GAP', 'ปลอดภัย', 'growing', 'กำลังเจริญเติบโตสม่ำเสมอ'],
-      [userId, 6, 'แปลง/แคร่ที่ 6', 'แคร่ 2 x 6 เมตร', 'ดินผสมกากยาง + ปุ๋ยหมักชีวภาพ (เตรียมพักแปลง)', 'ผักบุ้งจีน', 12, '2026-09-19', '2026-10-09', 'น้ำสะอาดมาตรฐาน GAP', 'น้ำสะอาดมาตรฐาน GAP', 'ปลอดภัย', 'growing', 'กำลังเจริญเติบโตสม่ำเสมอ']
+      [userId, 1, 'แปลง/แคร่ที่ 1', 'แคร่ 2 x 6 เมตร', 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)', '-', 12, null, null, 'ปลอดภัย', 'empty', 'แปลงว่าง พร้อมเริ่มรอบปลูกใหม่'],
+      [userId, 2, 'แปลง/แคร่ที่ 2', 'แคร่ 2 x 6 เมตร', 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)', '-', 12, null, null, 'ปลอดภัย', 'empty', 'แปลงว่าง พร้อมเริ่มรอบปลูกใหม่'],
+      [userId, 3, 'แปลง/แคร่ที่ 3', 'แคร่ 2 x 6 เมตร', 'ดินปรุงพิเศษ + พีทมอส + มูลไส้เดือน สำหรับผักสลัด', 'ผักบุ้งจีน', 12, '2026-09-19', '2026-10-09', 'ปลอดภัย', 'growing', 'กำลังเจริญเติบโตสม่ำเสมอ'],
+      [userId, 4, 'แปลง/แคร่ที่ 4', 'แคร่ 2 x 6 เมตร', 'ดินปรุงพิเศษ + พีทมอส + มูลไส้เดือน สำหรับผักสลัด', 'ฟิลเล่ย์ ไอซ์เบิร์ก (Frillice Iceberg)', 12, '2026-03-01', '2026-04-15', 'ปลอดภัย', 'harvest_ready', 'ใบหยิกหนากรอบมาก พร้อมเก็บเกี่ยว'],
+      [userId, 5, 'แปลง/แคร่ที่ 5', 'แคร่ 2 x 6 เมตร', 'ดินผสมกากยาง + ปุ๋ยหมักชีวภาพ', 'ผักบุ้งจีน', 12, '2026-09-19', '2026-10-09', 'ปลอดภัย', 'growing', 'กำลังเจริญเติบโตสม่ำเสมอ'],
+      [userId, 6, 'แปลง/แคร่ที่ 6', 'แคร่ 2 x 6 เมตร', 'ดินผสมกากยาง + ปุ๋ยหมักชีวภาพ (เตรียมพักแปลง)', 'ผักบุ้งจีน', 12, '2026-09-19', '2026-10-09', 'ปลอดภัย', 'growing', 'กำลังเจริญเติบโตสม่ำเสมอ']
     ];
 
     const plotIds = [];
     for (const p of plotsData) {
       const [res] = await pool.query(
-        `INSERT INTO plots (user_id, plot_number, name, dimension, soil_recipe, crop_name, area_sqm, planting_date, expected_harvest_date, water_source, water_source_type, field_safety_status, status, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO plots (user_id, plot_number, name, dimension, soil_recipe, crop_name, area_sqm, planting_date, expected_harvest_date, field_safety_status, status, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         p
       );
       plotIds.push(res.insertId);
@@ -77,17 +76,17 @@ async function seed() {
     // 4. Insert Planting Batches (รอบการปลูก)
     console.log('🌱 Seeding Planting Batches...');
     const batchesData = [
-      [userId, 'BATCH-260919-P3-641', plotIds[2], cropIds[0], '2026-09-19', '2026-10-09', 'growing', 1, 'หว่านเมล็ด 3 ขีดใน 1 แคร่'],
-      [userId, 'BATCH-2026-FL01', plotIds[3], cropIds[4], '2026-03-01', '2026-04-15', 'harvest_ready', 1, 'ฟิลเล่ย์ ไอซ์เบิร์ก แปลงที่ 4 ใบหยักสวย กรอบมาก'],
-      [userId, 'BATCH-260919-P5-188', plotIds[4], cropIds[0], '2026-09-19', '2026-10-09', 'growing', 1, 'รดน้ำเช้า-เย็นสม่ำเสมอ'],
-      [userId, 'BATCH-260919-P6-118', plotIds[5], cropIds[0], '2026-09-19', '2026-10-09', 'growing', 1, 'รดน้ำเช้า-เย็นสม่ำเสมอ']
+      [userId, 'BATCH-260919-P3-641', plotIds[2], cropIds[0], '2026-09-19', '2026-10-09', 'growing', 'หว่านเมล็ด 3 ขีดใน 1 แคร่'],
+      [userId, 'BATCH-2026-FL01', plotIds[3], cropIds[4], '2026-03-01', '2026-04-15', 'harvest_ready', 'ฟิลเล่ย์ ไอซ์เบิร์ก แปลงที่ 4 ใบหยักสวย กรอบมาก'],
+      [userId, 'BATCH-260919-P5-188', plotIds[4], cropIds[0], '2026-09-19', '2026-10-09', 'growing', 'เจริญเติบโตสม่ำเสมอ'],
+      [userId, 'BATCH-260919-P6-118', plotIds[5], cropIds[0], '2026-09-19', '2026-10-09', 'growing', 'เจริญเติบโตสม่ำเสมอ']
     ];
 
     for (let i = 0; i < batchesData.length; i++) {
       const b = batchesData[i];
       const [bRes] = await pool.query(
-        `INSERT INTO planting_batches (user_id, batch_code, plot_id, crop_id, start_date, expected_harvest_date, status, auto_water, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO planting_batches (user_id, batch_code, plot_id, crop_id, start_date, expected_harvest_date, status, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         b
       );
       // Update plot with current_batch_id
@@ -99,14 +98,14 @@ async function seed() {
     const activities = [
       [userId, plotIds[0], '2026-02-01', 'soil_prep', 'ผสมดินในกระบะปูน', 'กากยางที่พัฒนาที่ดินเอามาให้ 1 คันรถ 6 ล้อ ผสมกากยาง 2 กระสอบ ขี้ไก่ 1/2 กระสอบต่อ 1 กระบะปูน ผสม 8 กระบะปูนได้ 1 แคร่ (2x6 ม.)', 'กากยาง 16 กระสอบ, ขี้ไก่ 4 กระสอบ', ownerName],
       [userId, plotIds[0], '2026-02-05', 'seeding', 'แช่เมล็ดผักบุ้งน้ำอุ่น', 'แช่เมล็ดผักบุ้ง 3 ขีดในน้ำอุ่น 3 ชั่วโมง แล้วเทน้ำออก ให้พอหมาดๆ ตั้งไว้ค้างคืน', 'เมล็ดผักบุ้ง 3 ขีด', ownerName],
-      [userId, plotIds[0], '2026-02-06', 'seeding', 'หว่านเมล็ดผักบุ้งในแคร่ 1', 'หว่านเมล็ดผักบุ้ง 3 ขีด ใน 1 แคร่ (2x6 ม.) รดน้ำเช้า-เย็น', 'เมล็ดผักบุ้ง', ownerName],
+      [userId, plotIds[0], '2026-02-06', 'seeding', 'หว่านเมล็ดผักบุ้งในแคร่ 1', 'หว่านเมล็ดผักบุ้ง 3 ขีด ใน 1 แคร่ (2x6 ม.)', 'เมล็ดผักบุ้ง', ownerName],
       [userId, plotIds[0], '2026-02-15', 'growing', 'ใส่ปุ๋ยขี้ไก่บำรุงต้น', 'ใส่ปุ๋ยขี้ไก่หมัก 3 ถังปูน โรยทั่วทั้งแคร่', 'ปุ๋ยขี้ไก่หมัก 3 ถังปูน', ownerName],
       [userId, plotIds[0], '2026-02-20', 'harvest', 'เก็บเกี่ยวผักบุ้งจีนส่งจำหน่าย', 'เก็บผักบุ้งได้ 30 กก. ต่อ 1 แคร่ ล้างน้ำสะอาด บรรจุถุงใส 7x24 ถุงละ 4 ขีด ขาย 20 บาท ได้ 75 ถุง', 'ถุงใส 7x24 นิ้ว', ownerName],
 
       [userId, plotIds[1], '2026-02-01', 'seeding', 'เพาะเมล็ดพันธุ์ผักกวางตุ้งในกล่องทิชชู', 'เพาะเมล็ดในกล่องพลาสติกมีฝาปิด วางทิชชู พ่นน้ำพอหมาด โรยเมล็ด ปิดฝา 7 วัน', 'เมล็ดพันธุ์กวางตุ้ง, กระดาษทิชชู', ownerName],
-      [userId, plotIds[1], '2026-02-09', 'nursery', 'ย้ายต้นกล้าลงถาดหลุม 200 หลุม', 'ใช้ถาดหลุม 200 หลุม ใส่พีทมอส หยอดต้นกล้า ให้น้ำ เช้า-เที่ยง-เย็น', 'พีทมอส 1 กระสอบ, ถาดหลุม 200 หลุม', ownerName],
+      [userId, plotIds[1], '2026-02-09', 'nursery', 'ย้ายต้นกล้าลงถาดหลุม 200 หลุม', 'ใช้ถาดหลุม 200 หลุม ใส่พีทมอส หยอดต้นกล้า', 'พีทมอส 1 กระสอบ, ถาดหลุม 200 หลุม', ownerName],
       [userId, plotIds[1], '2026-02-10', 'soil_prep', 'ผสมดินเตรียมแปลงกวางตุ้ง (แปลง 2)', 'ผสมดินเหมือนผักบุ้ง 8 กระบะปูนต่อ 1 แปลง', 'กากยาง 16 กระสอบ, ขี้ไก่ 4 กระสอบ', ownerName],
-      [userId, plotIds[1], '2026-02-20', 'growing', 'ย้ายต้นกล้ากวางตุ้งลงแปลงจริง', 'นำต้นกล้าที่อยู่ในถาดหลุม 11 วัน ปลูกลงในแปลง รดน้ำเช้า-เย็น', 'ต้นกล้ากวางตุ้ง 200 ต้น', ownerName],
+      [userId, plotIds[1], '2026-02-20', 'growing', 'ย้ายต้นกล้ากวางตุ้งลงแปลงจริง', 'นำต้นกล้าที่อยู่ในถาดหลุม 11 วัน ปลูกลงในแปลง', 'ต้นกล้ากวางตุ้ง 200 ต้น', ownerName],
       [userId, plotIds[1], '2026-03-05', 'growing', 'ใส่ปุ๋ยขี้ไก่รอบโคนต้น', 'ใส่ปุ๋ยขี้ไก่ 3 อ่างป่น รอบๆ ต้น พร้อมพรวนดินตื้นๆ', 'ปุ๋ยขี้ไก่ 3 อ่างป่น', ownerName],
       [userId, plotIds[1], '2026-03-15', 'harvest', 'เก็บเกี่ยวผักกวางตุ้งส่งจำหน่าย', 'เก็บผักกวางตุ้งได้ 30 กก. บรรจุถุงใส 9x18 ถุงละ 4 ขีด ขาย 20 บาท ได้ 75 ถุง', 'ถุงใส 9x18 นิ้ว', ownerName]
     ];
@@ -116,22 +115,6 @@ async function seed() {
         `INSERT INTO crop_activities (user_id, plot_id, activity_date, stage, title, details, materials_used, operator_name)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         a
-      );
-    }
-
-    // 6. Insert Water Logs (GAP #1) - คลีน ไม่มีปริมาณลิตร และแหล่งน้ำชัดเจน
-    console.log('💧 Seeding Water Logs...');
-    const waterData = [
-      [userId, plotIds[2], '2026-09-19', 'เช้า', 'น้ำสะอาดมาตรฐาน GAP', 'น้ำสะอาดมาตรฐาน GAP', 'ผ่าน', 1, ownerName, 'รดน้ำรอบเช้าสม่ำเสมอ'],
-      [userId, plotIds[3], '2026-09-19', 'เช้า', 'น้ำสะอาดมาตรฐาน GAP', 'น้ำสะอาดมาตรฐาน GAP', 'ผ่าน', 1, ownerName, 'รดน้ำรอบเช้าสม่ำเสมอ'],
-      [userId, plotIds[4], '2026-09-19', 'เช้า', 'น้ำสะอาดมาตรฐาน GAP', 'น้ำสะอาดมาตรฐาน GAP', 'ผ่าน', 1, ownerName, 'รดน้ำรอบเช้าสม่ำเสมอ'],
-      [userId, plotIds[5], '2026-09-19', 'เช้า', 'น้ำสะอาดมาตรฐาน GAP', 'น้ำสะอาดมาตรฐาน GAP', 'ผ่าน', 1, ownerName, 'รดน้ำรอบเช้าสม่ำเสมอ']
-    ];
-    for (const w of waterData) {
-      await pool.query(
-        `INSERT INTO water_logs (user_id, plot_id, log_date, session, water_source, water_source_type, water_quality, contamination_check, worker_name, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        w
       );
     }
 

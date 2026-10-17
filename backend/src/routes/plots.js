@@ -23,9 +23,6 @@ plotsRouter.get('/', async (req, res) => {
               sc.name AS seed_crop_name,
               COALESCE(b.id, ab.id) AS batch_id,
               COALESCE(b.batch_code, ab.batch_code) AS batch_code,
-              COALESCE(b.initial_count, ab.initial_count) AS initial_count,
-              COALESCE(b.remaining_count, ab.remaining_count) AS remaining_count,
-              COALESCE(b.planting_unit, ab.planting_unit) AS planting_unit,
               COALESCE(b.total_damaged_count, ab.total_damaged_count, 0) AS total_damaged_count,
               COALESCE(b.total_harvested_count, ab.total_harvested_count, 0) AS total_harvested_count,
               COALESCE(b.notes, ab.notes) AS batch_notes,
@@ -108,8 +105,6 @@ plotsRouter.post('/', async (req, res) => {
       dimension,
       area_sqm,
       soil_recipe,
-      water_source,
-      water_source_type,
       notes,
     } = req.body;
 
@@ -131,15 +126,13 @@ plotsRouter.post('/', async (req, res) => {
     dimension = dimension?.trim() || 'แคร่ 2 x 6 เมตร';
     area_sqm = Number(area_sqm) || 12.00;
     soil_recipe = soil_recipe?.trim() || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)';
-    water_source = water_source?.trim() || 'น้ำประปา/บ่อพักน้ำมาตรฐาน GAP';
-    water_source_type = water_source_type?.trim() || 'tap';
 
     const [result] = await pool.query(
       `INSERT INTO plots (
         user_id, plot_number, name, dimension, area_sqm, 
-        soil_recipe, crop_name, status, water_source, water_source_type, 
+        soil_recipe, crop_name, status, 
         notes, created_by, updated_by
-      ) VALUES (?, ?, ?, ?, ?, ?, '-', 'empty', ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, '-', 'empty', ?, ?, ?)`,
       [
         req.user.id,
         plot_number,
@@ -147,8 +140,6 @@ plotsRouter.post('/', async (req, res) => {
         dimension,
         area_sqm,
         soil_recipe,
-        water_source,
-        water_source_type,
         notes || null,
         req.user.email,
         req.user.email,
@@ -363,10 +354,9 @@ plotsRouter.delete('/activities/:activityId', async (req, res) => {
           await pool.query(
             `UPDATE planting_batches
              SET total_damaged_count = GREATEST(0, COALESCE(total_damaged_count, 0) - ?),
-                 remaining_count = COALESCE(remaining_count, 0) + ?,
                  updated_at = NOW()
              WHERE id = ?`,
-            [lossCount, lossCount, pestRows[0].batch_id]
+            [lossCount, pestRows[0].batch_id]
           );
         }
         await pool.query('DELETE FROM pest_logs WHERE id = ? AND user_id = ?', [source_id, req.user.id]);
@@ -480,8 +470,6 @@ plotsRouter.use('/', crudRouter('plots', [
   'area_sqm',
   'planting_date',
   'expected_harvest_date',
-  'water_source',
-  'water_source_type',
   'soil_test_date',
   'soil_test_result',
   'field_safety_status',
@@ -496,5 +484,4 @@ plotsRouter.use('/', crudRouter('plots', [
   'notes',
   'default_worker_name',
   'cycle_number',
-  'auto_water_enabled',
 ]));

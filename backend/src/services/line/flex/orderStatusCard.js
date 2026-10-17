@@ -2,7 +2,7 @@ import { pool } from '../../../db.js';
 import { client } from '../config.js';
 
 // Flex Message: แสดงสถานะออเดอร์ล่าสุดของลูกค้า (Order Status)
-export async function replyOrderStatus(replyToken, userId) {
+export async function replyOrderStatus(replyToken, userId, specificOrderCode = null) {
   try {
     const [customers] = await pool.query('SELECT id FROM customers WHERE line_user_id = ?', [userId]);
 
@@ -13,10 +13,25 @@ export async function replyOrderStatus(replyToken, userId) {
       });
     }
 
-    const [orders] = await pool.query(
-      'SELECT * FROM orders WHERE customer_id = ? ORDER BY id DESC LIMIT 1',
-      [customers[0].id]
-    );
+    let orders = [];
+    if (specificOrderCode) {
+      const cleanCode = String(specificOrderCode).trim();
+      const [matched] = await pool.query(
+        'SELECT * FROM orders WHERE customer_id = ? AND (order_code = ? OR id = ?) ORDER BY id DESC LIMIT 1',
+        [customers[0].id, cleanCode, cleanCode]
+      );
+      if (matched.length > 0) {
+        orders = matched;
+      }
+    }
+
+    if (orders.length === 0) {
+      const [latest] = await pool.query(
+        'SELECT * FROM orders WHERE customer_id = ? ORDER BY id DESC LIMIT 1',
+        [customers[0].id]
+      );
+      orders = latest;
+    }
 
     if (orders.length === 0) {
       return client.replyMessage({
@@ -231,6 +246,59 @@ export async function replyOrderStatus(replyToken, userId) {
         ],
       }
     );
+
+    if (statusLower === 'shipping') {
+      const [storageRows] = await pool.query(
+        'SELECT * FROM storage_logs WHERE order_id = ? ORDER BY id DESC LIMIT 1',
+        [order.id]
+      ).catch(() => [[]]);
+      const storage = storageRows?.[0];
+      const vehicle = storage?.vehicle || 'รถจักรยานยนต์ส่วนตัว (เจ้าของฟาร์มส่งเอง)';
+      const storageCond = storage?.storage_conditions || 'บรรจุในกล่อง/ถุงเก็บความสด ป้องกันแสงแดดและความร้อน';
+      const destination = storage?.shipped_to || order.recipient_address || customers[0]?.address || 'ที่อยู่ตามคำสั่งซื้อ';
+
+      bodyContents.push({
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: '#f0fdf4',
+        cornerRadius: 'md',
+        paddingAll: 'sm',
+        margin: 'md',
+        borderColor: '#bbf7d0',
+        borderWidth: '1px',
+        spacing: 'xs',
+        contents: [
+          {
+            type: 'text',
+            text: '🛡️ ข้อมูลการจัดส่งมาตรฐาน GAP:',
+            weight: 'bold',
+            size: 'xxs',
+            color: '#166534',
+          },
+          {
+            type: 'text',
+            text: `📍 ส่งไปที่: ${destination}`,
+            size: 'xxs',
+            color: '#334155',
+            wrap: true,
+          },
+          {
+            type: 'text',
+            text: `❄️ การคุมคุณภาพ: ${storageCond}`,
+            size: 'xxs',
+            color: '#334155',
+            wrap: true,
+          },
+          {
+            type: 'text',
+            text: `🛵 ยานพาหนะ: ${vehicle}`,
+            size: 'xxs',
+            color: '#334155',
+            wrap: true,
+          },
+        ],
+      });
+    }
 
     if (order.tracking_number) {
       bodyContents.push({

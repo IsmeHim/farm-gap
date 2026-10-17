@@ -76,12 +76,9 @@ batchesRouter.post('/', async (req, res) => {
     const {
       plot_id,
       crop_id,
-      initial_count = null,
-      planting_unit = 'ต้น',
       start_date = new Date().toISOString().split('T')[0],
       soil_prep_date = null,
       seed_prep_date = null,
-      auto_water = true,
       notes = '',
       soil_recipe = ''
     } = req.body;
@@ -89,9 +86,6 @@ batchesRouter.post('/', async (req, res) => {
     if (!plot_id || !crop_id) {
       return res.status(400).json({ error: 'plot_id และ crop_id จำเป็นต้องระบุ' });
     }
-
-    const initCount = initial_count !== null && initial_count !== '' && !isNaN(Number(initial_count)) ? Number(initial_count) : null;
-    const unit = planting_unit?.trim() || 'ต้น';
 
     // 1. ตรวจสอบแปลงปลูก
     const [plots] = await pool.query('SELECT * FROM plots WHERE id = ? AND user_id = ?', [plot_id, req.user.id]);
@@ -144,11 +138,11 @@ batchesRouter.post('/', async (req, res) => {
     const randomSuffix = Math.floor(100 + Math.random() * 900);
     const batch_code = `BATCH-${datePart}-P${plot.plot_number || plot.id}-${randomSuffix}`;
 
-    // 3. บันทึกลง planting_batches พร้อม initial_count, remaining_count และ soil_recipe ของรอบนี้
+    // 3. บันทึกลง planting_batches พร้อม soil_recipe ของรอบนี้
     const [ins] = await pool.query(
-      `INSERT INTO planting_batches (user_id, batch_code, plot_id, crop_id, initial_count, remaining_count, planting_unit, total_damaged_count, total_harvested_count, start_date, expected_harvest_date, status, auto_water, water_schedule, notes, soil_recipe, soil_prep_date, seed_prep_date)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, 'growing', ?, 'เช้า-เย็น (น้ำสะอาดมาตรฐาน GAP)', ?, ?, ?, ?)`,
-      [req.user.id, batch_code, plot_id, crop_id, initCount, initCount, unit, start_date, expected_harvest_date, auto_water ? 1 : 0, notes, effectiveSoilRecipe, effectiveSoilPrepDate, effectiveSeedPrepDate]
+      `INSERT INTO planting_batches (user_id, batch_code, plot_id, crop_id, total_damaged_count, total_harvested_count, start_date, expected_harvest_date, status, notes, soil_recipe, soil_prep_date, seed_prep_date)
+       VALUES (?, ?, ?, ?, 0, 0, ?, ?, 'growing', ?, ?, ?, ?)`,
+      [req.user.id, batch_code, plot_id, crop_id, start_date, expected_harvest_date, notes, effectiveSoilRecipe, effectiveSoilPrepDate, effectiveSeedPrepDate]
     );
     const batchId = ins.insertId;
 
@@ -177,8 +171,23 @@ batchesRouter.post('/', async (req, res) => {
       [crop.name, start_date, expected_harvest_date, batchId, effectiveSoilRecipe, effectiveSoilPrepDate, effectiveSeedPrepDate, crop_id, plot_id, req.user.id]
     );
 
-    // 6. บันทึกลง crop_activities ให้สอดคล้องกับ Timeline ต้นน้ำ GAP
-    const countInfo = initCount ? ` จำนวน ${initCount.toLocaleString()} ${unit}` : '';
+    // 6. บันทึกขั้นตอนที่ 1: เตรียมดิน/แคร่ปลูก (GAP #2 Soil Management)
+    await pool.query(
+      `INSERT INTO crop_activities (user_id, plot_id, batch_id, activity_date, stage, title, details, materials_used, operator_name)
+       VALUES (?, ?, ?, ?, 'soil_prep', ?, ?, ?, ?)`,
+      [
+        req.user.id,
+        plot_id,
+        batchId,
+        effectiveSoilPrepDate,
+        `เตรียมดินและแคร่ปลูก (${batch_code})`,
+        `ผสมดินและปรับปรุงแปลงปลูกตามสูตรมาตรฐานฟาร์ม เตรียมแปลงสำหรับการปลูก ${crop.name}`,
+        effectiveSoilRecipe || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบ)',
+        req.user.display_name || 'เจ้าของฟาร์ม'
+      ]
+    );
+
+    // 7. บันทึกขั้นตอนการย้ายกล้าลงแปลง (GAP #3 Nursery & Planting)
     await pool.query(
       `INSERT INTO crop_activities (user_id, plot_id, batch_id, activity_date, stage, title, details, materials_used, operator_name)
        VALUES (?, ?, ?, ?, 'planting', ?, ?, ?, ?)`,
@@ -187,8 +196,8 @@ batchesRouter.post('/', async (req, res) => {
         plot_id,
         batchId,
         start_date,
-        `ย้ายกล้าลงแปลง ${crop.name}${countInfo} (${batch_code})`,
-        notes || `ย้ายต้นกล้าลงแปลงปลูก${countInfo} คาดเก็บเกี่ยว ${expected_harvest_date}`,
+        `ย้ายกล้าลงแปลง ${crop.name} (${batch_code})`,
+        notes || `ย้ายต้นกล้าลงแปลงปลูก คาดเก็บเกี่ยว ${expected_harvest_date}`,
         effectiveSoilRecipe ? `สูตรดิน: ${effectiveSoilRecipe}` : null,
         req.user.display_name || 'เจ้าของฟาร์ม'
       ]
@@ -198,7 +207,7 @@ batchesRouter.post('/', async (req, res) => {
     res.status(201).json({
       success: true,
       batch: created[0],
-      message: `เริ่มรอบการปลูก ${crop.name}${countInfo} ใน ${plot.name} เรียบร้อยแล้ว!`
+      message: `เริ่มรอบการปลูก ${crop.name} ใน ${plot.name} เรียบร้อยแล้ว!`
     });
   } catch (err) {
     console.error('Failed to start planting batch:', err);
@@ -213,13 +222,10 @@ batchesRouter.put('/:id', async (req, res) => {
       crop_id,
       start_date,
       notes,
-      auto_water,
       expected_harvest_date,
       soil_recipe,
       soil_prep_date,
       seed_prep_date,
-      initial_count,
-      planting_unit,
     } = req.body;
 
     // 1. ตรวจสอบว่ามีรอบการปลูกนี้และเป็นของผู้ใช้คนนี้หรือไม่
@@ -248,7 +254,6 @@ batchesRouter.put('/:id', async (req, res) => {
       growthDays = Number(crops[0].growth_days) || 30;
     }
 
-    const effectiveAutoWater = auto_water !== undefined ? (auto_water ? 1 : 0) : currentBatch.auto_water;
     const effectiveNotes = notes !== undefined ? notes : currentBatch.notes;
     const effectiveSoilRecipe = soil_recipe !== undefined ? soil_recipe : currentBatch.soil_recipe;
     const effectiveSoilPrepDate = soil_prep_date !== undefined ? (soil_prep_date || null) : currentBatch.soil_prep_date;
@@ -266,55 +271,26 @@ batchesRouter.put('/:id', async (req, res) => {
         : currentBatch.expected_harvest_date;
     }
 
-    // คำนวณจำนวนต้นใหม่หากมีการส่งมา
-    let effectiveInitCount = currentBatch.initial_count;
-    let effectiveRemainingCount = currentBatch.remaining_count;
-    let effectivePlantingUnit = currentBatch.planting_unit || 'ต้น';
-
-    if (initial_count !== undefined) {
-      if (initial_count !== null && initial_count !== '' && !isNaN(Number(initial_count))) {
-        effectiveInitCount = Number(initial_count);
-        effectiveRemainingCount = Math.max(
-          0,
-          effectiveInitCount - (currentBatch.total_damaged_count || 0) - (currentBatch.total_harvested_count || 0)
-        );
-      } else {
-        effectiveInitCount = null;
-        effectiveRemainingCount = null;
-      }
-    }
-    if (planting_unit !== undefined) {
-      effectivePlantingUnit = planting_unit?.trim() || 'ต้น';
-    }
-
     // 4. อัปเดต planting_batches
     await pool.query(
       `UPDATE planting_batches 
        SET crop_id = ?,
            start_date = ?,
            expected_harvest_date = ?,
-           auto_water = ?,
            notes = ?,
            soil_recipe = ?,
            soil_prep_date = ?,
            seed_prep_date = ?,
-           initial_count = ?,
-           remaining_count = ?,
-           planting_unit = ?,
            updated_at = NOW()
        WHERE id = ? AND user_id = ?`,
       [
         effectiveCropId,
         effectiveStartDate,
         effectiveExpectedDate,
-        effectiveAutoWater,
         effectiveNotes,
         effectiveSoilRecipe,
         effectiveSoilPrepDate,
         effectiveSeedPrepDate,
-        effectiveInitCount,
-        effectiveRemainingCount,
-        effectivePlantingUnit,
         req.params.id,
         req.user.id
       ]

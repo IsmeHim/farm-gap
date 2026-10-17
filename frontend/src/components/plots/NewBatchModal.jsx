@@ -277,17 +277,6 @@ export default function NewBatchModal({
                   />
                 </div>
 
-                {/* วัสดุอุปกรณ์ที่ใช้เพาะ */}
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">วัสดุ / ภาชนะที่ใช้เพาะเมล็ด</label>
-                  <input
-                    type="text"
-                    value={form.materials_used || 'กล่องพลาสติก, กระดาษทิชชู, ฟ็อกกี้พ่นน้ำ, ถาดเพาะ 200 หลุม'}
-                    onChange={(e) => setForm({ ...form, materials_used: e.target.value })}
-                    placeholder="เช่น กล่องพลาสติก, กระดาษทิชชู, ฟ็อกกี้พ่นน้ำ, ถาดเพาะ 200 หลุม"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-teal-300 bg-white text-slate-900 font-medium focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm"
-                  />
-                </div>
 
                 {/* รายละเอียด / วิธีการเพาะ */}
                 <div className="md:col-span-2">
@@ -365,41 +354,10 @@ export default function NewBatchModal({
                   </select>
                 </div>
 
-                {/* จำนวนต้นที่ลงปลูก */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                    จำนวนที่ลงปลูก (ทางเลือก)
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="เช่น 200"
-                    value={form.initial_count}
-                    onChange={(e) => setForm({ ...form, initial_count: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"
-                  />
-                  <span className="text-[10px] text-slate-400 block mt-1">
-                    * เช่น 200 ต้น/หลุม (ตัดยอดความเสียหายอัตโนมัติ)
-                  </span>
-                </div>
 
-                {/* หน่วยนับ */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">หน่วยนับ</label>
-                  <select
-                    value={form.planting_unit}
-                    onChange={(e) => setForm({ ...form, planting_unit: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"
-                  >
-                    <option value="ต้น">ต้น</option>
-                    <option value="หลุม">หลุม</option>
-                    <option value="กรัม">กรัม</option>
-                    <option value="ขีด">ขีด</option>
-                  </select>
-                </div>
 
                 {/* วันที่เริ่มปลูกลงแปลง */}
-                <div>
+                <div className="md:col-span-2">
                   <label className="block text-xs font-bold text-slate-800 mb-1.5">วันที่เริ่มลงแปลงปลูก</label>
                   <input
                     type="date"
@@ -408,22 +366,6 @@ export default function NewBatchModal({
                     onChange={(e) => setForm({ ...form, start_date: e.target.value })}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"
                   />
-                </div>
-
-                {/* ระบบรดน้ำประจำวัน */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">ระบบรดน้ำประจำวัน</label>
-                  <div className="h-10.5 px-3.5 flex items-center rounded-xl bg-slate-50 border border-slate-200">
-                    <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
-                      <input
-                        type="checkbox"
-                        checked={form.auto_water}
-                        onChange={(e) => setForm({ ...form, auto_water: e.target.checked })}
-                        className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-                      />
-                      <span>เปิดบันทึกรดน้ำอัตโนมัติ</span>
-                    </label>
-                  </div>
                 </div>
 
                 {/* วันที่เพาะเมล็ด (ถ้ามี) */}

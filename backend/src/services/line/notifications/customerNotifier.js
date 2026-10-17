@@ -101,9 +101,9 @@ export async function notifyCustomerOrderStatus(orderId, newStatus, dispatchDeta
         {
           type: 'button',
           action: {
-            type: 'uri',
+            type: 'message',
             label: '📦 ดูประวัติคำสั่งซื้อ',
-            uri: historyUri,
+            text: 'ดูประวัติ',
           },
           style: 'primary',
           color: '#15803d',
@@ -169,9 +169,10 @@ export async function notifyCustomerOrderStatus(orderId, newStatus, dispatchDeta
         {
           type: 'button',
           action: {
-            type: 'uri',
+            type: 'postback',
             label: '📦 ตรวจสอบสถานะการจัดส่ง',
-            uri: historyUri,
+            data: `action=check_order_status&order_code=${orderCode}`,
+            displayText: '📦 ตรวจสอบสถานะการจัดส่ง',
           },
           style: 'primary',
           color: '#0284c7',
@@ -190,9 +191,9 @@ export async function notifyCustomerOrderStatus(orderId, newStatus, dispatchDeta
         {
           type: 'button',
           action: {
-            type: 'uri',
+            type: 'message',
             label: '🛒 สั่งซื้อผักสดใหม่อีกครั้ง',
-            uri: orderStoreUri,
+            text: 'เมนูผัก',
           },
           style: 'primary',
           color: '#15803d',
@@ -201,9 +202,9 @@ export async function notifyCustomerOrderStatus(orderId, newStatus, dispatchDeta
         {
           type: 'button',
           action: {
-            type: 'uri',
+            type: 'message',
             label: '📦 ดูประวัติคำสั่งซื้อ',
-            uri: historyUri,
+            text: 'ดูประวัติ',
           },
           style: 'secondary',
           height: 'sm',
@@ -221,9 +222,9 @@ export async function notifyCustomerOrderStatus(orderId, newStatus, dispatchDeta
         {
           type: 'button',
           action: {
-            type: 'uri',
-            label: '🛒 หน้าร้านสั่งซื้อผักสด',
-            uri: orderStoreUri,
+            type: 'message',
+            label: '🛒 สั่งซื้อผักสด',
+            text: 'เมนูผัก',
           },
           style: 'secondary',
           height: 'sm',

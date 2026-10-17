@@ -191,7 +191,6 @@ export default function CropTimelineDrawer({
                 const isChemical = act.source_type === 'chemical';
                 const isPest = act.source_type === 'pest';
                 const isCare = act.stage === 'maintenance' && !isChemical && !isPest;
-                const isWatering = act.stage === 'watering';
                 const isHarvest = act.stage === 'harvest';
 
                 const isItemExpanded = viewMode === 'expanded' || Boolean(expandedIds[act.id]);
@@ -210,7 +209,6 @@ export default function CropTimelineDrawer({
                       isChemical ? 'bg-indigo-500 border-indigo-200 text-white' :
                       isPest ? 'bg-rose-500 border-rose-200 text-white' :
                       isCare ? 'bg-lime-500 border-lime-200 text-white' :
-                      isWatering ? 'bg-cyan-500 border-cyan-200 text-white' :
                       isHarvest ? 'bg-amber-500 border-amber-200 text-white' :
                       'bg-slate-500 border-slate-200 text-white'
                     }`}>
@@ -242,7 +240,6 @@ export default function CropTimelineDrawer({
                               isChemical ? 'bg-indigo-50 text-indigo-900 border-indigo-200' :
                               isPest ? 'bg-rose-50 text-rose-900 border-rose-200' :
                               isCare ? 'bg-lime-50 text-lime-900 border-lime-200' :
-                              isWatering ? 'bg-cyan-50 text-cyan-900 border-cyan-200' :
                               isHarvest ? 'bg-amber-50 text-amber-900 border-amber-200' :
                               'bg-slate-50 text-slate-800 border-slate-200'
                             }`}>
@@ -252,7 +249,6 @@ export default function CropTimelineDrawer({
                                isChemical ? '🧪 ปุ๋ย/ชีวภัณฑ์ (GAP #3)' :
                                isPest ? '🐛 ศัตรูพืช/โรค (GAP #4)' :
                                isCare ? '🌿 ดูแลแปลง/พ่นยา' : 
-                               isWatering ? '💧 ให้น้ำ' : 
                                isHarvest ? '🧺 เก็บเกี่ยว' : '📝 บันทึก'}
                             </span>
                             <span className="text-[10px] text-slate-400 ml-auto sm:ml-0">

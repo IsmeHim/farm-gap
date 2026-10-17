@@ -254,6 +254,18 @@ export async function handleEvent(event) {
     const params = new URLSearchParams(postbackData);
     const action = params.get('action');
 
+    // 3.0 ตรวจสอบสถานะการจัดส่ง / ตรวจสอบสถานะออเดอร์ใน LINE
+    if (action === 'check_order_status' || action === 'check_status') {
+      const orderCode = params.get('order_code') || params.get('order_id');
+      return replyOrderStatus(event.replyToken, userId, orderCode);
+    }
+    if (action === 'view_menu' || action === 'menu') {
+      return replyVegMenu(event.replyToken, userId);
+    }
+    if (action === 'view_history' || action === 'history') {
+      return replyOrderHistory(event.replyToken, userId);
+    }
+
     // 3.1 แตะเลือกผักจากเมนู -> แสดงปุ่ม Quick Reply ให้เลือกจำนวนเพื่อใส่ตะกร้า
     if (action === 'select_product') {
       const productId = params.get('product_id');
@@ -1133,17 +1145,24 @@ export async function handleEvent(event) {
       return replyVegMenu(replyToken, userId);
     }
     if (
-      ['เช็คสถานะ', 'ออเดอร์', 'สถานะ', 'สถานะออเดอร์', 'เช็คสถานะออเดอร์', 'ติดตามพัสดุ', 'เช็คพัสดุ', 'เช็คออเดอร์', 'ดูสถานะ', 'ตรวจสอบสถานะ'].includes(text) ||
+      ['เช็คสถานะ', 'ออเดอร์', 'สถานะ', 'สถานะออเดอร์', 'เช็คสถานะออเดอร์', 'ติดตามพัสดุ', 'เช็คพัสดุ', 'เช็คออเดอร์', 'ดูสถานะ', 'ตรวจสอบสถานะ', 'ตรวจสอบสถานะการจัดส่ง'].includes(text) ||
       text.startsWith('เช็คสถานะ') ||
       text.startsWith('ดูสถานะ') ||
+      text.startsWith('ตรวจสอบสถานะ') ||
       text === 'status' ||
       lowerTrimText.includes('เช็คสถานะ') ||
+      lowerTrimText.includes('ตรวจสอบสถานะ') ||
       lowerTrimText.includes('ตามของ') ||
       lowerTrimText.includes('ส่งถึงไหน') ||
       lowerTrimText.includes('ของส่งยัง') ||
       lowerTrimText.includes('พัสดุถึงไหน')
     ) {
-      return replyOrderStatus(replyToken, userId);
+      let specificOrderCode = null;
+      const orderCodeMatch = text.match(/ORD-[\w-]+/i);
+      if (orderCodeMatch) {
+        specificOrderCode = orderCodeMatch[0];
+      }
+      return replyOrderStatus(replyToken, userId, specificOrderCode);
     }
 
     if (

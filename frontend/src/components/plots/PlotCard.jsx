@@ -1,7 +1,6 @@
 import React from 'react';
 import { format } from 'date-fns';
 import {
-  Droplets,
   Trash2,
   Edit3,
   Sprout,
@@ -17,7 +16,6 @@ import { getBatchProgressInfo, getDaysPlanted, parseDateMidnight } from '../../u
 export default function PlotCard({
   plot,
   currentBatch,
-  onToggleAutoWater,
   onDeletePlot,
   deletingPlotId,
   onOpenSoilModal,
@@ -61,7 +59,7 @@ export default function PlotCard({
       }`}
     >
       <div>
-        {/* 1. ส่วน Header แปลง & สถานะ & ระบบรดน้ำ (Top Plot Header Bar) */}
+        {/* 1. ส่วน Header แปลง & สถานะ (Top Plot Header Bar) */}
         <div className={`p-3.5 pb-2.5 flex items-center justify-between border-b transition-colors ${
           isHarvestReady
             ? 'border-amber-100 bg-amber-50/60'
@@ -88,21 +86,6 @@ export default function PlotCard({
           </div>
 
           <div className="flex items-center gap-1.5">
-            {/* ปุ่มรดน้ำออโต้ */}
-            <button
-              type="button"
-              onClick={() => onToggleAutoWater(p.id)}
-              title={p.auto_water_enabled !== 0 ? 'คลิกเพื่องดรดน้ำอัตโนมัติ' : 'คลิกเพื่อเปิดโหมดรดน้ำอัตโนมัติ'}
-              className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10.5px] font-bold border transition cursor-pointer shadow-2xs ${
-                p.auto_water_enabled !== 0
-                  ? 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'
-                  : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200'
-              }`}
-            >
-              <Droplets className="w-3 h-3 text-current" />
-              <span>{p.auto_water_enabled !== 0 ? 'ออโต้' : 'เว้นน้ำ'}</span>
-            </button>
-
             {/* สถานะแปลง Badge */}
             <span
               className={`inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border shadow-2xs ${

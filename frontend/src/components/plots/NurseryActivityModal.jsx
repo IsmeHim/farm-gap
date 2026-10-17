@@ -6,6 +6,15 @@ import {
   Calendar,
 } from 'lucide-react';
 
+const STAGE_LABELS = {
+  soil_prep: 'เตรียมดิน / แคร่ปลูก',
+  seeding: 'เพาะเมล็ด / แช่น้ำอุ่น',
+  nursery: 'อนุบาลต้นกล้า / ถาดหลุม',
+  transplant: 'ย้ายกล้าลงแปลง',
+  maintenance: 'ดูแลรักษา / พ่นชีวภัณฑ์',
+  prep: 'เตรียมแปลงปลูก',
+};
+
 export default function NurseryActivityModal({
   isOpen,
   onClose,
@@ -29,7 +38,7 @@ export default function NurseryActivityModal({
               {nurseryForm.activity_id ? 'แก้ไขกิจกรรม' : 'บันทึกกิจกรรมแปลง/ต้นกล้า'}
             </h3>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
-              {nurseryForm.plot_name} • มาตรฐาน GAP ข้อ 3 (การจัดการเมล็ดพันธุ์และแปลงปลูก)
+              {nurseryForm.plot_name} • มาตรฐาน GAP ข้อ 2 และ 3 (การจัดการดินและแปลงปลูก)
             </p>
           </div>
           <button
@@ -55,18 +64,33 @@ export default function NurseryActivityModal({
                   type="button"
                   onClick={() => {
                     const matchedCrop = crops.find(c => String(c.id) === String(nurseryForm.seed_crop_id));
+                    const cropName = matchedCrop ? matchedCrop.name : '';
+                    setNurseryForm(prev => ({
+                      ...prev,
+                      stage: 'soil_prep',
+                      title: `เตรียมดินและแคร่ปลูก${cropName ? ` (${cropName})` : ''}`,
+                      details: 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ) ปรับหน้าดินสม่ำเสมอ รดน้ำบ่มดินก่อนปลูก'
+                    }));
+                  }}
+                  className="text-xs px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold border border-amber-200/80 transition cursor-pointer active:scale-95"
+                >
+                  🚜 1. เตรียมดิน/แคร่
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const matchedCrop = crops.find(c => String(c.id) === String(nurseryForm.seed_crop_id));
                     const cropName = matchedCrop ? matchedCrop.name : 'ผัก';
                     setNurseryForm(prev => ({
                       ...prev,
                       stage: 'seeding',
-                      title: `เพาะเมล็ดพันธุ์${cropName}ในกล่องพลาสติก`,
-                      details: 'วางกระดาษทิชชูในกล่องพลาสติก พ่นน้ำเดินให้ทั่วกระดาษทิชชูหมาดๆ โรยเมล็ดบางๆ แล้วปิดทับด้วยกระดาษทิชชู พ่นน้ำให้หมาดๆ เสร็จแล้วปิดฝากล่องพลาสติกให้มิดชิด',
-                      materials_used: 'กล่องพลาสติกมีฝาปิด, กระดาษทิชชู, ฟ็อกกี้พ่นน้ำ'
+                      title: `เพาะเมล็ดพันธุ์${cropName}`,
+                      details: 'วางกระดาษทิชชูในกล่อง พ่นน้ำให้ทั่วกระดาษทิชชูหมาดๆ โรยเมล็ดบางๆ แล้วปิดทับด้วยกระดาษทิชชู พ่นน้ำให้หมาดๆ เสร็จแล้วปิดฝาให้มิดชิด'
                     }));
                   }}
                   className="text-xs px-2.5 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold border border-teal-200/80 transition cursor-pointer active:scale-95"
                 >
-                  🌱 1. เพาะเมล็ด (กล่อง/ทิชชู)
+                  🌱 2. เพาะเมล็ด/แช่น้ำอุ่น
                 </button>
                 <button
                   type="button"
@@ -75,28 +99,12 @@ export default function NurseryActivityModal({
                       ...prev,
                       stage: 'nursery',
                       title: 'ย้ายต้นกล้าลงถาดหลุม 200 หลุม',
-                      details: 'ย้ายต้นกล้าลงถาดหลุม 200 หลุม ใส่พีทมอส รดน้ำ เช้า-เที่ยง-เย็น อนุบาลประมาณ 14–15 วัน',
-                      materials_used: 'ถาดหลุม 200 หลุม, พีทมอส, บัวรดน้ำฝอย'
+                      details: 'ย้ายต้นกล้าลงถาดหลุม 200 หลุม ใส่พีทมอส อนุบาลประมาณ 14–15 วัน'
                     }));
                   }}
                   className="text-xs px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold border border-emerald-200/80 transition cursor-pointer active:scale-95"
                 >
-                  🪴 2. ย้ายลงถาดหลุม 200 หลุม
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNurseryForm(prev => ({
-                      ...prev,
-                      stage: 'nursery',
-                      title: 'รดน้ำและอนุบาลต้นกล้า',
-                      details: 'รดน้ำ เช้า-เที่ยง-เย็น ตรวจสอบความชื้นให้เหมาะสม รับแสงแดดรำไร',
-                      materials_used: 'น้ำสะอาดมาตรฐาน GAP'
-                    }));
-                  }}
-                  className="text-xs px-2.5 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold border border-sky-200/80 transition cursor-pointer active:scale-95"
-                >
-                  💧 3. รดน้ำ/อนุบาลต้นกล้า
+                  🪴 3. ย้ายลงถาดหลุม 200 หลุม
                 </button>
                 <button
                   type="button"
@@ -105,8 +113,7 @@ export default function NurseryActivityModal({
                       ...prev,
                       stage: 'maintenance',
                       title: 'ฉีดพ่นน้ำหมักชีวภาพ / กำจัดศัตรูพืช',
-                      details: 'ฉีดพ่นน้ำหมักชีวภาพ/บิวเวอร์เรีย ป้องกันหนอนและแมลงศัตรูพืช ตรวจสภาพแปลง ช่วงแดดร่ม',
-                      materials_used: 'น้ำหมักชีวภาพสะเดา, สารชีวภัณฑ์, ถังพ่นยา'
+                      details: 'ฉีดพ่นน้ำหมักชีวภาพ/บิวเวอร์เรีย ป้องกันหนอนและแมลงศัตรูพืช ตรวจสภาพแปลง ช่วงแดดร่ม'
                     }));
                   }}
                   className="text-xs px-2.5 py-1.5 rounded-lg bg-lime-50 hover:bg-lime-100 text-lime-800 font-bold border border-lime-200/80 transition cursor-pointer active:scale-95"
@@ -146,7 +153,7 @@ export default function NurseryActivityModal({
               </select>
             </div>
 
-            {/* วันที่ และ ระยะกิจกรรม */}
+            {/* วันที่, ผู้ปฏิบัติงาน และ ระยะกิจกรรม */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1.5">
@@ -165,36 +172,42 @@ export default function NurseryActivityModal({
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                  ผู้ปฏิบัติงาน
+                </label>
+                <input
+                  type="text"
+                  value={nurseryForm.operator_name}
+                  onChange={(e) => setNurseryForm({ ...nurseryForm, operator_name: e.target.value })}
+                  placeholder="เช่น เจ้าของฟาร์ม"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-medium focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-slate-800 mb-1.5">
                   ระยะ / ประเภทกิจกรรม
                 </label>
                 <select
                   value={nurseryForm.stage}
-                  onChange={(e) => setNurseryForm({ ...nurseryForm, stage: e.target.value })}
+                  onChange={(e) => {
+                    const stg = e.target.value;
+                    const cropObj = crops.find(c => String(c.id) === String(nurseryForm.seed_crop_id));
+                    const cropName = cropObj ? cropObj.name : '';
+                    setNurseryForm(prev => ({
+                      ...prev,
+                      stage: stg,
+                      title: `${STAGE_LABELS[stg] || 'บันทึกกิจกรรม'}${cropName ? ` (${cropName})` : ''}`
+                    }));
+                  }}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm cursor-pointer"
                 >
-                  <option value="seeding">🌱 เพาะเมล็ด / แช่น้ำอุ่น</option>
-                  <option value="nursery">🪴 อนุบาลต้นกล้า / ถาดหลุม</option>
-                  <option value="transplant">🚜 ย้ายกล้าลงแปลง</option>
-                  <option value="maintenance">🌿 ดูแลรักษา / พ่นชีวภัณฑ์ / กำจัดวัชพืช</option>
-                  <option value="watering">💧 ให้น้ำตามรอบ</option>
+                  <option value="soil_prep">🚜 1. เตรียมดิน / แคร่ปลูก (สูตรดินฟาร์ม)</option>
+                  <option value="seeding">🌱 2. เพาะเมล็ด / แช่น้ำอุ่น</option>
+                  <option value="nursery">🪴 3. อนุบาลต้นกล้า / ถาดหลุม</option>
+                  <option value="transplant">🚜 4. ย้ายกล้าลงแปลง</option>
+                  <option value="maintenance">🌿 5. ดูแลรักษา / พ่นชีวภัณฑ์ / กำจัดวัชพืช</option>
                   <option value="prep">📝 บันทึกเตรียมการทั่วไป</option>
                 </select>
               </div>
-            </div>
-
-            {/* หัวข้อกิจกรรม */}
-            <div>
-              <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                ชื่อกิจกรรม / การปฏิบัติ <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={nurseryForm.title}
-                onChange={(e) => setNurseryForm({ ...nurseryForm, title: e.target.value })}
-                placeholder="เช่น เพาะเมล็ดพันธุ์ผักกวางตุ้ง หรือ ย้ายต้นกล้าลงถาดหลุม 200 หลุม"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm"
-              />
             </div>
 
             {/* รายละเอียดขั้นตอน */}
@@ -214,34 +227,6 @@ export default function NurseryActivityModal({
                 placeholder="วิธีเพาะ/เทคนิคการปลูกจากคลังผักจะแสดงที่นี่อัตโนมัติ (แก้ไขได้)"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-medium placeholder:text-slate-400 focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-xs sm:text-sm leading-relaxed"
               />
-            </div>
-
-            {/* วัสดุอุปกรณ์ และ ผู้ปฏิบัติงาน */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                  วัสดุ / อุปกรณ์ที่ใช้
-                </label>
-                <input
-                  type="text"
-                  value={nurseryForm.materials_used}
-                  onChange={(e) => setNurseryForm({ ...nurseryForm, materials_used: e.target.value })}
-                  placeholder="เช่น พีทมอส, ถาด 200 หลุม, ทิชชู"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-medium focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                  ผู้ปฏิบัติงาน
-                </label>
-                <input
-                  type="text"
-                  value={nurseryForm.operator_name}
-                  onChange={(e) => setNurseryForm({ ...nurseryForm, operator_name: e.target.value })}
-                  placeholder="เช่น เจ้าของฟาร์ม"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-medium focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm"
-                />
-              </div>
             </div>
           </div>
 

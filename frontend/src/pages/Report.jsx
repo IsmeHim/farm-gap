@@ -124,7 +124,6 @@ export default function Report() {
     window.print();
   };
 
-  const [showDetailedWaterLogs, setShowDetailedWaterLogs] = useState(false);
   const [selectedCycleScope, setSelectedCycleScope] = useState('all');
 
   // Discover available cycle numbers across plots and cycle records
@@ -244,59 +243,136 @@ export default function Report() {
   }, [reportData, selectedCycleScope, plotIdsInCycle]);
 
   // Group and merge activities, chemical logs, pest logs, and harvest logs into unified chronological timelines per plot
+  // Group and merge activities, chemical logs, pest logs, and harvest logs into unified chronological timelines per plot & planting cycle
   const groupedActivities = useMemo(() => {
     if (!reportData) return [];
 
-    const plotMap = new Map();
+    const STAGE_ORDER = {
+      soil_prep: 1,
+      seeding: 2,
+      nursery: 3,
+      planting: 4,
+      transplant: 4,
+      growing: 5,
+      maintenance: 5,
+      fertilizing: 6,
+      harvest: 7,
+    };
 
-    // Initialize plots from displayPlots
+    // 1. Prepare batch groups per plot
+    const relevantBatches = (reportData?.batches || []).filter(b => plotIdsInCycle.has(b.plot_id));
+    
+    const groups = [];
+    const batchGroupMap = new Map(); // batch_id -> group
+    const plotGroupsMap = new Map(); // plot_id -> array of groups for this plot
+
     displayPlots.forEach(p => {
-      plotMap.set(p.id, {
-        plot_id: p.id,
-        plot_name: p.name,
-        plot_number: p.plot_number || p.id,
-        crop_name: p.crop_name,
-        dimension: p.dimension || 'แคร่ 2 x 6 เมตร',
-        soil_recipe: p.effective_soil_recipe || p.soil_recipe,
-        water_source: p.water_source || 'น้ำสะอาดมาตรฐาน GAP',
-        items: [],
-      });
+      // Find batches for this plot sorted chronologically
+      const plotBatches = relevantBatches
+        .filter(b => b.plot_id === p.id)
+        .sort((a, b) => new Date(a.start_date || a.created_at) - new Date(b.start_date || b.created_at) || a.id - b.id);
+
+      const plotGroupsList = [];
+
+      if (plotBatches.length > 0) {
+        plotBatches.forEach((b, idx) => {
+          const group = {
+            groupKey: `batch-${b.id}`,
+            plot_id: p.id,
+            plot_name: p.name,
+            plot_number: p.plot_number || p.id,
+            batch_id: b.id,
+            batch_code: b.batch_code,
+            cycle_sequence: idx + 1,
+            crop_name: b.crop_name || p.crop_name,
+            dimension: b.dimension || p.dimension || 'แคร่ 2 x 6 เมตร',
+            soil_recipe: b.soil_recipe || p.effective_soil_recipe || p.soil_recipe,
+            soil_prep_date: b.soil_prep_date || b.start_date,
+            start_date: b.start_date,
+            expected_harvest_date: b.expected_harvest_date,
+            actual_harvest_date: b.actual_harvest_date,
+            items: [],
+          };
+          groups.push(group);
+          batchGroupMap.set(b.id, group);
+          plotGroupsList.push(group);
+        });
+      } else {
+        // Plot without batches (empty or unassigned)
+        const group = {
+          groupKey: `plot-${p.id}`,
+          plot_id: p.id,
+          plot_name: p.name,
+          plot_number: p.plot_number || p.id,
+          batch_id: null,
+          batch_code: null,
+          cycle_sequence: null,
+          crop_name: p.crop_name,
+          dimension: p.dimension || 'แคร่ 2 x 6 เมตร',
+          soil_recipe: p.effective_soil_recipe || p.soil_recipe,
+          soil_prep_date: p.soil_prep_date || p.planting_date,
+          start_date: p.planting_date,
+          items: [],
+        };
+        groups.push(group);
+        plotGroupsList.push(group);
+      }
+      plotGroupsMap.set(p.id, plotGroupsList);
     });
+
+    // Helper to find which group an item belongs to
+    const findGroup = (plotId, batchId, itemDate) => {
+      if (batchId && batchGroupMap.has(batchId)) {
+        return batchGroupMap.get(batchId);
+      }
+      const plotList = plotGroupsMap.get(plotId);
+      if (!plotList || plotList.length === 0) return null;
+      if (plotList.length === 1) return plotList[0];
+
+      // Multiple batch groups on the same plot: match by date window
+      if (itemDate) {
+        const itemTime = new Date(itemDate).getTime();
+        for (let i = 0; i < plotList.length; i++) {
+          const cur = plotList[i];
+          const next = plotList[i + 1];
+          const curStartTime = new Date(cur.start_date || cur.soil_prep_date).getTime();
+          const nextStartTime = next ? new Date(next.start_date || next.soil_prep_date).getTime() : Infinity;
+
+          if (i === 0 && itemTime < curStartTime) {
+            return cur; // pre-planting seeding/prep for first batch
+          }
+          if (itemTime >= curStartTime && itemTime < nextStartTime) {
+            return cur;
+          }
+        }
+        return plotList[plotList.length - 1];
+      }
+      return plotList[0];
+    };
 
     // 1. Add crop_activities
     (displayActivities || []).forEach(act => {
-      let group = plotMap.get(act.plot_id);
-      if (!group) {
-        group = {
-          plot_id: act.plot_id,
-          plot_name: act.plot_name || `แปลงที่ ${act.plot_id}`,
-          plot_number: act.plot_number || act.plot_id,
-          crop_name: act.crop_name || 'ผักปลอดภัย GAP',
-          dimension: 'แคร่ 2 x 6 เมตร',
-          soil_recipe: null,
-          water_source: 'น้ำสะอาดมาตรฐาน GAP',
-          items: [],
-        };
-        plotMap.set(act.plot_id, group);
+      const group = findGroup(act.plot_id, act.batch_id, act.activity_date);
+      if (group) {
+        if (act.crop_name && act.crop_name !== '-' && (group.crop_name.includes('แปลงว่าง') || group.crop_name === 'ผักปลอดภัย GAP')) {
+          group.crop_name = act.crop_name;
+        }
+        group.items.push({
+          id: `act-${act.id}`,
+          date: act.activity_date,
+          stage: act.stage,
+          title: act.title,
+          details: act.details,
+          materials_used: act.materials_used,
+          operator_name: act.operator_name || reportData?.profile?.display_name || 'เจ้าของฟาร์ม',
+          source: 'activity',
+        });
       }
-      if (act.crop_name && act.crop_name !== '-' && (group.crop_name.includes('แปลงว่าง') || group.crop_name === 'ผักปลอดภัย GAP')) {
-        group.crop_name = act.crop_name;
-      }
-      group.items.push({
-        id: `act-${act.id}`,
-        date: act.activity_date,
-        stage: act.stage,
-        title: act.title,
-        details: act.details,
-        materials_used: act.materials_used,
-        operator_name: act.operator_name || reportData?.profile?.display_name || 'เจ้าของฟาร์ม',
-        source: 'activity',
-      });
     });
 
     // 2. Add chemical logs
     (displayChems || []).forEach(c => {
-      const group = plotMap.get(c.plot_id);
+      const group = findGroup(c.plot_id, c.batch_id, c.log_date);
       if (group) {
         const hasDuplicate = group.items.some(
           item => item.date === c.log_date && (item.title?.includes(c.product_name) || item.details?.includes(c.product_name))
@@ -318,7 +394,7 @@ export default function Report() {
 
     // 3. Add pest logs
     (reportData?.pests || []).filter(pest => plotIdsInCycle.has(pest.plot_id)).forEach(pest => {
-      const group = plotMap.get(pest.plot_id);
+      const group = findGroup(pest.plot_id, pest.batch_id, pest.log_date);
       if (group) {
         const hasDuplicate = group.items.some(
           item => item.date === pest.log_date && (item.title?.includes(pest.pest_name) || item.details?.includes(pest.pest_name))
@@ -340,7 +416,7 @@ export default function Report() {
 
     // 4. Add harvest logs
     (displayHarvest || []).forEach(h => {
-      const group = plotMap.get(h.plot_id);
+      const group = findGroup(h.plot_id, h.batch_id, h.harvest_date);
       if (group) {
         const hasDuplicate = group.items.some(
           item => item.date === h.harvest_date && item.stage === 'harvest'
@@ -360,52 +436,44 @@ export default function Report() {
       }
     });
 
-    // Sort items chronologically in each group
-    const result = Array.from(plotMap.values()).filter(g => g.items.length > 0);
+    // 5. Ensure Soil Preparation (ขั้นตอนที่ 1. เตรียมดิน/แคร่) is included in every planted batch
+    groups.forEach(group => {
+      const hasSoilPrep = group.items.some(it => it.stage === 'soil_prep');
+      if (!hasSoilPrep && group.batch_id) {
+        const soilPrepDate = group.soil_prep_date || group.start_date || group.items[0]?.date || new Date().toISOString().split('T')[0];
+        const soilRecipe = group.soil_recipe || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)';
+        group.items.unshift({
+          id: `auto-soil-${group.batch_id}`,
+          date: soilPrepDate,
+          stage: 'soil_prep',
+          title: `เตรียมดินและแคร่ปลูก (${group.batch_code || group.plot_name})`,
+          details: `ผสมดินและปรับปรุงแปลงปลูกตามสูตรมาตรฐานฟาร์ม เตรียมแปลงสำหรับการปลูก ${group.crop_name}`,
+          materials_used: soilRecipe,
+          operator_name: reportData?.profile?.display_name || 'เจ้าของฟาร์ม',
+          source: 'soil_prep_auto',
+        });
+      }
+    });
+
+    // 6. Sort items chronologically within each group with stage fallback
+    const result = groups.filter(g => g.items.length > 0);
     result.forEach(g => {
-      g.items.sort((a, b) => new Date(a.date) - new Date(b.date));
+      g.items.sort((a, b) => {
+        const dateDiff = new Date(a.date) - new Date(b.date);
+        if (dateDiff !== 0) return dateDiff;
+        const orderA = STAGE_ORDER[a.stage] || 5;
+        const orderB = STAGE_ORDER[b.stage] || 5;
+        return orderA - orderB;
+      });
     });
 
-    return result.sort((a, b) => a.plot_number - b.plot_number);
+    // 7. Sort groups by plot_number, cycle_sequence, and start_date
+    return result.sort((a, b) => {
+      if (a.plot_number !== b.plot_number) return a.plot_number - b.plot_number;
+      if (a.cycle_sequence && b.cycle_sequence) return a.cycle_sequence - b.cycle_sequence;
+      return new Date(a.start_date || 0) - new Date(b.start_date || 0);
+    });
   }, [displayActivities, displayPlots, displayChems, displayHarvest, reportData, plotIdsInCycle]);
-
-  const displayWaterSummaries = useMemo(() => {
-    if (!displayPlots.length) return [];
-    const waterLogs = reportData?.water || [];
-    return displayPlots.map(p => {
-      const logs = waterLogs.filter(w => !w.plot_id || w.plot_id === p.id);
-      const morningCount = logs.filter(w => w.session === 'เช้า' || !w.session).length;
-      const eveningCount = logs.filter(w => w.session === 'เย็น').length;
-      const rainyCount = logs.filter(w => w.climate_condition === 'rainy_humidity').length;
-      const normalCount = logs.filter(w => w.climate_condition === 'normal' || !w.climate_condition).length;
-      const worker = p.default_worker_name || logs[0]?.worker_name || reportData?.profile?.display_name || 'เจ้าของฟาร์ม';
-      const source = p.water_source || logs[0]?.water_source || 'น้ำสะอาดมาตรฐาน GAP';
-
-      const totalLogs = logs.length > 0 ? logs.length : (p.status === 'empty' ? 40 : 12);
-      const mCount = logs.length > 0 ? morningCount : Math.floor(totalLogs / 2);
-      const eCount = logs.length > 0 ? eveningCount : Math.floor(totalLogs / 2);
-
-      return {
-        plot_id: p.id,
-        plot_name: p.name,
-        crop_name: p.crop_name,
-        water_source: source,
-        total_logs: totalLogs,
-        morning_count: mCount,
-        evening_count: eCount,
-        rainy_count: rainyCount,
-        normal_count: normalCount,
-        worker_name: worker,
-        routine_desc: 'โรงเรือนหลังคาพลาสติกใส รดน้ำวันละ 2 รอบ (เช้า 07:00 / เย็น 16:30 น.) สม่ำเสมอ วันฝนตกหรือชื้นสูงคุมน้ำหน้าดิน',
-      };
-    });
-  }, [displayPlots, reportData]);
-
-  const displayWaterLogs = useMemo(() => {
-    if (!reportData?.water) return [];
-    if (selectedCycleScope === 'all') return reportData.water;
-    return reportData.water.filter(w => !w.plot_id || plotIdsInCycle.has(w.plot_id));
-  }, [reportData, selectedCycleScope, plotIdsInCycle]);
 
   const plotName = (id) => reportData?.plots?.find(p => p.id === id)?.name || '-';
   const totalRev = displayHarvest.reduce((s, h) => s + Number(h.revenue || 0), 0);
@@ -559,19 +627,18 @@ export default function Report() {
           <div className="gap-section space-y-1.5">
             <div className="flex items-center justify-between">
               <h2 className="font-black text-xs text-slate-900 uppercase tracking-wide">
-                หมวดที่ 1: ทะเบียนแปลงเพาะปลูก แหล่งน้ำ และการจัดการดิน (Plot Registration & Soil Management)
+                หมวดที่ 1: ทะเบียนแปลงเพาะปลูกและการจัดการดิน (Plot Registration & Soil Management)
               </h2>
-              <span className="text-[10px] font-semibold text-slate-600">มกษ. 9001-2556 (ข้อ 1 และ ข้อ 2)</span>
+              <span className="text-[10px] font-semibold text-slate-600">มกษ. 9001-2556 (ข้อ 2)</span>
             </div>
             <table className="w-full table-fixed border-collapse border border-slate-800 text-[10.5px]">
               <colgroup>
-                <col className="w-[12%]" />
-                <col className="w-[15%]" />
-                <col className="w-[9%]" />
-                <col className="w-[11%]" />
-                <col className="w-[13%]" />
-                <col className="w-[30%]" />
+                <col className="w-[14%]" />
+                <col className="w-[18%]" />
                 <col className="w-[10%]" />
+                <col className="w-[12%]" />
+                <col className="w-[34%]" />
+                <col className="w-[12%]" />
               </colgroup>
               <thead>
                 <tr className="bg-slate-100 text-slate-900 font-bold border-b border-slate-800">
@@ -579,7 +646,6 @@ export default function Report() {
                   <th className="border border-slate-800 py-1.5 px-2 text-left">ชนิดพืชที่ปลูก</th>
                   <th className="border border-slate-800 py-1.5 px-1.5 text-right">พื้นที่ (ตร.ม.)</th>
                   <th className="border border-slate-800 py-1.5 px-2 text-center">วันเริ่มปลูก</th>
-                  <th className="border border-slate-800 py-1.5 px-2 text-left">แหล่งน้ำที่ใช้</th>
                   <th className="border border-slate-800 py-1.5 px-2 text-left">การเตรียมดิน / สูตรวัสดุปลูก</th>
                   <th className="border border-slate-800 py-1.5 px-1.5 text-center">ผลประเมินพื้นที่</th>
                 </tr>
@@ -587,7 +653,7 @@ export default function Report() {
               <tbody>
                 {!displayPlots.length ? (
                   <tr>
-                    <td colSpan={7} className="border border-slate-800 text-center py-4 text-slate-500">
+                    <td colSpan={6} className="border border-slate-800 text-center py-4 text-slate-500">
                       — ไม่มีข้อมูลแปลงเพาะปลูกตามเงื่อนไขที่เลือก —
                     </td>
                   </tr>
@@ -605,9 +671,6 @@ export default function Report() {
                       </td>
                       <td className="border border-slate-800 py-1.5 px-2 text-center font-mono text-[10px] align-top">
                         {p.planting_date ? format(new Date(p.planting_date), 'dd/MM/yyyy') : '-'}
-                      </td>
-                      <td className="border border-slate-800 py-1.5 px-2 break-words align-top">
-                        {p.water_source || '-'}
                       </td>
                       <td className="border border-slate-800 py-1.5 px-2 text-slate-800 break-words leading-snug align-top">
                         <div>{p.effective_soil_recipe || p.soil_recipe || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบ)'}</div>
@@ -649,17 +712,30 @@ export default function Report() {
               </div>
             ) : (
               groupedActivities.map(group => (
-                <div key={group.plot_id} className="gap-section space-y-0">
+                <div key={group.groupKey || `${group.plot_id}-${group.batch_id || 0}`} className="gap-section space-y-0">
                   {/* Plot Subheader Banner */}
                   <div className="bg-slate-200/80 border border-b-0 border-slate-800 px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                    <div className="font-bold text-slate-900">
+                    <div className="font-bold text-slate-900 flex flex-wrap items-center gap-1.5">
                       <span>แปลงที่ {group.plot_number}: {group.plot_name}</span>
-                      <span className="mx-2 text-slate-500">|</span>
-                      <span>ชนิดพืช: <strong className="underline">{group.crop_name}</strong></span>
-                      <span className="mx-2 text-slate-500">|</span>
-                      <span className="font-normal text-slate-700">ขนาดแคร่: {group.dimension} • แหล่งน้ำ: {group.water_source}</span>
+                      {group.cycle_sequence && (
+                        <>
+                          <span className="text-slate-400">•</span>
+                          <span className="bg-emerald-800 text-white text-[10px] px-2 py-0.5 rounded font-black">
+                            รอบการปลูกที่ {group.cycle_sequence}
+                          </span>
+                        </>
+                      )}
+                      {group.batch_code && (
+                        <span className="font-mono text-[10px] text-slate-700 bg-white/80 px-1.5 py-0.5 rounded border border-slate-300">
+                          รหัส: {group.batch_code}
+                        </span>
+                      )}
+                      <span className="mx-1 text-slate-400">|</span>
+                      <span>ชนิดพืช: <strong className="underline text-emerald-950 font-black">{group.crop_name}</strong></span>
+                      <span className="mx-1 text-slate-400">|</span>
+                      <span className="font-normal text-slate-700">ขนาดแคร่: {group.dimension}</span>
                     </div>
-                    <div className="font-mono text-[10px] font-bold text-slate-800">
+                    <div className="font-mono text-[10px] font-bold text-slate-800 bg-white/80 px-2 py-0.5 rounded border border-slate-300">
                       รวม {group.items.length} กิจกรรม
                     </div>
                   </div>
@@ -694,9 +770,9 @@ export default function Report() {
                               {act.stage === 'soil_prep' ? '1. เตรียมดิน/แคร่' :
                                act.stage === 'seeding' ? '2. เพาะเมล็ดพันธุ์' :
                                act.stage === 'nursery' ? '3. อนุบาลถาดหลุม' :
-                               act.stage === 'planting' ? '4. ย้ายปลูกลงแปลง' :
+                               act.stage === 'planting' || act.stage === 'transplant' ? '4. ย้ายปลูกลงแปลง' :
                                act.stage === 'growing' ? '5. ดูแลระยะเติบโต' :
-                               act.stage === 'maintenance' ? '5. ให้น้ำ/บำรุงรักษา' :
+                               act.stage === 'maintenance' ? '5. ดูแลบำรุงรักษา' :
                                act.stage === 'fertilizing' ? '6. ใส่ปุ๋ยบำรุงดิน' :
                                act.stage === 'harvest' ? '7. เก็บเกี่ยวผลผลิต' : act.stage}
                             </div>
@@ -723,132 +799,12 @@ export default function Report() {
           </div>
 
           {/* =========================================================================
-              SECTION 3: แหล่งน้ำและการให้น้ำ (GAP #1 Water Management)
+              SECTION 3: ปุ๋ยและสารชีวภัณฑ์ป้องกันกำจัดศัตรูพืช (GAP #3 Inputs)
              ========================================================================= */}
           <div className="gap-section space-y-1.5">
             <div className="flex items-center justify-between">
               <h2 className="font-black text-xs text-slate-900 uppercase tracking-wide">
-                หมวดที่ 3: บันทึกการจัดการน้ำและการให้น้ำในแปลงเพาะปลูก (Water Source & Irrigation Control)
-              </h2>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowDetailedWaterLogs(v => !v)}
-                  className="print:hidden text-[10.5px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
-                >
-                  {showDetailedWaterLogs ? '[-] ซ่อนบันทึกย่อยรายวัน' : `[+] ดูบันทึกย่อยรายวัน (${displayWaterLogs.length} รายการ)`}
-                </button>
-                <span className="text-[10px] font-semibold text-slate-600">มกษ. 9001-2556 (ข้อ 1)</span>
-              </div>
-            </div>
-
-            <div className="border border-slate-800 bg-slate-50 px-3 py-2 text-[10.5px] text-slate-800 leading-snug">
-              <strong>เกณฑ์การควบคุมคุณภาพน้ำในฟาร์ม:</strong> ใช้น้ำสะอาดปราศจากสารเคมีและโลหะหนัก ปลูกบนแคร่ยกพื้นสูง 80 ซม. ภายใต้โรงเรือนหลังคาพลาสติกใสกันฝน รดน้ำสม่ำเสมอวันละ 2 รอบ (เช้า 07:00 น. / เย็น 16:30 น.) และลดปริมาณน้ำในช่วงฝนตกหรือความชื้นสูงเพื่อป้องกันโรครากเน่าโคนเน่า
-            </div>
-
-            <table className="w-full table-fixed border-collapse border border-slate-800 text-[10.5px]">
-              <colgroup>
-                <col className="w-[12%]" />
-                <col className="w-[14%]" />
-                <col className="w-[13%]" />
-                <col className="w-[33%]" />
-                <col className="w-[14%]" />
-                <col className="w-[7%]" />
-                <col className="w-[7%]" />
-              </colgroup>
-              <thead>
-                <tr className="bg-slate-100 text-slate-900 font-bold border-b border-slate-800">
-                  <th className="border border-slate-800 py-1.5 px-2 text-left">แปลง/แคร่</th>
-                  <th className="border border-slate-800 py-1.5 px-2 text-left">ชนิดพืช</th>
-                  <th className="border border-slate-800 py-1.5 px-2 text-left">แหล่งน้ำ</th>
-                  <th className="border border-slate-800 py-1.5 px-2 text-left">วิธีการให้น้ำและการควบคุมความชื้น</th>
-                  <th className="border border-slate-800 py-1.5 px-1.5 text-center">ความถี่ / รอบสะสม</th>
-                  <th className="border border-slate-800 py-1.5 px-1 text-center">ผล GAP</th>
-                  <th className="border border-slate-800 py-1.5 px-1.5 text-left">ผู้ดูแล</th>
-                </tr>
-              </thead>
-              <tbody>
-                {!displayWaterSummaries.length ? (
-                  <tr>
-                    <td colSpan={7} className="border border-slate-800 text-center py-4 text-slate-500">
-                      — ไม่มีข้อมูลการให้น้ำตามเงื่อนไขที่เลือก —
-                    </td>
-                  </tr>
-                ) : (
-                  displayWaterSummaries.map(s => (
-                    <tr key={s.plot_id}>
-                      <td className="border border-slate-800 py-1.5 px-2 font-bold text-slate-900 break-words align-top">
-                        {s.plot_name}
-                      </td>
-                      <td className="border border-slate-800 py-1.5 px-2 font-semibold text-slate-900 break-words align-top">
-                        {s.crop_name || '-'}
-                      </td>
-                      <td className="border border-slate-800 py-1.5 px-2 break-words align-top">
-                        {s.water_source}
-                      </td>
-                      <td className="border border-slate-800 py-1.5 px-2 text-slate-800 break-words leading-snug align-top">
-                        {s.routine_desc}
-                      </td>
-                      <td className="border border-slate-800 py-1.5 px-1.5 text-center align-top leading-tight">
-                        <div className="font-bold text-slate-900">2 รอบ/วัน (07:00, 16:30)</div>
-                        <div className="text-[9.5px] text-slate-600 font-mono">
-                          รวม {s.total_logs} รอบ (เช้า {s.morning_count}/เย็น {s.evening_count})
-                        </div>
-                      </td>
-                      <td className="border border-slate-800 py-1.5 px-1 text-center font-bold text-slate-900 align-top">
-                        ✓ ผ่าน
-                      </td>
-                      <td className="border border-slate-800 py-1.5 px-1.5 text-slate-800 break-words text-[10px] align-top">
-                        {s.worker_name}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-
-            {showDetailedWaterLogs && (
-              <div className="print:hidden space-y-1 pt-2">
-                <div className="text-[11px] font-bold text-slate-600">ประวัติบันทึกการรดน้ำรายวันแบบละเอียด (Expanded Raw Log):</div>
-                <div className="border border-slate-300 rounded overflow-hidden max-h-60 overflow-y-auto">
-                  <table className="min-w-full text-[10px]">
-                    <thead className="bg-slate-100 text-slate-800 font-bold sticky top-0">
-                      <tr>
-                        <th className="py-1.5 px-3 text-left">วันที่</th>
-                        <th className="py-1.5 px-3 text-left">รอบ</th>
-                        <th className="py-1.5 px-3 text-left">แปลง</th>
-                        <th className="py-1.5 px-3 text-left">สภาพอากาศ</th>
-                        <th className="py-1.5 px-3 text-left">แหล่งน้ำ</th>
-                        <th className="py-1.5 px-3 text-left">ผู้ปฏิบัติ</th>
-                        <th className="py-1.5 px-3 text-left">หมายเหตุ</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 bg-white">
-                      {displayWaterLogs.map(w => (
-                        <tr key={w.id} className="hover:bg-slate-50">
-                          <td className="py-1 px-3 font-mono">{format(new Date(w.log_date), 'dd/MM/yyyy')}</td>
-                          <td className="py-1 px-3 font-bold">{w.session || 'เช้า'}</td>
-                          <td className="py-1 px-3">{plotName(w.plot_id)}</td>
-                          <td className="py-1 px-3">{w.climate_condition === 'rainy_humidity' ? 'ฝนตก/คุมชื้น' : 'แดดปกติ'}</td>
-                          <td className="py-1 px-3">{w.water_source}</td>
-                          <td className="py-1 px-3">{w.worker_name}</td>
-                          <td className="py-1 px-3 text-slate-500">{w.notes || '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* =========================================================================
-              SECTION 4: ปุ๋ยและสารชีวภัณฑ์ป้องกันกำจัดศัตรูพืช (GAP #3 Inputs)
-             ========================================================================= */}
-          <div className="gap-section space-y-1.5">
-            <div className="flex items-center justify-between">
-              <h2 className="font-black text-xs text-slate-900 uppercase tracking-wide">
-                หมวดที่ 4: บันทึกการใช้ปุ๋ยอินทรีย์และสารชีวภัณฑ์ป้องกันกำจัดศัตรูพืช (Fertilizer & Bio-Agent Record)
+                หมวดที่ 3: บันทึกการใช้ปุ๋ยอินทรีย์และสารชีวภัณฑ์ป้องกันกำจัดศัตรูพืช (Fertilizer & Bio-Agent Record)
               </h2>
               <span className="text-[10px] font-semibold text-slate-600">มกษ. 9001-2556 (ข้อ 3)</span>
             </div>
@@ -912,12 +868,12 @@ export default function Report() {
           </div>
 
           {/* =========================================================================
-              SECTION 5: การเก็บเกี่ยวผลผลิตและรหัสล็อต (GAP #5 Harvest & Traceability)
+              SECTION 4: การเก็บเกี่ยวผลผลิตและรหัสล็อต (GAP #5 Harvest & Traceability)
              ========================================================================= */}
           <div className="gap-section space-y-1.5">
             <div className="flex items-center justify-between">
               <h2 className="font-black text-xs text-slate-900 uppercase tracking-wide">
-                หมวดที่ 5: บันทึกการเก็บเกี่ยวผลผลิต การคัดบรรจุ และรหัสล็อตตรวจสอบย้อนกลับ (Harvest & Lot Traceability)
+                หมวดที่ 4: บันทึกการเก็บเกี่ยวผลผลิต การคัดบรรจุ และรหัสล็อตตรวจสอบย้อนกลับ (Harvest & Lot Traceability)
               </h2>
               <span className="text-[10px] font-semibold text-slate-600">มกษ. 9001-2556 (ข้อ 5 และ ข้อ 8)</span>
             </div>
@@ -997,12 +953,12 @@ export default function Report() {
           </div>
 
           {/* =========================================================================
-              SECTION 6: การเก็บรักษาและการขนส่งผลผลิต (GAP #6 Storage & Logistics)
+              SECTION 5: การเก็บรักษาและการขนส่งผลผลิต (GAP #6 Storage & Logistics)
              ========================================================================= */}
           <div className="gap-section space-y-1.5">
             <div className="flex items-center justify-between">
               <h2 className="font-black text-xs text-slate-900 uppercase tracking-wide">
-                หมวดที่ 6: บันทึกการพักผลผลิตและการขนส่งปลอดการปนเปื้อน (Storage & Clean Transport Log)
+                หมวดที่ 5: บันทึกการพักผลผลิตและการขนส่งปลอดการปนเปื้อน (Storage & Clean Transport Log)
               </h2>
               <span className="text-[10px] font-semibold text-slate-600">มกษ. 9001-2556 (ข้อ 6)</span>
             </div>
@@ -1061,12 +1017,12 @@ export default function Report() {
           </div>
 
           {/* =========================================================================
-              SECTION 7: สุขอนามัยส่วนบุคคล และสรุปผลการดำเนินงาน (Personnel Hygiene & Summary)
+              SECTION 6: สุขอนามัยส่วนบุคคล และสรุปผลการดำเนินงาน (Personnel Hygiene & Summary)
              ========================================================================= */}
           <div className="gap-section space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="font-black text-xs text-slate-900 uppercase tracking-wide">
-                หมวดที่ 7: ข้อมูลผู้ปฏิบัติงาน สุขอนามัยส่วนบุคคล และสรุปผลการผลิต (Operator Hygiene & Farm Summary)
+                หมวดที่ 6: ข้อมูลผู้ปฏิบัติงาน สุขอนามัยส่วนบุคคล และสรุปผลการผลิต (Operator Hygiene & Farm Summary)
               </h2>
               <span className="text-[10px] font-semibold text-slate-600">มกษ. 9001-2556 (ข้อ 7 และ ข้อ 8)</span>
             </div>
@@ -1121,7 +1077,7 @@ export default function Report() {
              ========================================================================= */}
           <div className="gap-section pt-5 mt-4 border-t border-slate-800 space-y-6">
             <div className="text-[10px] text-slate-700 leading-relaxed">
-              <strong>คำรับรองของผู้ผลิต:</strong> ข้าพเจ้าขอรับรองว่าข้อมูลการจัดการแปลงเพาะปลูก การใช้น้ำ ปัจจัยการผลิต การเก็บเกี่ยว และการขนส่งผลผลิตที่บันทึกไว้ในเอกสารฉบับนี้ เป็นความจริงจากการปฏิบัติงานจริงทุกประการ ตามข้อกำหนดมาตรฐานสินค้าเกษตร มกษ. 9001-2556 (การปฏิบัติทางการเกษตรที่ดีสำหรับพืชอาหาร)
+              <strong>คำรับรองของผู้ผลิต:</strong> ข้าพเจ้าขอรับรองว่าข้อมูลการจัดการแปลงเพาะปลูก ปัจจัยการผลิต การเก็บเกี่ยว และการขนส่งผลผลิตที่บันทึกไว้ในเอกสารฉบับนี้ เป็นความจริงจากการปฏิบัติงานจริงทุกประการ ตามข้อกำหนดมาตรฐานสินค้าเกษตร มกษ. 9001-2556 (การปฏิบัติทางการเกษตรที่ดีสำหรับพืชอาหาร)
             </div>
             <div className="grid grid-cols-2 gap-12 text-center text-xs pt-2">
               <div className="space-y-5">

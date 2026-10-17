@@ -30,6 +30,14 @@ import SoilPrepModal from '../components/plots/SoilPrepModal';
 import NurseryActivityModal from '../components/plots/NurseryActivityModal';
 import CropTimelineDrawer from '../components/plots/CropTimelineDrawer';
 
+const STAGE_LABELS = {
+  seeding: 'เพาะเมล็ด / แช่น้ำอุ่น',
+  nursery: 'อนุบาลต้นกล้า / ถาดหลุม',
+  transplant: 'ย้ายกล้าลงแปลง',
+  maintenance: 'ดูแลรักษา / พ่นชีวภัณฑ์',
+  prep: 'เตรียมแปลงปลูก',
+};
+
 export default function Plots() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -47,15 +55,10 @@ export default function Plots() {
   const [form, setForm] = useState({
     plot_id: '',
     crop_id: '',
-    initial_count: '',
-    planting_unit: 'ต้น',
     start_date: getTodayLocalStr(),
     soil_prep_date: getTodayLocalStr(),
     seed_prep_date: '',
-    auto_water: true,
-    water_schedule: 'เช้า-เย็น (น้ำสะอาดมาตรฐาน GAP)',
     notes: '',
-    materials_used: 'กล่องพลาสติก, กระดาษทิชชู, ฟ็อกกี้พ่นน้ำ, ถาดเพาะ 200 หลุม',
     operator_name: 'เจ้าของฟาร์ม',
     soil_recipe: '',
   });
@@ -69,8 +72,6 @@ export default function Plots() {
     area_sqm: 12,
     soil_recipe: 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)',
     soil_prep_date: getTodayLocalStr(),
-    water_source: 'น้ำประปา/บ่อพักน้ำมาตรฐาน GAP',
-    water_source_type: 'tap',
     notes: '',
   });
   const [creatingPlot, setCreatingPlot] = useState(false);
@@ -81,13 +82,10 @@ export default function Plots() {
   const [editingBatch, setEditingBatch] = useState(null);
   const [editForm, setEditForm] = useState({
     crop_id: '',
-    initial_count: '',
-    planting_unit: 'ต้น',
     start_date: '',
     soil_prep_date: '',
     seed_prep_date: '',
     soil_recipe: '',
-    auto_water: true,
     notes: '',
   });
   const [savingEdit, setSavingEdit] = useState(false);
@@ -195,20 +193,6 @@ export default function Plots() {
     fetchData();
   }, []);
 
-  const handleTogglePlotAuto = async (plotId) => {
-    try {
-      const res = await api.post('/api/water/plot-auto-toggle', { plot_id: plotId });
-      toast.success(res.data.message);
-      setPlots((prev) =>
-        prev.map((p) =>
-          p.id === plotId ? { ...p, auto_water_enabled: res.data.auto_water_enabled } : p
-        )
-      );
-    } catch (err) {
-      toast.error('ไม่สามารถเปลี่ยนสถานะรดน้ำอัตโนมัติของแปลงนี้ได้');
-    }
-  };
-
   const openModalWithPlot = (plotId, preferredMode) => {
     const found = plots.find((p) => p.id === plotId);
     const chosenCropId = found?.seed_crop_id || (crops[0]?.id || '');
@@ -225,8 +209,6 @@ export default function Plots() {
       ...prev,
       plot_id: plotId,
       crop_id: chosenCropId,
-      initial_count: '',
-      planting_unit: 'ต้น',
       start_date: getTodayLocalStr(),
       soil_prep_date: found?.soil_prep_date
         ? formatDateForInput(found.soil_prep_date)
@@ -234,7 +216,6 @@ export default function Plots() {
       seed_prep_date: found?.seed_prep_date
         ? formatDateForInput(found.seed_prep_date)
         : '',
-      materials_used: 'กล่องพลาสติก, กระดาษทิชชู, ฟ็อกกี้พ่นน้ำ, ถาดเพาะ 200 หลุม',
       operator_name: 'เจ้าของฟาร์ม',
       notes:
         chosenCrop?.notes ||
@@ -255,8 +236,6 @@ export default function Plots() {
       dimension: 'แคร่ 2 x 6 เมตร',
       area_sqm: 12,
       soil_recipe: 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)',
-      water_source: 'น้ำประปา/บ่อพักน้ำมาตรฐาน GAP',
-      water_source_type: 'tap',
       notes: '',
     });
     setShowAddPlotModal(true);
@@ -314,11 +293,6 @@ export default function Plots() {
     });
     setEditForm({
       crop_id: targetBatch.crop_id || (crops[0]?.id || ''),
-      initial_count:
-        targetBatch.initial_count !== null && targetBatch.initial_count !== undefined
-          ? targetBatch.initial_count
-          : '',
-      planting_unit: targetBatch.planting_unit || 'ต้น',
       start_date: formatDateForInput(targetBatch.start_date) || getTodayLocalStr(),
       soil_prep_date: formatDateForInput(targetBatch.soil_prep_date || plot?.soil_prep_date) || '',
       seed_prep_date: formatDateForInput(targetBatch.seed_prep_date) || '',
@@ -326,7 +300,6 @@ export default function Plots() {
         targetBatch.soil_recipe ||
         plot?.soil_recipe ||
         'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)',
-      auto_water: Boolean(targetBatch.auto_water),
       notes: targetBatch.notes || '',
     });
     setShowEditBatchModal(true);
@@ -448,13 +421,9 @@ export default function Plots() {
       ? `ดูแลแปลง/พ่นชีวภัณฑ์ (${cropName})`
       : `เพาะเมล็ดพันธุ์${cropName}`;
     const defaultDetails = isGrowing
-      ? 'ตรวจแปลง ฉีดพ่นน้ำหมักชีวภาพ/สารชีวภัณฑ์ ป้องกันศัตรูพืช และรดน้ำตามรอบมาตรฐาน GAP'
+      ? 'ตรวจแปลง ฉีดพ่นน้ำหมักชีวภาพ/สารชีวภัณฑ์ ป้องกันศัตรูพืชตามมาตรฐาน GAP'
       : matchedCrop?.notes ||
         'เพาะเมล็ดในกล่องพลาสติกที่มีฝาปิดมิดชิด วางกระดาษทิชชูในกล่องพลาสติก พ่นน้ำให้ทั่วกระดาษทิชชูหมาดๆ โรยเมล็ดบางๆ ปิดทับด้วยกระดาษทิชชูแล้วพ่นน้ำให้หมาดๆ เสร็จแล้วปิดฝากล่อง';
-    const defaultMaterials = isGrowing
-      ? 'สารชีวภัณฑ์, น้ำหมักชีวภาพ, ถังพ่นยา'
-      : 'กล่องพลาสติก, กระดาษทิชชู, ฟ็อกกี้พ่นน้ำ';
-
     setNurseryForm({
       activity_id: null,
       plot_id: plot.id,
@@ -464,7 +433,7 @@ export default function Plots() {
       stage: defaultStage,
       title: defaultTitle,
       details: defaultDetails,
-      materials_used: defaultMaterials,
+      materials_used: '',
       operator_name: 'เจ้าของฟาร์ม',
     });
     setShowNurseryModal(true);
@@ -487,7 +456,7 @@ export default function Plots() {
       stage: activity.stage || 'seeding',
       title: activity.title || '',
       details: activity.details || '',
-      materials_used: activity.materials_used || '',
+      materials_used: '',
       operator_name: activity.operator_name || 'เจ้าของฟาร์ม',
     });
     setShowNurseryModal(true);
@@ -496,9 +465,15 @@ export default function Plots() {
   const handleSaveNurseryActivity = async (e) => {
     e.preventDefault();
     if (!nurseryForm.plot_id) return;
-    if (!nurseryForm.title || !nurseryForm.activity_date) {
-      return toast.error('กรุณาระบุวันที่และชื่อกิจกรรม');
+    if (!nurseryForm.activity_date) {
+      return toast.error('กรุณาระบุวันที่ทำกิจกรรม');
     }
+
+    const cropObj = crops.find((c) => String(c.id) === String(nurseryForm.seed_crop_id));
+    const cropName = cropObj ? cropObj.name : (nurseryForm.plot_name || '');
+    const finalTitle =
+      nurseryForm.title?.trim() ||
+      `${STAGE_LABELS[nurseryForm.stage] || 'บันทึกกิจกรรม'}${cropName ? ` (${cropName})` : ''}`;
 
     try {
       setSavingNursery(true);
@@ -507,24 +482,24 @@ export default function Plots() {
         await api.put(`/api/plots/activities/${nurseryForm.activity_id}`, {
           activity_date: nurseryForm.activity_date,
           stage: nurseryForm.stage,
-          title: nurseryForm.title,
+          title: finalTitle,
           details: nurseryForm.details,
-          materials_used: nurseryForm.materials_used,
+          materials_used: null,
           operator_name: nurseryForm.operator_name,
         });
-        toast.success(`แก้ไขกิจกรรม "${nurseryForm.title}" เรียบร้อยแล้ว!`);
+        toast.success(`แก้ไขกิจกรรม "${finalTitle}" เรียบร้อยแล้ว!`);
       } else {
         // Create new activity
         await api.post(`/api/plots/${nurseryForm.plot_id}/activities`, {
           seed_crop_id: nurseryForm.seed_crop_id ? Number(nurseryForm.seed_crop_id) : null,
           activity_date: nurseryForm.activity_date,
           stage: nurseryForm.stage,
-          title: nurseryForm.title,
+          title: finalTitle,
           details: nurseryForm.details,
-          materials_used: nurseryForm.materials_used,
+          materials_used: null,
           operator_name: nurseryForm.operator_name,
         });
-        toast.success(`บันทึกกิจกรรม "${nurseryForm.title}" เรียบร้อยแล้ว!`);
+        toast.success(`บันทึกกิจกรรม "${finalTitle}" เรียบร้อยแล้ว!`);
       }
       setShowNurseryModal(false);
       await fetchData();
@@ -583,9 +558,6 @@ export default function Plots() {
           stage: 'seeding',
           title: `เพาะเมล็ดพันธุ์${cropName}`,
           details: form.notes || defaultSeedingDetails,
-          materials_used:
-            form.materials_used ||
-            'กล่องพลาสติก, กระดาษทิชชู, ฟ็อกกี้พ่นน้ำ, ถาดเพาะ 200 หลุม',
           operator_name: form.operator_name || 'เจ้าของฟาร์ม',
         });
 
@@ -683,7 +655,6 @@ export default function Plots() {
                 key={p.id}
                 plot={p}
                 currentBatch={currentBatch}
-                onToggleAutoWater={handleTogglePlotAuto}
                 onDeletePlot={handleDeletePlot}
                 deletingPlotId={deletingPlotId}
                 onOpenSoilModal={handleOpenSoilModal}
@@ -744,14 +715,13 @@ export default function Plots() {
                 <th className="py-3 px-3.5 font-bold whitespace-nowrap">วันเก็บผลผลิต</th>
                 <th className="py-3 px-3.5 font-bold whitespace-nowrap min-w-[130px]">ความคืบหน้า</th>
                 <th className="py-3 px-3.5 font-bold whitespace-nowrap text-center">สถานะ</th>
-                <th className="py-3 px-3.5 font-bold whitespace-nowrap">ระบบรดน้ำ</th>
                 <th className="py-3 px-3.5 font-bold whitespace-nowrap text-right">จัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {batches.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-10 text-center text-slate-400">
+                  <td colSpan={8} className="py-10 text-center text-slate-400">
                     ยังไม่มีประวัติรอบการปลูก
                   </td>
                 </tr>
@@ -783,18 +753,6 @@ export default function Plots() {
                         <span className="font-bold text-emerald-800 block leading-snug">
                           {b.crop_name}
                         </span>
-                        {b.initial_count ? (
-                          <span className="text-[11px] text-slate-500 font-medium block mt-0.5 whitespace-nowrap">
-                            เหลือ{' '}
-                            {Number(b.remaining_count ?? b.initial_count).toLocaleString()}/
-                            {Number(b.initial_count).toLocaleString()} {b.planting_unit || 'ต้น'}
-                            {b.total_damaged_count > 0 && (
-                              <span className="text-rose-600 font-bold ml-1">
-                                (เสีย {b.total_damaged_count})
-                              </span>
-                            )}
-                          </span>
-                        ) : null}
                       </td>
 
                       {/* 3. Plot Name */}
@@ -895,15 +853,7 @@ export default function Plots() {
                         </span>
                       </td>
 
-                      {/* 8. Watering Mode */}
-                      <td className="py-3.5 px-3.5 align-middle text-slate-600 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1 text-[11px] font-medium">
-                          <Droplets className="w-3.5 h-3.5 text-sky-500 shrink-0" />
-                          <span>{b.auto_water ? 'รดน้ำอัตโนมัติ' : 'รดน้ำเอง'}</span>
-                        </span>
-                      </td>
-
-                      {/* 9. Actions */}
+                      {/* 8. Actions */}
                       <td className="py-3.5 px-3.5 align-middle text-right whitespace-nowrap">
                         {!isHarvested &&
                         (b.status === 'growing' ||

@@ -123,9 +123,7 @@ export default function Dashboard() {
   const [clusters, setClusters] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [runningAi, setRunningAi] = useState(false);
-  const [todayWater, setTodayWater] = useState({ wateredPlotIds: [] });
   const [activePlots, setActivePlots] = useState([]);
-  const [wateringLoading, setWateringLoading] = useState(false);
   const [revChartMode, setRevChartMode] = useState('bar'); // 'bar' | 'area'
 
   const fetchAiData = async () => {
@@ -135,15 +133,6 @@ export default function Dashboard() {
       setCustomers(aiRes.data.customers || []);
     } catch (err) {
       console.warn('Failed to load AI data:', err.message);
-    }
-  };
-
-  const fetchWaterStatus = async () => {
-    try {
-      const res = await api.get('/api/water/today-status');
-      setTodayWater(res.data);
-    } catch (e) {
-      console.warn('Water status fetch error:', e.message);
     }
   };
 
@@ -208,37 +197,8 @@ export default function Dashboard() {
       setRevenueChart(sortedMonthly);
 
       fetchAiData();
-      fetchWaterStatus();
     })();
   }, []);
-
-  const handleWaterAllToday = async () => {
-    setWateringLoading(true);
-    try {
-      const res = await api.post('/api/water/quick-all');
-      if (res.data.already_watered) {
-        toast.info(res.data.message);
-      } else {
-        toast.success(res.data.message || 'บันทึกรดน้ำทุกแปลงสำเร็จ!');
-      }
-      await fetchWaterStatus();
-    } catch (e) {
-      toast.error('ไม่สามารถบันทึกรดน้ำได้');
-    } finally {
-      setWateringLoading(false);
-    }
-  };
-
-  const handleTogglePlotAuto = async (plotId) => {
-    try {
-      const res = await api.post('/api/water/plot-auto-toggle', { plot_id: plotId });
-      toast.success(res.data.message);
-      setPlotsList(prev => prev.map(p => p.id === plotId ? { ...p, auto_water_enabled: res.data.auto_water_enabled } : p));
-      await fetchWaterStatus();
-    } catch (e) {
-      toast.error('ไม่สามารถเปลี่ยนสถานะรดน้ำอัตโนมัติของแปลงนี้ได้');
-    }
-  };
 
   const profit = stats.revenue - stats.cost;
 
@@ -260,7 +220,6 @@ export default function Dashboard() {
       return (p.activities && p.activities.length > 0) || Boolean(p.seed_prep_date) || Boolean(p.seed_crop_id);
     }).length;
   }, [plotsList]);
-  const isAllWatered = activePlots.length > 0 && (todayWater.wateredPlotIds || []).length >= activePlots.length;
 
   const cards = [
     {
@@ -302,14 +261,6 @@ export default function Dashboard() {
       icon: PackageCheck,
       accent: 'bg-sky-100 text-sky-800',
       badgeClass: 'bg-sky-50 text-sky-800 border border-sky-200/60',
-    },
-    {
-      label: 'รดน้ำวันนี้',
-      value: `${(todayWater.wateredPlotIds || []).length}/${activePlots.length}`,
-      detail: isAllWatered ? '✓ ครบทุกแปลงแล้ว' : `ขาด ${activePlots.length - (todayWater.wateredPlotIds || []).length} แปลง`,
-      icon: Droplets,
-      accent: isAllWatered ? 'bg-emerald-100 text-emerald-800' : 'bg-teal-100 text-teal-800',
-      badgeClass: isAllWatered ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/60' : 'bg-amber-50 text-amber-900 border border-amber-200',
     },
     {
       label: 'สถานะ GAP',
@@ -355,7 +306,7 @@ export default function Dashboard() {
             แดชบอร์ดภาพรวมฟาร์ม (Farm Overview)
           </h1>
           <p className="mt-1 text-xs sm:text-sm text-slate-500 font-medium">
-            ระบบติดตามผลผลิต การให้น้ำ ความเสี่ยง GAP สต็อกสินค้า และลูกค้าในจุดเดียว
+            ระบบติดตามผลผลิต ความปลอดภัย GAP สต็อกสินค้า และลูกค้าในจุดเดียว
           </p>
         </div>
 
@@ -369,13 +320,6 @@ export default function Dashboard() {
             <span>พิมพ์รายงาน GAP</span>
           </Link>
           <Link
-            to="/water"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 text-xs font-bold transition cursor-pointer"
-          >
-            <Droplets className="w-4 h-4 text-emerald-600" />
-            <span>จัดการระบบน้ำ</span>
-          </Link>
-          <Link
             to="/plots"
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#173f2a] hover:bg-[#123020] text-white text-xs font-bold shadow-xs transition cursor-pointer"
           >
@@ -385,68 +329,8 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* Daily Routine Quick Action Bar */}
-      {activePlots.length > 0 && (
-        <section className={`rounded-2xl p-4 sm:p-5 border transition shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
-          isAllWatered
-            ? 'bg-emerald-50/60 border-emerald-200/90'
-            : 'bg-white border-slate-200/90'
-        }`}>
-          <div className="flex items-center gap-3.5">
-            <div className={`p-3 rounded-xl border shrink-0 ${
-              isAllWatered
-                ? 'bg-emerald-100/80 border-emerald-300 text-emerald-800'
-                : 'bg-teal-50 border-teal-200 text-teal-700'
-            }`}>
-              <Droplets className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-black text-slate-900 text-sm sm:text-base tracking-tight">
-                  ⚡ กิจวัตรการให้น้ำประจำวัน (Daily Watering Routine)
-                </h3>
-                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
-                  isAllWatered
-                    ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                    : 'bg-amber-100 text-amber-900 border-amber-200'
-                }`}>
-                  รดแล้ว {(todayWater.wateredPlotIds || []).length} / {activePlots.length} แปลง
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                {isAllWatered
-                  ? 'ระบบบันทึกการให้น้ำครบถ้วนทุกแปลงแล้ววันนี้ ข้อมูลพร้อมเข้าสมุดจด GAP'
-                  : 'กดปุ่มเพื่อบันทึกการรดน้ำอัตโนมัติพร้อมกันทุกแปลงที่กำลังปลูก โดยไม่ต้องเข้าไปจดทีละแปลง'}
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={handleWaterAllToday}
-            disabled={wateringLoading || isAllWatered}
-            className={`inline-flex items-center justify-center gap-2 font-black px-4 py-2.5 rounded-xl text-xs sm:text-sm shadow-xs transition active:scale-95 cursor-pointer whitespace-nowrap shrink-0 w-full sm:w-auto ${
-              isAllWatered
-                ? 'bg-emerald-100/80 text-emerald-800 border border-emerald-200 cursor-not-allowed'
-                : 'bg-amber-400 hover:bg-amber-500 text-slate-950 shadow-amber-200/50'
-            }`}
-          >
-            {isAllWatered ? (
-              <>
-                <CheckCircle2 className="w-4 h-4 text-emerald-700" />
-                <span>รดน้ำครบทุกแปลงแล้ววันนี้</span>
-              </>
-            ) : (
-              <>
-                <Zap className="w-4 h-4 fill-current text-slate-950" />
-                <span>⚡ รดน้ำทุกแปลงทันที ({activePlots.length - (todayWater.wateredPlotIds || []).length} แปลง)</span>
-              </>
-            )}
-          </button>
-        </section>
-      )}
-
-      {/* Unified Executive KPI Cards (6 Grid) */}
-      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+      {/* Unified Executive KPI Cards (5 Grid) */}
+      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
         {cards.map(card => (
           <div
             key={card.label}
@@ -510,7 +394,6 @@ export default function Dashboard() {
 
             const startDate = batch?.start_date || plot.planting_date;
             const growthDays = Number(batch?.growth_days || plot.growth_days || 30);
-            const autoWater = batch?.auto_water !== undefined ? Boolean(batch.auto_water) : true;
 
             const daysPlanted = startDate ? getDaysPlanted(startDate) : 0;
             const batchSeedDate = batch?.seed_prep_date || plot?.batch_seed_prep_date || plot?.seed_prep_date || plot?.activities?.find(a => a.stage === 'seeding')?.activity_date;
@@ -697,21 +580,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Bottom Actions */}
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleTogglePlotAuto(plot.id)}
-                    title={plot.auto_water_enabled !== 0 ? 'คลิกเพื่องดรดน้ำอัตโนมัติ (เช่น เตรียมตัด/เว้นน้ำ)' : 'คลิกเพื่อเปิดโหมดรดน้ำอัตโนมัติ'}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition active:scale-95 cursor-pointer border ${
-                      plot.auto_water_enabled !== 0
-                        ? 'bg-blue-50/90 hover:bg-blue-100 text-blue-700 border-blue-200 shadow-2xs'
-                        : 'bg-amber-100/90 hover:bg-amber-200 text-amber-950 border-amber-300 shadow-2xs'
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${plot.auto_water_enabled !== 0 ? 'bg-blue-500 animate-pulse' : 'bg-amber-500'}`} />
-                    <span>{plot.auto_water_enabled !== 0 ? 'รดน้ำออโต้' : 'เว้นน้ำ'}</span>
-                  </button>
-
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                   {isGrowing || isPlotReady ? (
                     <button
                       onClick={() => navigate(`/harvest?plot_id=${plot.id}&smart=true`)}

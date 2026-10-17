@@ -199,28 +199,17 @@ harvestRouter.post('/smart-record', async (req, res) => {
 
     if (activeBatch) {
       if (plantsHarvested > 0) {
-        const currentRem = (activeBatch.remaining_count !== null && activeBatch.remaining_count !== undefined)
-          ? Number(activeBatch.remaining_count)
-          : Number(activeBatch.initial_count || 0);
-        const newRemaining = Math.max(0, currentRem - plantsHarvested);
-
         await pool.query(
           `UPDATE planting_batches
            SET total_harvested_count = COALESCE(total_harvested_count, 0) + ?,
-               remaining_count = ?,
                updated_at = NOW()
            WHERE id = ?`,
-          [plantsHarvested, newRemaining, activeBatch.id]
+          [plantsHarvested, activeBatch.id]
         );
-
-        // ถ้าผักถูกตัดจนเหลือ 0 ต้นแล้ว -> ถือว่าตัดครบหมดแปลง (Fully Completed) ทันที
-        if (newRemaining <= 0) {
-          isFullyCompleted = true;
-        }
       }
 
       if (isFullyCompleted) {
-        // เก็บเกี่ยวหมดแปลง หรือ ยอดต้นไม้เหลือ 0 -> ปิดรอบ batch
+        // เก็บเกี่ยวหมดแปลง -> ปิดรอบ batch
         await pool.query(
           `UPDATE planting_batches SET status = 'harvested', actual_harvest_date = ? WHERE id = ?`,
           [hDate, activeBatch.id]

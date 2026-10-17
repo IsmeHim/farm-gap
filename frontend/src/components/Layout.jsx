@@ -4,7 +4,6 @@ import { useAuth } from '../lib/auth.jsx';
 import {
   BadgeCheck,
   Bug,
-  Droplets,
   ExternalLink,
   FileText,
   FlaskConical,
@@ -44,7 +43,6 @@ const menuGroups = [
   {
     group: '2. การดูแลแปลงประจำวัน',
     items: [
-      { to: '/water', icon: Droplets, label: 'ระบบน้ำ & บันทึกรดน้ำ' },
       { to: '/chemicals', icon: FlaskConical, label: 'ปุ๋ย & สารบำรุง' },
       { to: '/pests', icon: Bug, label: 'ศัตรูพืช & โรคพืช' },
     ]

@@ -84,52 +84,6 @@ export default function EditBatchModal({
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                  จำนวนที่ลงปลูก (ต้น/หลุม)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  placeholder="เช่น 200"
-                  value={editForm.initial_count}
-                  onChange={(e) => setEditForm({ ...editForm, initial_count: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"
-                />
-                <span className="text-[10px] text-slate-400 block mt-1">
-                  * ยอดคงเหลือจะคำนวณจากยอดนี้หักความเสียหายสะสม
-                </span>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1.5">หน่วยนับ</label>
-                <select
-                  value={editForm.planting_unit}
-                  onChange={(e) => setEditForm({ ...editForm, planting_unit: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"
-                >
-                  <option value="ต้น">ต้น</option>
-                  <option value="หลุม">หลุม</option>
-                  <option value="กรัม">กรัม</option>
-                  <option value="ขีด">ขีด</option>
-                </select>
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-800 mb-1.5">ระบบรดน้ำประจำวัน</label>
-                <div className="h-10.5 px-3.5 flex items-center rounded-xl bg-slate-50 border border-slate-200">
-                  <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-800">
-                    <input
-                      type="checkbox"
-                      checked={editForm.auto_water}
-                      onChange={(e) => setEditForm({ ...editForm, auto_water: e.target.checked })}
-                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-                    />
-                    <span>เปิดบันทึกรดน้ำอัตโนมัติ</span>
-                  </label>
-                </div>
-              </div>
-
               {/* สูตรดินสำหรับรอบการปลูกนี้ */}
               <div className="md:col-span-2 bg-amber-50/50 p-3.5 rounded-2xl border border-amber-200/70 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">

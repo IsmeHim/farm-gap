@@ -266,7 +266,6 @@ export default function Harvest() {
     );
     const currentRemaining =
       activeBatch?.remaining_count ??
-      activeBatch?.initial_count ??
       targetPlot?.remaining_count ??
       '';
 

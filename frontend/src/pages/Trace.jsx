@@ -35,7 +35,7 @@ const STAGE_LABELS = {
   soil_prep: '🪴 เตรียมดิน / แคร่',
   planting: '🌿 ย้ายปลูกลงแปลง',
   growing: '🌿 ดูแลรอบปลูก',
-  maintenance: '💧 ให้น้ำ / ดูแล',
+  maintenance: '🌿 ดูแลแปลง / บำรุงรักษา',
   fertilizing: '💩 ปุ๋ย / น้ำหมักชีวภาพ',
   harvest: '🧺 เก็บเกี่ยว / บรรจุ'
 };

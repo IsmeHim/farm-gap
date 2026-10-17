@@ -53,7 +53,6 @@ export default function SmartHarvestModal({
     const prog = getPlotProgressInfo(p, currentBatch);
     const remaining =
       currentBatch?.remaining_count ??
-      currentBatch?.initial_count ??
       p.remaining_count ??
       0;
     if (prog.isReady) {
@@ -290,11 +289,8 @@ export default function SmartHarvestModal({
                 );
                 const remaining =
                   currentBatch?.remaining_count ??
-                  currentBatch?.initial_count ??
                   selectedPlot.remaining_count ??
                   0;
-                const initial = currentBatch?.initial_count ?? selectedPlot.initial_count;
-                const unit = currentBatch?.planting_unit || selectedPlot.planting_unit || 'ต้น';
                 const prog = getPlotProgressInfo(selectedPlot, currentBatch);
                 const matchedCrop = crops.find(
                   (c) =>
@@ -318,11 +314,6 @@ export default function SmartHarvestModal({
                           </div>
                           <div className="text-[11px] text-slate-500 mt-0.5">
                             วันลงปลูก: {selectedPlot.planting_date ? format(new Date(selectedPlot.planting_date), 'dd/MM/yyyy') : '-'}
-                            {initial && (
-                              <span className="ml-2 font-bold text-emerald-900">
-                                (คงเหลือ {Number(remaining).toLocaleString()} / ทั้งหมด {Number(initial).toLocaleString()} {unit})
-                              </span>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -395,7 +386,6 @@ export default function SmartHarvestModal({
                       );
                       const currentRemaining =
                         currentBatch?.remaining_count ??
-                        currentBatch?.initial_count ??
                         selectedPlot?.remaining_count ??
                         '';
                       setForm((prev) => ({
@@ -426,7 +416,6 @@ export default function SmartHarvestModal({
                   );
                   const currentRem = Number(
                     currentBatch?.remaining_count ??
-                    currentBatch?.initial_count ??
                     selectedPlot?.remaining_count ??
                     0
                   );

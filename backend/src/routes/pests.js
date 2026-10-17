@@ -101,9 +101,7 @@ pestsRouter.get('/', async (req, res) => {
       SELECT p.*,
              pl.name AS plot_name,
              pl.crop_name,
-             b.batch_code,
-             b.initial_count AS batch_initial_count,
-             b.remaining_count AS batch_remaining_count
+             b.batch_code
       FROM pest_logs p
       LEFT JOIN plots pl ON pl.id = p.plot_id
       LEFT JOIN planting_batches b ON b.id = p.batch_id
@@ -222,10 +220,9 @@ pestsRouter.post('/', async (req, res) => {
       await pool.query(
         `UPDATE planting_batches
          SET total_damaged_count = COALESCE(total_damaged_count, 0) + ?,
-             remaining_count = GREATEST(0, COALESCE(remaining_count, initial_count, 0) - ?),
              updated_at = NOW()
          WHERE id = ?`,
-        [lossCount, lossCount, targetBatch.id]
+        [lossCount, targetBatch.id]
       );
     }
 
@@ -336,10 +333,9 @@ pestsRouter.put('/:id', async (req, res) => {
       await pool.query(
         `UPDATE planting_batches
          SET total_damaged_count = GREATEST(0, COALESCE(total_damaged_count, 0) + ?),
-             remaining_count = GREATEST(0, COALESCE(remaining_count, initial_count, 0) - ?),
              updated_at = NOW()
          WHERE id = ?`,
-        [diff, diff, effectiveBatchId]
+        [diff, effectiveBatchId]
       );
     }
 

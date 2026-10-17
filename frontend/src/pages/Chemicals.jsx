@@ -120,20 +120,27 @@ function ChemicalCustomModal({ open, setOpen, editingId, form, setForm, save, pl
 
   const applyPreset = (preset) => {
     setSelectedPresetName(preset.name);
-    setForm(prev => ({
-      ...prev,
-      ...preset.data,
-      plot_id: prev.plot_id || (plots[0]?.id || ''),
-      log_date: prev.log_date || new Date().toISOString().split('T')[0],
-      worker_name: prev.worker_name || 'เจ้าของฟาร์ม'
-    }));
+    const firstActivePlot = plots.find(p => p.crop_name && p.crop_name !== '-' && p.status !== 'empty' && p.status !== 'vacant');
+    setForm(prev => {
+      const prevPlot = plots.find(p => p.id === Number(prev.plot_id));
+      const prevPlotVacant = !prevPlot || !prevPlot.crop_name || prevPlot.crop_name === '-' || prevPlot.status === 'empty' || prevPlot.status === 'vacant';
+      return {
+        ...prev,
+        ...preset.data,
+        plot_id: (!prevPlotVacant && prev.plot_id) ? prev.plot_id : (firstActivePlot?.id || ''),
+        log_date: prev.log_date || new Date().toISOString().split('T')[0],
+        worker_name: prev.worker_name || 'เจ้าของฟาร์ม'
+      };
+    });
     toast.success(`✨ ใส่ข้อมูล "${preset.name}" ให้อัตโนมัติเรียบร้อย`);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.plot_id) {
-      toast.error('กรุณาเลือกแปลงปลูก');
+    const selectedPlot = plots.find(p => p.id === Number(form.plot_id));
+    const isSelectedVacant = selectedPlot && (!selectedPlot.crop_name || selectedPlot.crop_name === '-' || selectedPlot.status === 'empty' || selectedPlot.status === 'vacant');
+    if (!form.plot_id || (isSelectedVacant && !editingId)) {
+      toast.error('กรุณาเลือกแปลงที่กำลังปลูก (ไม่สามารถเลือกแปลงว่างได้)');
       return;
     }
     if (!form.product_name || !String(form.product_name).trim()) {
@@ -262,11 +269,20 @@ function ChemicalCustomModal({ open, setOpen, editingId, form, setForm, save, pl
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm cursor-pointer shadow-2xs"
                 >
                   <option value="">-- เลือกแปลง --</option>
-                  {plots.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} {p.crop_name && p.crop_name !== '-' ? `(🌱 ${p.crop_name})` : '(แปลงว่าง)'}
-                    </option>
-                  ))}
+                  {plots.map(p => {
+                    const isVacant = !p.crop_name || p.crop_name === '-' || p.status === 'empty' || p.status === 'vacant';
+                    const isDisabled = isVacant && (!editingId || form.plot_id !== p.id);
+                    return (
+                      <option
+                        key={p.id}
+                        value={p.id}
+                        disabled={isDisabled}
+                        className={isDisabled ? 'text-slate-400 bg-slate-100' : ''}
+                      >
+                        {p.name} {isVacant ? '(แปลงว่าง — ไม่สามารถเลือกได้)' : `(🌱 ${p.crop_name})`}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
