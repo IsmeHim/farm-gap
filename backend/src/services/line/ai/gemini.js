@@ -20,9 +20,10 @@ export async function askGemini(prompt, systemInstruction) {
 
   const candidateModels = [
     process.env.GEMINI_MODEL,
-    'gemini-3.6-flash',
-    'gemini-3.5-flash',
-    'gemini-flash-latest',
+    'gemini-3.5-flash-lite', // ตัวหลัก: ฟรีวันละ 500 ครั้ง เร็ว ฉลาดพอดีกับงานร้านค้า/ฟาร์ม
+    'gemini-3.1-flash-lite', // สำรอง 1: ฟรีอีก 500 ครั้ง/วัน (รวมเป็น 1,000 ครั้ง/วัน)
+    'gemini-3.6-flash',      // สำรอง 2: ตัวท็อป (กรณี Lite ใช้งานไม่ได้)
+    'gemini-2.5-flash-lite', // สำรอง 3
   ].filter(Boolean);
   const models = [...new Set(candidateModels)];
 
@@ -46,13 +47,13 @@ export async function askGemini(prompt, systemInstruction) {
       });
       
       if (!res.ok) {
-        if (res.status === 429) {
-          console.warn('⚠️ Gemini rate limit / quota exceeded (HTTP 429). Serving smart farm knowledge assistant.');
+        if (res.status === 401 || res.status === 403) {
+          console.warn(`⚠️ Gemini API auth/key rejected (HTTP ${res.status}). Aborting model fallbacks.`);
           break;
         }
-        if (res.status === 400 || res.status === 401 || res.status === 403) {
-          console.warn(`⚠️ Gemini API auth/request rejected (HTTP ${res.status}). Aborting model fallbacks.`);
-          break;
+        if (res.status === 429) {
+          console.warn(`⚠️ Gemini model [${model}] rate limit / quota exceeded (HTTP 429). Trying fallback model...`);
+          continue;
         }
         console.warn(`⚠️ Gemini model [${model}] returned HTTP ${res.status}, trying fallback model...`);
         continue;
