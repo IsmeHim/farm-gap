@@ -322,14 +322,19 @@ export default function Report() {
 
     // Helper to find which group an item belongs to
     const findGroup = (plotId, batchId, itemDate) => {
-      if (batchId && batchGroupMap.has(batchId)) {
-        return batchGroupMap.get(batchId);
+      // 1. ถ้ามี batchId ชัดเจน และตรงกับกลุ่มรอบที่โหลดมา
+      if (batchId) {
+        if (batchGroupMap.has(batchId)) {
+          return batchGroupMap.get(batchId);
+        }
+        // ถ้ามี batchId แต่หาไม่เจอใน batches (เป็นรอบที่ถูกยกเลิกไปแล้ว) -> ไม่จัดเข้ากลุ่มใดๆ
+        return null;
       }
+
       const plotList = plotGroupsMap.get(plotId);
       if (!plotList || plotList.length === 0) return null;
-      if (plotList.length === 1) return plotList[0];
 
-      // Multiple batch groups on the same plot: match by date window
+      // 2. ถ้าไม่มี batchId ให้จับคู่ตามช่วงเวลาของรอบในแปลงนั้น
       if (itemDate) {
         const itemTime = new Date(itemDate).getTime();
         for (let i = 0; i < plotList.length; i++) {
@@ -338,14 +343,33 @@ export default function Report() {
           const curStartTime = new Date(cur.start_date || cur.soil_prep_date).getTime();
           const nextStartTime = next ? new Date(next.start_date || next.soil_prep_date).getTime() : Infinity;
 
+          // ถ้าเป็นกิจกรรมก่อนเริ่มรอบแรก (เช่น เพาะเมล็ดก่อนลงแปลง)
           if (i === 0 && itemTime < curStartTime) {
-            return cur; // pre-planting seeding/prep for first batch
+            return cur;
           }
+
           if (itemTime >= curStartTime && itemTime < nextStartTime) {
+            // ถ้ารอบนี้เก็บเกี่ยวเสร็จแล้ว และกิจกรรมเกิดขึ้นหลังวันเก็บเกี่ยว -> ไม่จัดใส่รอบที่ปิดไปแล้ว
+            if (cur.actual_harvest_date) {
+              const harvestTime = new Date(cur.actual_harvest_date).getTime();
+              if (itemTime > harvestTime) {
+                if (next) return next;
+                return null;
+              }
+            }
             return cur;
           }
         }
-        return plotList[plotList.length - 1];
+
+        // หากเวลาอยู่หลังรอบสุดท้าย
+        const lastGroup = plotList[plotList.length - 1];
+        if (lastGroup.actual_harvest_date) {
+          const lastHarvestTime = new Date(lastGroup.actual_harvest_date).getTime();
+          if (itemTime > lastHarvestTime) {
+            return null;
+          }
+        }
+        return lastGroup;
       }
       return plotList[0];
     };
@@ -622,38 +646,34 @@ export default function Report() {
           </div>
 
           {/* =========================================================================
-              SECTION 1: ข้อมูลแปลงเพาะปลูกและการเตรียมดิน (Plots & Soil Management)
+              SECTION 1: ข้อมูลกายภาพแปลงเพาะปลูกและโครงสร้างโรงเรือน (Plot Registration & Infrastructure)
              ========================================================================= */}
           <div className="gap-section space-y-1.5">
             <div className="flex items-center justify-between">
               <h2 className="font-black text-xs text-slate-900 uppercase tracking-wide">
-                หมวดที่ 1: ทะเบียนแปลงเพาะปลูกและการจัดการดิน (Plot Registration & Soil Management)
+                หมวดที่ 1: ทะเบียนแปลงเพาะปลูกและโครงสร้างโรงเรือน (Plot Registration & Infrastructure)
               </h2>
-              <span className="text-[10px] font-semibold text-slate-600">มกษ. 9001-2556 (ข้อ 2)</span>
+              <span className="text-[10px] font-semibold text-slate-600">มกษ. 9001-2556 (ข้อ 1)</span>
             </div>
             <table className="w-full table-fixed border-collapse border border-slate-800 text-[10.5px]">
               <colgroup>
-                <col className="w-[14%]" />
-                <col className="w-[18%]" />
-                <col className="w-[10%]" />
-                <col className="w-[12%]" />
-                <col className="w-[34%]" />
-                <col className="w-[12%]" />
+                <col className="w-[20%]" />
+                <col className="w-[35%]" />
+                <col className="w-[15%]" />
+                <col className="w-[30%]" />
               </colgroup>
               <thead>
                 <tr className="bg-slate-100 text-slate-900 font-bold border-b border-slate-800">
                   <th className="border border-slate-800 py-1.5 px-2 text-left">ชื่อแปลง/แคร่</th>
-                  <th className="border border-slate-800 py-1.5 px-2 text-left">ชนิดพืชที่ปลูก</th>
-                  <th className="border border-slate-800 py-1.5 px-1.5 text-right">พื้นที่ (ตร.ม.)</th>
-                  <th className="border border-slate-800 py-1.5 px-2 text-center">วันเริ่มปลูก</th>
-                  <th className="border border-slate-800 py-1.5 px-2 text-left">การเตรียมดิน / สูตรวัสดุปลูก</th>
-                  <th className="border border-slate-800 py-1.5 px-1.5 text-center">ผลประเมินพื้นที่</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">ลักษณะแปลง / ขนาดมิติ</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-right">พื้นที่ (ตร.ม.)</th>
+                  <th className="border border-slate-800 py-1.5 px-2 text-left">แหล่งน้ำที่ใช้ (GAP ข้อ 1)</th>
                 </tr>
               </thead>
               <tbody>
                 {!displayPlots.length ? (
                   <tr>
-                    <td colSpan={6} className="border border-slate-800 text-center py-4 text-slate-500">
+                    <td colSpan={4} className="border border-slate-800 text-center py-4 text-slate-500">
                       — ไม่มีข้อมูลแปลงเพาะปลูกตามเงื่อนไขที่เลือก —
                     </td>
                   </tr>
@@ -663,30 +683,36 @@ export default function Report() {
                       <td className="border border-slate-800 py-1.5 px-2 font-bold text-slate-900 break-words align-top">
                         {p.name}
                       </td>
-                      <td className="border border-slate-800 py-1.5 px-2 font-semibold text-slate-900 break-words align-top">
-                        {p.crop_name || '-'}
+                      <td className="border border-slate-800 py-1.5 px-2 font-medium text-slate-800 break-words align-top">
+                        {p.dimension ? `แคร่ปลูกยกระดับ (${p.dimension})` : 'แคร่ปลูกยกระดับ 2 x 6 เมตร'}
+                        <span className="block text-[9.5px] text-slate-500">โรงเรือนตาข่ายกันแมลง ยกสูงจากพื้นดิน</span>
                       </td>
-                      <td className="border border-slate-800 py-1.5 px-1.5 text-right font-mono align-top">
-                        {Number(p.area_sqm || 0).toLocaleString()}
-                      </td>
-                      <td className="border border-slate-800 py-1.5 px-2 text-center font-mono text-[10px] align-top">
-                        {p.planting_date ? format(new Date(p.planting_date), 'dd/MM/yyyy') : '-'}
+                      <td className="border border-slate-800 py-1.5 px-2 text-right font-mono font-bold align-top">
+                        {Number(p.area_sqm || 12).toLocaleString()}
                       </td>
                       <td className="border border-slate-800 py-1.5 px-2 text-slate-800 break-words leading-snug align-top">
-                        <div>{p.effective_soil_recipe || p.soil_recipe || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบ)'}</div>
-                        {p.soil_test_date && (
-                          <div className="text-[9.5px] text-slate-500 font-mono">
-                            วันที่ตรวจดิน: {format(new Date(p.soil_test_date), 'dd/MM/yyyy')}
-                          </div>
-                        )}
-                      </td>
-                      <td className="border border-slate-800 py-1.5 px-1.5 text-center font-bold text-slate-900 align-top">
-                        ✓ {p.field_safety_status || 'ปลอดภัย'}
+                        <div>น้ำประปาหมู่บ้าน / แหล่งน้ำสะอาดปลอดภัย</div>
+                        <div className="text-[9.5px] text-emerald-800 font-semibold">✓ ผ่านเกณฑ์มาตรฐาน GAP ข้อ 1</div>
                       </td>
                     </tr>
                   ))
                 )}
               </tbody>
+              {displayPlots.length > 0 && (
+                <tfoot>
+                  <tr className="bg-slate-100/80 font-bold border-t border-slate-800 text-[10.5px]">
+                    <td colSpan={2} className="border border-slate-800 py-1.5 px-2 text-right">
+                      รวมพื้นที่เพาะปลูกทั้งหมด:
+                    </td>
+                    <td className="border border-slate-800 py-1.5 px-2 text-right font-mono text-emerald-950 font-black">
+                      {displayPlots.reduce((sum, p) => sum + Number(p.area_sqm || 12), 0).toLocaleString()}
+                    </td>
+                    <td className="border border-slate-800 py-1.5 px-2 text-slate-600 text-[10px]">
+                      ตร.ม. (รวม {displayPlots.length} แปลง/แคร่)
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
 

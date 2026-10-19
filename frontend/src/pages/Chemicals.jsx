@@ -110,16 +110,64 @@ const CHEMICAL_PRESETS = [
       safety_ppe: 1,
       phi_days: 3,
     }
+  },
+  {
+    icon: '🐔',
+    name: 'ปุ๋ยขี้ไก่',
+    desc: '3 ถังปูน บำรุงรอบต้น',
+    badge: 'อินทรีย์',
+    data: {
+      chem_type: 'ปุ๋ย',
+      product_name: 'ปุ๋ยขี้ไก่หมัก / มูลไก่',
+      amount: 3,
+      unit: 'ถังปูน',
+      application_method: 'โรย',
+      reason: 'ใส่ปุ๋ยขี้ไก่บำรุงรอบต้น เร่งการเจริญเติบโต',
+      safety_ppe: 1,
+      phi_days: 0,
+    }
+  },
+  {
+    icon: '🍍',
+    name: 'น้ำหมักสับปะรด / PSB',
+    desc: 'รดสลับ 3 วันครั้ง',
+    badge: 'อินทรีย์',
+    data: {
+      chem_type: 'ฮอร์โมน/สารบำรุง',
+      product_name: 'น้ำหมักสับปะรด + จุลินทรีย์สังเคราะห์แสง',
+      amount: 50,
+      unit: 'ml',
+      application_method: 'ราด',
+      reason: 'รดน้ำหมักสับปะรดสลับกับจุลินทรีย์สังเคราะห์แสง ช่วยระบบรากและใบ',
+      safety_ppe: 0,
+      phi_days: 0,
+    }
   }
+];
+
+const PRESET_UNITS = [
+  { value: 'ml', label: 'ml (มิลลิลิตร)' },
+  { value: 'ลิตร', label: 'ลิตร (L)' },
+  { value: 'g', label: 'g (กรัม)' },
+  { value: 'กก.', label: 'กก. (กิโลกรัม)' },
+  { value: 'ถังปูน', label: 'ถังปูน (ถังหิ้วปูนก่อสร้าง)' },
+  { value: 'กระบะปูน', label: 'กระบะปูน' },
+  { value: 'กระสอบ', label: 'กระสอบ' },
+  { value: 'ช้อนโต๊ะ', label: 'ช้อนโต๊ะ' },
+  { value: 'ช้อนชา', label: 'ช้อนชา' },
+  { value: 'ขัน', label: 'ขัน' },
+  { value: 'กำมือ', label: 'กำมือ' },
 ];
 
 function ChemicalCustomModal({ open, setOpen, editingId, form, setForm, save, plots, title }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedPresetName, setSelectedPresetName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [isCustomUnit, setIsCustomUnit] = useState(false);
 
   const applyPreset = (preset) => {
     setSelectedPresetName(preset.name);
+    setIsCustomUnit(false);
     const firstActivePlot = plots.find(p => p.crop_name && p.crop_name !== '-' && p.status !== 'empty' && p.status !== 'vacant');
     setForm(prev => {
       const prevPlot = plots.find(p => p.id === Number(prev.plot_id));
@@ -217,7 +265,7 @@ function ChemicalCustomModal({ open, setOpen, editingId, form, setForm, save, pl
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {CHEMICAL_PRESETS.map((preset) => {
                     const isSelected = selectedPresetName === preset.name;
                     return (
@@ -330,7 +378,7 @@ function ChemicalCustomModal({ open, setOpen, editingId, form, setForm, save, pl
                   <input
                     type="text"
                     required
-                    placeholder="เช่น ไตรโคเดอร์มา, น้ำหมักปลา, ปุ๋ยสูตร 15-15-15"
+                    placeholder="เช่น ปุ๋ยขี้ไก่ 3 อ่าวป่น, ไตรโคเดอร์มา, น้ำหมักปลา, ปุ๋ยสูตร 15-15-15"
                     value={form.product_name || ''}
                     onChange={e => setForm({ ...form, product_name: e.target.value })}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm placeholder:text-slate-400 shadow-2xs"
@@ -347,26 +395,81 @@ function ChemicalCustomModal({ open, setOpen, editingId, form, setForm, save, pl
                       type="number"
                       step="any"
                       min="0"
-                      placeholder="เช่น 20"
+                      placeholder="เช่น 3 หรือ 20"
                       value={form.amount ?? ''}
                       onChange={e => setForm({ ...form, amount: e.target.value })}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm shadow-2xs"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-1.5">หน่วย</label>
-                    <select
-                      value={form.unit || 'ml'}
-                      onChange={e => setForm({ ...form, unit: e.target.value })}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm shadow-2xs cursor-pointer"
-                    >
-                      <option value="ml">ml (มิลลิลิตร)</option>
-                      <option value="ลิตร">ลิตร (L)</option>
-                      <option value="g">g (กรัม)</option>
-                      <option value="กก.">กก. (กิโลกรัม)</option>
-                      <option value="ช้อนโต๊ะ">ช้อนโต๊ะ</option>
-                      <option value="กระสอบ">กระสอบ</option>
-                    </select>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-bold text-slate-800">หน่วย</label>
+                      {(isCustomUnit || (!PRESET_UNITS.some(u => u.value === form.unit) && form.unit)) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCustomUnit(false);
+                            setForm({ ...form, unit: 'ml' });
+                          }}
+                          className="text-[10px] text-emerald-700 hover:underline font-bold cursor-pointer"
+                        >
+                          เลือกจากรายการ
+                        </button>
+                      )}
+                    </div>
+
+                    {!isCustomUnit && (PRESET_UNITS.some(u => u.value === form.unit) || !form.unit) ? (
+                      <select
+                        value={form.unit || 'ml'}
+                        onChange={e => {
+                          if (e.target.value === 'custom') {
+                            setIsCustomUnit(true);
+                            setForm({ ...form, unit: '' });
+                          } else {
+                            setForm({ ...form, unit: e.target.value });
+                          }
+                        }}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm shadow-2xs cursor-pointer"
+                      >
+                        {PRESET_UNITS.map(u => (
+                          <option key={u.value} value={u.value}>
+                            {u.label}
+                          </option>
+                        ))}
+                        <option value="custom">✏️ ระบุหน่วยเอง...</option>
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder="พิมพ์หน่วย เช่น ถังปูน, ปี๊บ, อ่าว"
+                        value={form.unit || ''}
+                        onChange={e => setForm({ ...form, unit: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border-2 border-emerald-500 bg-emerald-50/40 text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm shadow-2xs"
+                        autoFocus
+                      />
+                    )}
+
+                    {/* Quick unit pills */}
+                    <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                      <span className="text-[10px] text-slate-400 font-medium">ลัด:</span>
+                      {['ถังปูน', 'กระบะปูน', 'กระสอบ', 'กก.', 'ml', 'ลิตร'].map(u => (
+                        <button
+                          key={u}
+                          type="button"
+                          onClick={() => {
+                            setIsCustomUnit(false);
+                            setForm(prev => ({ ...prev, unit: u }));
+                          }}
+                          className={`text-[10.5px] px-1.5 py-0.5 rounded border transition cursor-pointer font-bold ${
+                            form.unit === u
+                              ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                              : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          {u}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -380,6 +483,7 @@ function ChemicalCustomModal({ open, setOpen, editingId, form, setForm, save, pl
                     <option value="พ่น">พ่นทางใบ</option>
                     <option value="ราด">ราดโคนต้น / รดลงดิน</option>
                     <option value="โรย">โรย / หว่านรอบโคน</option>
+                    <option value="คลุกดิน">คลุกผสมดิน</option>
                     <option value="ฉีดราก">ฉีดเข้าระบบน้ำ / ให้ปุ๋ยน้ำ</option>
                     <option value="อื่นๆ">อื่นๆ</option>
                   </select>

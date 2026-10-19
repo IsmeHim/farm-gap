@@ -10,6 +10,9 @@ import {
   ShoppingBag,
   List,
   RotateCcw,
+  Plus,
+  Layers,
+  Check,
 } from 'lucide-react';
 import { getBatchProgressInfo, getDaysPlanted, parseDateMidnight } from '../../utils/plotUtils';
 
@@ -45,6 +48,7 @@ export default function PlotCard({
   );
   const isGrowing = hasCrop && !isHarvestReady;
   const isEmpty = !hasCrop && !isNurseryPending;
+  const hasSoilPrepared = Boolean(p.soil_prep_date && p.soil_recipe);
 
   return (
     <div
@@ -131,39 +135,66 @@ export default function PlotCard({
 
         {/* 2. กล่องแสดงสูตรดินประจำแคร่ (GAP ข้อ 2) */}
         <div className="p-3.5 pb-2">
-          <div className="rounded-2xl p-3 border bg-gradient-to-br from-amber-50/70 via-stone-50/90 to-amber-50/40 border-amber-200/90 text-xs shadow-2xs space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-[11px] text-amber-950 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-amber-600" />
-                <span>สูตรดิน (GAP ข้อ 2)</span>
-              </span>
-              <div className="flex items-center gap-1">
-                {p.soil_prep_date ? (
-                  <span className="font-semibold text-amber-800 text-[10px] bg-amber-100/80 px-1.5 py-0.2 rounded border border-amber-300">
-                    ✓ {format(new Date(p.soil_prep_date), 'dd/MM/yy')}
-                  </span>
-                ) : (
-                  <span className="font-bold text-orange-700 text-[10px] bg-orange-100 px-1.5 py-0.2 rounded border border-orange-300">
-                    รอเตรียมดิน
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => onOpenSoilModal(p)}
-                  className="inline-flex items-center gap-0.5 text-[10.5px] font-bold text-amber-800 hover:text-amber-950 hover:bg-amber-200/70 px-1.5 py-0.5 rounded transition cursor-pointer"
-                  title="ปรับปรุงสูตรดินและวันที่เตรียมแคร่"
-                >
-                  <Edit3 className="w-3 h-3 text-amber-700" />
-                  <span>ปรับสูตร</span>
-                </button>
+          {!hasSoilPrepared ? (
+            <div className="rounded-2xl p-2.5 sm:p-3 border-2 border-dashed border-amber-300/80 bg-amber-50/40 hover:bg-amber-50/70 transition-all flex items-center justify-between gap-2 shadow-2xs">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                  <Layers className="w-3.5 h-3.5 text-amber-700" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11.5px] font-black text-amber-950 whitespace-nowrap">
+                      สูตรดิน (GAP ข้อ 2)
+                    </span>
+                    <span className="text-[10px] text-amber-700 font-extrabold bg-amber-100/90 border border-amber-200/80 px-1.5 py-0.5 rounded-md whitespace-nowrap">
+                      ยังไม่เตรียมดิน
+                    </span>
+                  </div>
+                  <p className="text-[10.5px] text-slate-500 truncate mt-0.5">
+                    บันทึกการผสมดิน ปรุงแคร่ หรือพักตากดิน
+                  </p>
+                </div>
               </div>
-            </div>
 
-            {/* ข้อความสูตรดิน */}
-            <p className="text-[11px] leading-relaxed text-stone-700 font-medium line-clamp-2">
-              {p.soil_recipe || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)'}
-            </p>
-          </div>
+              <button
+                type="button"
+                onClick={() => onOpenSoilModal(p)}
+                className="inline-flex items-center gap-1 text-[11px] font-extrabold text-amber-900 bg-white hover:bg-amber-100 border border-amber-300 hover:border-amber-400 px-3 py-1.5 rounded-xl shadow-2xs transition cursor-pointer active:scale-95 shrink-0 whitespace-nowrap"
+              >
+                <Plus className="w-3.5 h-3.5 text-amber-700" />
+                <span>เตรียมดิน</span>
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-2xl p-3 border bg-gradient-to-br from-amber-50/70 via-stone-50/90 to-amber-50/40 border-amber-200/90 text-xs shadow-2xs space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold text-[11px] text-amber-950 flex items-center gap-1.5 whitespace-nowrap">
+                  <span className="w-2 h-2 rounded-full bg-amber-600 shrink-0" />
+                  <span>สูตรดิน (GAP ข้อ 2)</span>
+                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="font-extrabold text-emerald-800 text-[10px] bg-emerald-100/90 px-2 py-0.5 rounded-md border border-emerald-300 flex items-center gap-1 whitespace-nowrap">
+                    <Check className="w-3 h-3 text-emerald-600" />
+                    <span>เตรียมแล้ว {format(new Date(p.soil_prep_date), 'dd/MM/yy')}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onOpenSoilModal(p)}
+                    className="inline-flex items-center gap-0.5 text-[10.5px] font-bold text-amber-800 hover:text-amber-950 hover:bg-amber-200/70 px-1.5 py-0.5 rounded transition cursor-pointer whitespace-nowrap"
+                    title="แก้ไขสูตรดินหรือวันที่เตรียมแคร่"
+                  >
+                    <Edit3 className="w-3 h-3 text-amber-700" />
+                    <span>แก้ไข</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* ข้อความสูตรดิน */}
+              <p className="text-[11px] leading-relaxed text-stone-700 font-medium line-clamp-2">
+                {p.soil_recipe}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* 3. ส่วนข้อมูลการเพาะปลูก & รอบการผลิต (Crop Info & Timeline Details) */}

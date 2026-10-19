@@ -50,7 +50,8 @@ r.get('/:year', async (req, res) => {
        FROM crop_activities a 
        JOIN plots p ON p.id = a.plot_id 
        WHERE a.user_id=? AND a.activity_date BETWEEN ? AND ? 
-       ORDER BY a.activity_date ASC, a.id ASC`, [uid, start, end]),
+         AND (a.batch_id IS NULL OR a.batch_id = 0 OR a.batch_id IN (SELECT id FROM planting_batches WHERE user_id = ?))
+       ORDER BY a.activity_date ASC, a.id ASC`, [uid, start, end, uid]),
     q('SELECT * FROM crops WHERE user_id=? OR user_id IS NULL ORDER BY id ASC', [uid]),
   ]);
 

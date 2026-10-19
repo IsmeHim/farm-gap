@@ -6,6 +6,8 @@ import {
   CheckCircle2,
   Calendar,
   Sparkles,
+  User,
+  FileText,
 } from 'lucide-react';
 import { getTodayLocalStr, formatDateForInput } from '../../utils/plotUtils';
 
@@ -64,7 +66,7 @@ export default function NewBatchModal({
                     setForm(prev => ({
                       ...prev,
                       seed_prep_date: prev.seed_prep_date || getTodayLocalStr(),
-                      notes: (!prev.notes && matched) ? (matched.notes || '') : prev.notes
+                      notes: matched?.notes || ''
                     }));
                   }}
                   className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
@@ -89,7 +91,7 @@ export default function NewBatchModal({
                           setForm(prev => ({
                             ...prev,
                             seed_prep_date: prev.seed_prep_date || getTodayLocalStr(),
-                            notes: (!prev.notes && matched) ? (matched.notes || '') : prev.notes
+                            notes: matched?.notes || ''
                           }));
                         }}
                         className="w-4 h-4 text-teal-600 focus:ring-teal-500 cursor-pointer"
@@ -115,7 +117,8 @@ export default function NewBatchModal({
                     const found = plots.find(p => p.id === Number(form.plot_id));
                     setForm(prev => ({
                       ...prev,
-                      seed_prep_date: found?.seed_prep_date ? formatDateForInput(found.seed_prep_date) : ''
+                      seed_prep_date: found?.seed_prep_date ? formatDateForInput(found.seed_prep_date) : '',
+                      notes: ''
                     }));
                   }}
                   className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
@@ -139,7 +142,8 @@ export default function NewBatchModal({
                           const found = plots.find(p => p.id === Number(form.plot_id));
                           setForm(prev => ({
                             ...prev,
-                            seed_prep_date: found?.seed_prep_date ? formatDateForInput(found.seed_prep_date) : ''
+                            seed_prep_date: found?.seed_prep_date ? formatDateForInput(found.seed_prep_date) : '',
+                            notes: ''
                           }));
                         }}
                         className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
@@ -233,7 +237,7 @@ export default function NewBatchModal({
                       setForm(prev => ({
                         ...prev,
                         crop_id: val,
-                        notes: matched?.notes || prev.notes
+                        notes: matched?.notes || ''
                       }));
                     }}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-teal-300 bg-white text-slate-900 font-bold focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm"
@@ -277,19 +281,39 @@ export default function NewBatchModal({
                   />
                 </div>
 
-
                 {/* รายละเอียด / วิธีการเพาะ */}
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                    วิธีการเพาะเมล็ด / บันทึกการจัดการกล้า (GAP ข้อ 4)
-                  </label>
+                <div className="md:col-span-2 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <FileText className="w-4 h-4 text-teal-600" />
+                      <span>วิธีการเพาะเมล็ด / บันทึกการจัดการกล้า (GAP ข้อ 4)</span>
+                    </label>
+                    {(() => {
+                      const matched = crops.find((c) => String(c.id) === String(form.crop_id));
+                      if (!matched?.notes) return null;
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => setForm((prev) => ({ ...prev, notes: matched.notes }))}
+                          className="text-[11px] font-bold text-teal-700 hover:text-teal-900 bg-teal-100/70 hover:bg-teal-200/80 px-2.5 py-0.5 rounded-lg border border-teal-300 transition cursor-pointer flex items-center gap-1"
+                          title="ดึงข้อมูลวิธีการเพาะจากคลังชนิดผักอีกครั้ง"
+                        >
+                          <Sparkles className="w-3 h-3 text-teal-600" />
+                          <span>ดึงจากคลังชนิดผัก</span>
+                        </button>
+                      );
+                    })()}
+                  </div>
                   <textarea
                     rows={3}
-                    value={form.notes}
+                    value={form.notes || ''}
                     onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                    placeholder="เพาะเมล็ดในกล่องพลาสติกที่มีฝาปิดมิดชิด วางกระดาษทิชชูในกล่องพลาสติก พ่นน้ำให้ทั่วกระดาษทิชชูหมาดๆ โรยเมล็ดบางๆ ปิดทับด้วยกระดาษทิชชูแล้วพ่นน้ำให้หมาดๆ เสร็จแล้วปิดฝากล่อง"
-                    className="w-full px-3.5 py-2 rounded-xl border border-teal-300 bg-white text-slate-900 font-medium placeholder:text-slate-400 focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-xs leading-relaxed"
+                    placeholder="ดึงจากคลังชนิดผักอัตโนมัติ หรือพิมพ์ระบุ เช่น แช่น้ำอุ่น 3 ชม. เทน้ำออก ผสมดิน หรือเพาะในกล่องปิดทิชชูหมาด 7 วัน..."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-teal-300 bg-white text-slate-900 font-medium placeholder:text-slate-400 focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-xs sm:text-sm leading-relaxed"
                   />
+                  <p className="text-[10.5px] text-teal-700 font-medium">
+                    * ดึงข้อมูลวิธีเพาะเมล็ดจากคลังชนิดผักอัตโนมัติ (สามารถแก้ไขเพิ่มเติมตามการทำจริงได้)
+                  </p>
                 </div>
               </div>
             ) : (
@@ -357,8 +381,11 @@ export default function NewBatchModal({
 
 
                 {/* วันที่เริ่มปลูกลงแปลง */}
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">วันที่เริ่มลงแปลงปลูก</label>
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>วันที่เริ่มลงแปลงปลูก</span>
+                  </label>
                   <input
                     type="date"
                     required
@@ -366,74 +393,72 @@ export default function NewBatchModal({
                     onChange={(e) => setForm({ ...form, start_date: e.target.value })}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"
                   />
+                  <span className="text-[10.5px] text-slate-400 block mt-1">
+                    * วันที่หว่านเมล็ดลงแคร่ หรือวันที่ย้ายกล้าลงแปลงจริง
+                  </span>
                 </div>
 
-                {/* วันที่เพาะเมล็ด (ถ้ามี) */}
-                {form.seed_prep_date && (
-                  <div className="md:col-span-2 bg-teal-50/70 p-3 rounded-2xl border border-teal-200/80 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <Sprout className="w-4 h-4 text-teal-600 shrink-0" />
-                      <div>
-                        <span className="font-bold text-teal-900">วันที่เพาะกล้าที่บันทึกไว้:</span>{' '}
-                        <span className="font-extrabold text-teal-950">{format(new Date(form.seed_prep_date), 'dd/MM/yyyy')}</span>
-                        <span className="text-[10px] text-teal-700 block mt-0.5">* คำนวณวันเก็บเกี่ยวร่วมกับอายุต้นกล้าอัตโนมัติ</span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setForm(prev => ({ ...prev, seed_prep_date: '' }))}
-                      className="text-[11px] text-rose-600 hover:text-rose-800 font-bold hover:underline cursor-pointer"
-                    >
-                      ล้างวันเพาะกล้า
-                    </button>
-                  </div>
-                )}
+                {/* ผู้ปฏิบัติงาน / ผู้บันทึก */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5 flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>ผู้ปฏิบัติงาน / ผู้บันทึก</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.operator_name || 'เจ้าของฟาร์ม'}
+                    onChange={(e) => setForm({ ...form, operator_name: e.target.value })}
+                    placeholder="เช่น เจ้าของฟาร์ม / ผู้ดูแลแปลง"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"
+                  />
+                  <span className="text-[10.5px] text-slate-400 block mt-1">
+                    * ผู้รับผิดชอบตามมาตรฐาน GAP
+                  </span>
+                </div>
 
-                {/* วันที่เตรียมดิน/ปรุงดินสำหรับรอบนี้ (GAP ข้อ 2) */}
-                <div className="md:col-span-2 bg-amber-50/60 p-3.5 rounded-2xl border border-amber-200/80 space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                    <label className="block text-xs font-bold text-amber-950 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                      <span>วันที่เตรียมดิน / ปรุงดินรอบนี้ (GAP ข้อ 2)</span>
+                {/* บันทึกการปฏิบัติงานจริง (รายละเอียดการลงแปลง) */}
+                <div className="md:col-span-2 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <FileText className="w-4 h-4 text-emerald-600" />
+                      <span>บันทึกการปฏิบัติงานจริง (รายละเอียดการลงแปลง)</span>
                     </label>
+                    <span className="text-[11px] text-slate-400">
+                      * บันทึกลงสมุด GAP ข้อ 4
+                    </span>
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={form.notes || ''}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                    placeholder="เช่น หว่านเมล็ดผักบุ้ง 3 ขีดใน 1 แคร่ รดน้ำเช้าเย็น"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-medium placeholder:text-slate-400 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-xs sm:text-sm leading-relaxed"
+                  />
+
+                  {/* Preset Pills */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[10.5px] font-bold text-slate-500">ตัวอย่างบันทึกด่วน:</span>
                     <button
                       type="button"
-                      onClick={() => setForm(prev => ({ ...prev, soil_prep_date: getTodayLocalStr() }))}
-                      className="text-[11px] text-amber-800 hover:text-amber-950 font-bold hover:underline cursor-pointer self-start sm:self-auto"
+                      onClick={() => setForm((prev) => ({ ...prev, notes: 'หว่านเมล็ดผักบุ้ง 3 ขีดใน 1 แคร่ รดน้ำเช้าเย็น' }))}
+                      className="text-[10.5px] font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-lg transition cursor-pointer"
                     >
-                      ⚡ ใช้วันนี้ ({format(new Date(), 'dd/MM/yyyy')})
+                      🌱 หว่านเมล็ดผักบุ้ง 3 ขีดใน 1 แคร่ รดน้ำเช้าเย็น
                     </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="sm:col-span-1">
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center gap-1">
-                        <Calendar className="w-3 h-3 text-amber-600" />
-                        <span>วันที่เตรียมดิน</span>
-                      </label>
-                      <input
-                        type="date"
-                        required
-                        value={form.soil_prep_date}
-                        onChange={(e) => setForm({ ...form, soil_prep_date: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl border border-amber-300 bg-white text-slate-900 font-bold focus:border-amber-600 focus:ring-1 focus:ring-amber-600 outline-none text-xs"
-                      />
-                      <span className="text-[10px] text-slate-400 block mt-0.5">
-                        * ตรวจสอบ/ยืนยันเพื่อบันทึก GAP
-                      </span>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        สูตรดินที่ใช้ในแปลงนี้
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={form.soil_recipe}
-                        onChange={(e) => setForm({ ...form, soil_recipe: e.target.value })}
-                        placeholder="เช่น ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)"
-                        className="w-full px-3 py-2 rounded-xl border border-amber-300 bg-white text-slate-900 font-medium placeholder:text-slate-400 focus:border-amber-600 focus:ring-1 focus:ring-amber-600 outline-none text-xs leading-relaxed"
-                      />
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setForm((prev) => ({ ...prev, notes: 'ย้ายต้นกล้า 200 ต้นลงแคร่ปลูก รดน้ำเช้า-เย็น' }))}
+                      className="text-[10.5px] font-semibold bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 px-2.5 py-1 rounded-lg transition cursor-pointer"
+                    >
+                      🌿 ย้ายต้นกล้า 200 ต้นลงแคร่ รดน้ำเช้า-เย็น
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm((prev) => ({ ...prev, notes: 'หยอดเมล็ดแถวละ 10 ซม. คลุมฟางบางๆ รดน้ำชุ่มเช้า-เย็น' }))}
+                      className="text-[10.5px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-2.5 py-1 rounded-lg transition cursor-pointer"
+                    >
+                      🌾 คลุมฟาง รดน้ำชุ่ม
+                    </button>
                   </div>
                 </div>
               </div>

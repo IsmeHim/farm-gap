@@ -254,6 +254,7 @@ harvestRouter.post('/smart-record', async (req, res) => {
              seed_notes = NULL,
              seed_crop_id = NULL,
              soil_prep_date = NULL,
+             soil_recipe = NULL,
              updated_by = ?, 
              updated_at = CURRENT_TIMESTAMP 
          WHERE id = ?`,

@@ -177,7 +177,7 @@ export default function Plots() {
           seed_prep_date: found?.seed_prep_date
             ? formatDateForInput(found.seed_prep_date)
             : '',
-          notes: found?.seed_notes || prev.notes || '',
+          notes: '',
         }));
         setShowNewModal(true);
       }
@@ -217,9 +217,7 @@ export default function Plots() {
         ? formatDateForInput(found.seed_prep_date)
         : '',
       operator_name: 'เจ้าของฟาร์ม',
-      notes:
-        chosenCrop?.notes ||
-        'เพาะเมล็ดในกล่องพลาสติกที่มีฝาปิดมิดชิด วางกระดาษทิชชูในกล่องพลาสติก พ่นน้ำให้ทั่วกระดาษทิชชูหมาดๆ โรยเมล็ดบางๆ ปิดทับด้วยกระดาษทิชชูแล้วพ่นน้ำให้หมาดๆ เสร็จแล้วปิดฝากล่อง',
+      notes: initialMode === 'nursery' ? (chosenCrop?.notes || '') : '',
       soil_recipe:
         found?.soil_recipe ||
         'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)',
@@ -364,9 +362,11 @@ export default function Plots() {
       (b) => b.plot_id === plot.id && (b.status === 'growing' || b.status === 'harvest_ready')
     );
     const initialSoilDate = plot.soil_prep_date || currentBatch?.soil_prep_date;
+    const hasPrepared = Boolean(plot.soil_prep_date && plot.soil_recipe);
     setSoilForm({
       plot_id: plot.id,
       plot_name: plot.name,
+      has_prepared: hasPrepared,
       soil_recipe:
         plot.soil_recipe ||
         currentBatch?.soil_recipe ||
@@ -374,6 +374,8 @@ export default function Plots() {
       soil_prep_date: initialSoilDate
         ? formatDateForInput(initialSoilDate)
         : getTodayLocalStr(),
+      operator_name: plot.soil_activity?.operator_name || 'เจ้าของฟาร์ม',
+      details: plot.soil_activity?.details || '',
     });
     setShowSoilModal(true);
   };
@@ -383,16 +385,34 @@ export default function Plots() {
     if (!soilForm.plot_id) return;
     try {
       setSavingSoil(true);
-      await api.put(`/api/plots/${soilForm.plot_id}`, {
+      const res = await api.put(`/api/plots/${soilForm.plot_id}/soil`, {
         soil_recipe: soilForm.soil_recipe,
-        soil_prep_date: soilForm.soil_prep_date || null,
+        soil_prep_date: soilForm.soil_prep_date,
+        operator_name: soilForm.operator_name || 'เจ้าของฟาร์ม',
+        details: soilForm.details || '',
       });
-      toast.success(`บันทึกสูตรดิน/การเตรียมแคร่ของ "${soilForm.plot_name}" เรียบร้อยแล้ว!`);
+      toast.success(res.data?.message || `บันทึกกิจกรรมเตรียมดินของ "${soilForm.plot_name}" เรียบร้อยแล้ว!`);
       setShowSoilModal(false);
       fetchData();
     } catch (err) {
       console.error('Failed to update soil recipe:', err);
       toast.error(err.response?.data?.error || 'เกิดข้อผิดพลาดในการบันทึกสูตรดิน');
+    } finally {
+      setSavingSoil(false);
+    }
+  };
+
+  const handleDeleteSoil = async (plotId) => {
+    if (!window.confirm('ต้องการยกเลิกกิจกรรมเตรียมดินของแปลงนี้หรือไม่?')) return;
+    try {
+      setSavingSoil(true);
+      const res = await api.delete(`/api/plots/${plotId}/soil`);
+      toast.success(res.data?.message || 'ยกเลิกการเตรียมดินเรียบร้อยแล้ว');
+      setShowSoilModal(false);
+      fetchData();
+    } catch (err) {
+      console.error('Failed to delete soil prep:', err);
+      toast.error(err.response?.data?.error || 'เกิดข้อผิดพลาดในการยกเลิก');
     } finally {
       setSavingSoil(false);
     }
@@ -968,6 +988,7 @@ export default function Plots() {
         setSoilForm={setSoilForm}
         savingSoil={savingSoil}
         onSave={handleSaveSoil}
+        onDelete={handleDeleteSoil}
       />
 
       {/* Modal 5: บันทึกกิจกรรมแปลง / ต้นกล้า GAP */}

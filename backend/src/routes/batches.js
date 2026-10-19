@@ -172,20 +172,37 @@ batchesRouter.post('/', async (req, res) => {
     );
 
     // 6. บันทึกขั้นตอนที่ 1: เตรียมดิน/แคร่ปลูก (GAP #2 Soil Management)
-    await pool.query(
-      `INSERT INTO crop_activities (user_id, plot_id, batch_id, activity_date, stage, title, details, materials_used, operator_name)
-       VALUES (?, ?, ?, ?, 'soil_prep', ?, ?, ?, ?)`,
-      [
-        req.user.id,
-        plot_id,
-        batchId,
-        effectiveSoilPrepDate,
-        `เตรียมดินและแคร่ปลูก (${batch_code})`,
-        `ผสมดินและปรับปรุงแปลงปลูกตามสูตรมาตรฐานฟาร์ม เตรียมแปลงสำหรับการปลูก ${crop.name}`,
-        effectiveSoilRecipe || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบ)',
-        req.user.display_name || 'เจ้าของฟาร์ม'
-      ]
+    // ตรวจสอบว่ามีกิจกรรมเตรียมดินที่ผู้ใช้บันทึกไว้ล่วงหน้าแล้วหรือไม่
+    const [existingSoilActs] = await pool.query(
+      `SELECT id FROM crop_activities WHERE batch_id = ? AND stage = 'soil_prep' LIMIT 1`,
+      [batchId]
     );
+
+    if (existingSoilActs.length === 0) {
+      // ถ้ายังไม่มีกิจกรรมเตรียมดิน ให้สร้างกิจกรรมเตรียมดินมาตรฐานสำหรับรอบนี้
+      await pool.query(
+        `INSERT INTO crop_activities (user_id, plot_id, batch_id, activity_date, stage, title, details, materials_used, operator_name)
+         VALUES (?, ?, ?, ?, 'soil_prep', ?, ?, ?, ?)`,
+        [
+          req.user.id,
+          plot_id,
+          batchId,
+          effectiveSoilPrepDate,
+          `เตรียมดินและแคร่ปลูก (${batch_code})`,
+          `ผสมดินและปรับปรุงแปลงปลูกตามสูตรมาตรฐานฟาร์ม เตรียมแปลงสำหรับการปลูก ${crop.name}`,
+          effectiveSoilRecipe || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบ)',
+          req.user.display_name || 'เจ้าของฟาร์ม'
+        ]
+      );
+    } else {
+      // มีกิจกรรมเตรียมดินจริงที่บันทึกไว้ก่อนแล้ว ให้อัปเดตชื่อ batch_code แนบท้าย
+      await pool.query(
+        `UPDATE crop_activities 
+         SET title = CONCAT(title, ' (${batch_code})')
+         WHERE id = ? AND title NOT LIKE '%BATCH-%'`,
+        [existingSoilActs[0].id]
+      );
+    }
 
     // 7. บันทึกขั้นตอนการย้ายกล้าลงแปลง (GAP #3 Nursery & Planting)
     await pool.query(
@@ -390,19 +407,19 @@ batchesRouter.delete('/:id', async (req, res) => {
              seed_prep_date = NULL,
              seed_notes = NULL,
              seed_crop_id = NULL,
+             soil_prep_date = NULL,
+             soil_recipe = NULL,
              updated_at = NOW()
          WHERE id = ? AND user_id = ?`,
         [batch.plot_id, req.user.id]
       );
-
-
     }
 
-    // 2. ลบ crop_activities ที่เกี่ยวข้องกับรอบการปลูกนี้
+    // 2. ลบ crop_activities ทั้งหมดที่เกี่ยวข้องกับรอบการปลูกที่ถูกยกเลิกนี้ (ไม่ให้ตกค้างในเอกสาร GAP)
     await pool.query(
       `DELETE FROM crop_activities 
-       WHERE user_id = ? AND plot_id = ? AND stage = 'planting' AND title LIKE ?`,
-      [req.user.id, batch.plot_id, `%${batch.batch_code}%`]
+       WHERE user_id = ? AND (batch_id = ? OR (plot_id = ? AND title LIKE ?))`,
+      [req.user.id, batch.id, batch.plot_id, `%${batch.batch_code}%`]
     ).catch(() => {});
 
     // 3. ลบรอบการปลูกออกจาก planting_batches

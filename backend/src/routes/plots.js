@@ -77,6 +77,17 @@ plotsRouter.get('/', async (req, res) => {
         p.activities = activities.filter(a => a.plot_id === p.id && (!a.batch_id || a.batch_id === 0));
       }
 
+      // ตรวจสอบกิจกรรมเตรียมดินในรอบปัจจุบันนี้ (GAP ข้อ 2)
+      const soilActivity = p.activities.find(a => a.stage === 'soil_prep');
+      p.soil_activity = soilActivity || null;
+      if (soilActivity) {
+        p.soil_prep_date = soilActivity.activity_date;
+        p.soil_recipe = soilActivity.materials_used || p.soil_recipe;
+      } else if (p.status === 'empty') {
+        p.soil_prep_date = null;
+        p.soil_recipe = null;
+      }
+
       // แนบประวัติรอบเก่าที่เก็บเกี่ยวไปแล้ว สำหรับใช้ย้อนดูในหน้าต่างไทม์ไลน์
       p.past_batches = plotBatches
         .filter(b => b.status === 'harvested')
@@ -125,7 +136,7 @@ plotsRouter.post('/', async (req, res) => {
 
     dimension = dimension?.trim() || 'แคร่ 2 x 6 เมตร';
     area_sqm = Number(area_sqm) || 12.00;
-    soil_recipe = soil_recipe?.trim() || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)';
+    soil_recipe = soil_recipe?.trim() || null;
 
     const [result] = await pool.query(
       `INSERT INTO plots (
@@ -185,17 +196,33 @@ plotsRouter.post('/:id/reset', async (req, res) => {
     if (!plots[0]) return res.status(404).json({ error: 'ไม่พบแปลงปลูกนี้' });
     const plot = plots[0];
 
-    // ลบ planting_batches ที่กำลังปลูกหรือพร้อมเก็บเกี่ยวของแปลงนี้
-    await pool.query(
-      `DELETE FROM planting_batches 
+    // 1. หา active batches ที่กำลังปลูกหรือพร้อมเก็บเกี่ยวของแปลงนี้
+    const [activeBatches] = await pool.query(
+      `SELECT id, batch_code FROM planting_batches 
        WHERE plot_id = ? AND user_id = ? AND status IN ('growing', 'harvest_ready')`,
       [req.params.id, req.user.id]
     );
+    const activeBatchIds = activeBatches.map(b => b.id);
 
-    // ลบกิจกรรมต้นกล้าที่ยังไม่เคยผูกกับ batch ใดๆ ของแปลงนี้ (ถ้ามี)
+    // 2. ลบ crop_activities ทั้งหมดที่ผูกกับ active batches ที่กำลังถูกยกเลิกนี้
+    if (activeBatchIds.length > 0) {
+      await pool.query(
+        `DELETE FROM crop_activities WHERE user_id = ? AND batch_id IN (?)`,
+        [req.user.id, activeBatchIds]
+      );
+    }
+
+    // 3. ลบกิจกรรมต้นกล้า/เตรียมดินที่ยังไม่เคยผูกกับ batch ใดๆ ของแปลงนี้ (ถ้ามี)
     await pool.query(
       `DELETE FROM crop_activities
        WHERE plot_id = ? AND user_id = ? AND (batch_id IS NULL OR batch_id = 0)`,
+      [req.params.id, req.user.id]
+    );
+
+    // 4. ลบ planting_batches ที่กำลังปลูกหรือพร้อมเก็บเกี่ยวของแปลงนี้
+    await pool.query(
+      `DELETE FROM planting_batches 
+       WHERE plot_id = ? AND user_id = ? AND status IN ('growing', 'harvest_ready')`,
       [req.params.id, req.user.id]
     );
 
@@ -211,6 +238,7 @@ plotsRouter.post('/:id/reset', async (req, res) => {
            seed_notes = NULL,
            seed_crop_id = NULL,
            soil_prep_date = NULL,
+           soil_recipe = NULL,
            updated_at = NOW()
        WHERE id = ? AND user_id = ?`,
       [req.params.id, req.user.id]
@@ -427,6 +455,163 @@ plotsRouter.use('/', (req, res, next) => {
     }
   }
   next();
+});
+
+// บันทึก/อัปเดตกิจกรรมเตรียมดิน / สูตรดิน (GAP ข้อ 2)
+plotsRouter.put('/:id/soil', async (req, res) => {
+  try {
+    const plotId = Number(req.params.id);
+    const { soil_recipe, soil_prep_date, details, notes, operator_name } = req.body;
+
+    if (!soil_prep_date) {
+      return res.status(400).json({ error: 'กรุณาระบุวันที่ผสมดิน/เตรียมแคร่' });
+    }
+    const finalRecipe = (soil_recipe || '').trim() || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)';
+    const finalDate = soil_prep_date;
+    const finalOperator = operator_name || req.user.display_name || 'เจ้าของฟาร์ม';
+    const finalDetails = details || notes || 'ผสมดินและปรับปรุงแคร่ปลูกตามมาตรฐาน GAP ข้อ 2 (การจัดการดินและวัสดุปลูก)';
+
+    // ตรวจสอบแปลง
+    const [plots] = await pool.query('SELECT * FROM plots WHERE id = ? AND user_id = ?', [plotId, req.user.id]);
+    if (!plots[0]) return res.status(404).json({ error: 'ไม่พบแปลงปลูกที่ระบุ' });
+    const plot = plots[0];
+
+    // หา active batch ถ้ามี
+    const [batches] = await pool.query(
+      `SELECT * FROM planting_batches 
+       WHERE plot_id = ? AND user_id = ? AND status IN ('growing', 'harvest_ready') 
+       ORDER BY id DESC LIMIT 1`,
+      [plotId, req.user.id]
+    );
+    const activeBatch = batches[0] || null;
+    const currentBatchId = plot.current_batch_id || activeBatch?.id || null;
+
+    // 1. อัปเดตข้อมูลในตาราง plots
+    await pool.query(
+      `UPDATE plots 
+       SET soil_recipe = ?, 
+           soil_prep_date = ?, 
+           updated_at = NOW() 
+       WHERE id = ? AND user_id = ?`,
+      [finalRecipe, finalDate, plotId, req.user.id]
+    );
+
+    // 2. ถ้ามี active batch ให้อัปเดตใน planting_batches ด้วย
+    if (activeBatch) {
+      await pool.query(
+        `UPDATE planting_batches 
+         SET soil_recipe = ?, 
+             soil_prep_date = ?, 
+             updated_at = NOW() 
+         WHERE id = ? AND user_id = ?`,
+        [finalRecipe, finalDate, activeBatch.id, req.user.id]
+      );
+    }
+
+    // 3. ตรวจสอบว่ามีกิจกรรม soil_prep ในรอบนี้แล้วหรือยัง
+    let existingAct = null;
+    if (currentBatchId) {
+      const [acts] = await pool.query(
+        `SELECT * FROM crop_activities WHERE batch_id = ? AND stage = 'soil_prep' LIMIT 1`,
+        [currentBatchId]
+      );
+      existingAct = acts[0] || null;
+    } else {
+      const [acts] = await pool.query(
+        `SELECT * FROM crop_activities 
+         WHERE plot_id = ? AND user_id = ? AND (batch_id IS NULL OR batch_id = 0) AND stage = 'soil_prep' 
+         ORDER BY id DESC LIMIT 1`,
+        [plotId, req.user.id]
+      );
+      existingAct = acts[0] || null;
+    }
+
+    let activityResultId;
+    if (existingAct) {
+      // อัปเดตกิจกรรมเตรียมดินเดิม
+      await pool.query(
+        `UPDATE crop_activities 
+         SET activity_date = ?, 
+             title = ?, 
+             materials_used = ?, 
+             details = ?, 
+             operator_name = ?, 
+             updated_at = NOW() 
+         WHERE id = ?`,
+        [
+          finalDate,
+          `เตรียมดินและแคร่ปลูก (GAP ข้อ 2)`,
+          finalRecipe,
+          finalDetails,
+          finalOperator,
+          existingAct.id
+        ]
+      );
+      activityResultId = existingAct.id;
+    } else {
+      // สร้างกิจกรรมเตรียมดินใหม่
+      const [insertRes] = await pool.query(
+        `INSERT INTO crop_activities (
+           user_id, plot_id, batch_id, activity_date, stage, title, details, materials_used, operator_name
+         ) VALUES (?, ?, ?, ?, 'soil_prep', ?, ?, ?, ?)`,
+        [
+          req.user.id,
+          plotId,
+          currentBatchId,
+          finalDate,
+          `เตรียมดินและแคร่ปลูก (GAP ข้อ 2)`,
+          finalDetails,
+          finalRecipe,
+          finalOperator
+        ]
+      );
+      activityResultId = insertRes.insertId;
+    }
+
+    const [savedAct] = await pool.query('SELECT * FROM crop_activities WHERE id = ?', [activityResultId]);
+
+    res.json({
+      success: true,
+      message: `บันทึกกิจกรรมเตรียมดิน/สูตรดินของ "${plot.name}" เรียบร้อยแล้ว!`,
+      activity: savedAct[0],
+      soil_recipe: finalRecipe,
+      soil_prep_date: finalDate
+    });
+  } catch (err) {
+    console.error('Error in /plots/:id/soil:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ยกเลิกกิจกรรมเตรียมดินของรอบนี้
+plotsRouter.delete('/:id/soil', async (req, res) => {
+  try {
+    const plotId = Number(req.params.id);
+    const [plots] = await pool.query('SELECT * FROM plots WHERE id = ? AND user_id = ?', [plotId, req.user.id]);
+    if (!plots[0]) return res.status(404).json({ error: 'ไม่พบแปลงปลูกที่ระบุ' });
+    const plot = plots[0];
+
+    if (plot.current_batch_id) {
+      await pool.query(
+        `DELETE FROM crop_activities WHERE batch_id = ? AND stage = 'soil_prep'`,
+        [plot.current_batch_id]
+      );
+    } else {
+      await pool.query(
+        `DELETE FROM crop_activities WHERE plot_id = ? AND user_id = ? AND (batch_id IS NULL OR batch_id = 0) AND stage = 'soil_prep'`,
+        [plotId, req.user.id]
+      );
+    }
+
+    await pool.query(
+      `UPDATE plots SET soil_prep_date = NULL, soil_recipe = NULL WHERE id = ? AND user_id = ?`,
+      [plotId, req.user.id]
+    );
+
+    res.json({ success: true, message: 'ยกเลิกการเตรียมดินของแปลงนี้เรียบร้อยแล้ว' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Sync soil_recipe and soil_prep_date to active planting_batches if updated on plot

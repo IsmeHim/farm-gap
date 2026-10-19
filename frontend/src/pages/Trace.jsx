@@ -112,31 +112,39 @@ export default function Trace() {
           {/* Left Column: Farm & Product Passport Card (5 Cols on desktop) */}
           <div className="lg:col-span-5 space-y-3">
             <div className="bg-white rounded-3xl shadow-xs border border-emerald-100/90 overflow-hidden text-center">
-              {/* Header Banner */}
-              <div className="bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900 text-white p-5 pt-6 pb-6 relative">
-                <div className="w-12 h-12 mx-auto rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center mb-2.5 shadow-inner">
-                  <Sprout className="w-6 h-6 text-[#f4d27a]" />
-                </div>
-                <div className="inline-flex items-center gap-1 bg-emerald-950/50 text-emerald-200 text-[10.5px] px-2.5 py-0.5 rounded-full font-bold mb-1.5 backdrop-blur-sm border border-white/10">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  มาตรฐาน GAP เกษตรปลอดภัย
+              {/* Header Banner - Compact & Modern */}
+              <div className="bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900 text-white px-4 py-4 sm:py-5 relative">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-inner shrink-0">
+                    <Sprout className="w-4 h-4 text-[#f4d27a]" />
+                  </div>
+                  <div className="inline-flex items-center gap-1 bg-emerald-950/60 text-emerald-200 text-[10.5px] px-2.5 py-0.5 rounded-full font-bold backdrop-blur-sm border border-white/10">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>มาตรฐาน GAP เกษตรปลอดภัย</span>
+                  </div>
                 </div>
                 <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">{data.crop_name}</h1>
-                <div className="text-emerald-200/90 text-xs mt-0.5 font-medium flex items-center justify-center gap-1">
+                <div className="text-emerald-200/90 text-xs mt-1 font-medium flex items-center justify-center gap-1">
                   <MapPin className="w-3 h-3 text-emerald-400" />
                   <span>ฟาร์ม: {data.farm_name || 'FarmGAP Producer'}</span>
                 </div>
               </div>
 
-              {/* Lot Code Floating Strip */}
-              <div className="mx-3.5 -mt-3.5 bg-white rounded-2xl shadow-md border border-emerald-100 p-2.5 sm:p-3 flex items-center justify-between">
+              {/* Lot Code Card with clean spacing - มีระยะห่าง ไม่ชนกล่องเขียว */}
+              <div className="mx-3.5 sm:mx-4 mt-3 bg-slate-50/70 hover:bg-white transition rounded-2xl border border-emerald-200/80 p-3 sm:p-3.5 flex items-center justify-between shadow-2xs">
                 <div className="text-left">
-                  <div className="text-[9px] uppercase tracking-wider font-extrabold text-slate-400">Traceability Lot</div>
-                  <div className="font-mono font-black text-emerald-950 text-xs sm:text-sm">{data.lot_code}</div>
+                  <div className="text-[9.5px] uppercase tracking-wider font-extrabold text-emerald-800 flex items-center gap-1">
+                    <Package className="w-3 h-3 text-emerald-600" />
+                    <span>Traceability Lot</span>
+                  </div>
+                  <div className="font-mono font-black text-emerald-950 text-xs sm:text-sm mt-0.5">{data.lot_code}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[9px] uppercase tracking-wider font-extrabold text-slate-400">วันเก็บเกี่ยว</div>
-                  <div className="font-bold text-slate-800 text-xs sm:text-sm">
+                  <div className="text-[9.5px] uppercase tracking-wider font-extrabold text-slate-500 flex items-center justify-end gap-1">
+                    <Calendar className="w-3 h-3 text-slate-400" />
+                    <span>วันเก็บเกี่ยว</span>
+                  </div>
+                  <div className="font-bold text-slate-900 text-xs sm:text-sm mt-0.5">
                     {formatDateDisplay(data.harvest_date)}
                   </div>
                 </div>
@@ -153,15 +161,26 @@ export default function Trace() {
                   <div className="font-extrabold text-slate-900 text-xs">{data.quality_grade || 'เกรด A (คัดพิเศษ)'}</div>
                 </div>
                 <div className="bg-emerald-50/60 p-2 sm:p-2.5 rounded-xl border border-emerald-100/70">
-                  <div className="text-[10px] text-emerald-700 font-semibold">รอบการปลูก</div>
-                  <div className="font-extrabold text-slate-900 text-xs">
-                    #{data.plot_name ? data.plot_name.replace(/แปลง|\s|\(.*?\)/g, '') : 'P'}-R{data.cycle_number || 1}
+                  <div className="text-[10px] text-emerald-700 font-semibold">รหัสรอบการปลูก</div>
+                  <div className="font-mono font-bold text-slate-900 text-[11px] truncate" title={data.batch_code || data.lot_code}>
+                    {data.batch_code || `#${data.plot_name ? data.plot_name.replace(/แปลง|\s|\(.*?\)/g, '') : 'P'}-R${data.cycle_number || 1}`}
                   </div>
                 </div>
                 <div className="bg-emerald-50/60 p-2 sm:p-2.5 rounded-xl border border-emerald-100/70">
                   <div className="text-[10px] text-emerald-700 font-semibold">ปริมาณเก็บเกี่ยว</div>
                   <div className="font-extrabold text-slate-900 text-xs">{Number(data.quantity).toLocaleString()} {data.unit || 'กก.'}</div>
                 </div>
+
+                {data.soil_recipe && (
+                  <div className="col-span-2 bg-amber-50/60 p-2 sm:p-2.5 rounded-xl border border-amber-200/70 text-left">
+                    <div className="text-[10px] text-amber-900 font-bold flex items-center gap-1">
+                      <span>🪴 สูตรดิน / วัสดุปลูก (GAP ข้อ 2):</span>
+                    </div>
+                    <div className="text-[11px] text-slate-700 mt-0.5 line-clamp-2 leading-relaxed">
+                      {data.soil_recipe}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -191,7 +210,9 @@ export default function Trace() {
                   <h2 className="text-sm sm:text-base font-extrabold text-slate-900">
                     เส้นทางการเติบโตจากต้นน้ำ (Seed-to-Harvest)
                   </h2>
-                  <p className="text-[10.5px] text-slate-500">บันทึกขั้นตอนจริงตั้งแต่เพาะเมล็ดจนถึงเก็บเกี่ยวผลผลิต</p>
+                  <p className="text-[10.5px] text-slate-500">
+                    {data.batch_code ? `บันทึกขั้นตอนจริงเฉพาะรอบการผลิต ${data.batch_code}` : 'บันทึกขั้นตอนจริงตั้งแต่เพาะเมล็ดจนถึงเก็บเกี่ยว'}
+                  </p>
                 </div>
               </div>
               <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 shrink-0">
