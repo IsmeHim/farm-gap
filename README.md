@@ -258,7 +258,9 @@ erDiagram
 | `total_damaged_count` | INT | จำนวนต้นที่เสียหายระหว่างรอบ |
 | `total_harvested_count` | INT | จำนวนต้นที่ตัดเก็บเกี่ยวได้สำเร็จ |
 | `status` | VARCHAR(50) | สถานะรอบปลูก (`growing`, `completed`, `cancelled`) |
+| `seed_prep_date` | DATE | วันที่เริ่มเพาะเมล็ดสำหรับรอบนี้ (สำหรับคำนวณวันเก็บเกี่ยวร่วม) |
 | `soil_recipe` | TEXT | สูตรดินที่ใช้เฉพาะรอบนี้ |
+| `soil_prep_date` | DATE | วันที่เตรียมดินเสร็จสิ้นสำหรับรอบนี้ |
 | `notes` | TEXT | บันทึกรอบการปลูก |
 
 #### 5. ตาราง `crop_activities` (บันทึกกิจกรรมและพัฒนาการในแปลง)
@@ -267,13 +269,15 @@ erDiagram
 | `id` | INT (PK, AI) | รหัสบันทึกกิจกรรม |
 | `user_id` | INT (FK) | ผู้บันทึก |
 | `plot_id` | INT (FK) | แปลงที่ปฏิบัติงาน |
+| `batch_id` | INT (FK) | รหัสรอบการปลูกที่กิจกรรมนี้สังกัด (ช่วยแยกกิจกรรมตามรอบปลูก) |
 | `activity_date` | DATE | วันที่ปฏิบัติงาน |
-| `stage` | ENUM(...) | ขั้นตอน (`soil_prep`, `seed_nursery`, `planting`, `maintenance`, `fertilizing`, `harvest`) |
+| `stage` | VARCHAR(50) | ขั้นตอน (`soil_prep`, `seed_nursery`/`seeding`, `planting`, `maintenance`, `fertilizing`, `harvest`) |
 | `title` | VARCHAR(255) | หัวข้อกิจกรรม (เช่น บันทึกเตรียมดิน, ย้ายกล้าลงแคร่) |
 | `materials_used` | TEXT | วัสดุ/สารที่ใช้ |
 | `details` | TEXT | รายละเอียดการปฏิบัติงาน |
 | `operator_name` | VARCHAR(255) | ชื่อผู้ปฏิบัติงาน |
 | `image_url` | TEXT | ลิงก์ภาพถ่ายกิจกรรม |
+| `source_type` / `source_id` | VARCHAR / INT | แหล่งที่มาของกิจกรรมกรณีซิงก์จากโมดูลอื่น |
 
 #### 6. ตาราง `chemical_logs` (บันทึกการใช้ปุ๋ย สารปรับปรุง และสารเคมี)
 | คอลัมน์ | ประเภทข้อมูล | รายละเอียด |
@@ -432,11 +436,11 @@ farmgap/
 │   │   │   ├── line.js                         # LINE Webhook Controller (Modular Entry Point)
 │   │   │   ├── orders.js                       # API จัดการคำสั่งซื้อ ตรวจสลิป อัปเดตจัดส่ง
 │   │   │   ├── pests.js                        # API บันทึกการสำรวจและจัดการโรคแมลง
-│   │   │   ├── plots.js                        # API จัดการแปลงและแคร่ปลูก
+│   │   │   ├── plots.js                        # API จัดการแปลง, แคร่ปลูก, บันทึกสูตรดิน/เตรียมดิน (/soil), และไทม์ไลน์พืช
 │   │   │   ├── products.js                     # API จัดการรายการสินค้าและสต็อกพร้อมขาย
-│   │   │   ├── report.js                       # API สร้างข้อมูลรายงานส่งตรวจ GAP ขนาด A4 (แยกตารางรอบปลูก)
+│   │   │   ├── report.js                       # API สร้างข้อมูลรายงานส่งตรวจ GAP ขนาด A4 (แยกตารางรอบปลูก, แหล่งน้ำ GAP ข้อ 1)
 │   │   │   ├── sales.js                        # API สรุปรายงานยอดขายและวิเคราะห์ต้นทุน
-│   │   │   ├── trace.js                        # API ข้อมูลตรวจสอบย้อนกลับ (Traceability API)
+│   │   │   ├── trace.js                        # API ข้อมูลตรวจสอบย้อนกลับ (สโคปเฉพาะรอบ batch_id พร้อมขนาดแคร่และสูตรดิน)
 │   │   │   ├── upload.js                       # API อัปโหลดไฟล์รูปภาพผ่าน Multer
 │   │   │   └── ai.js                           # API วิเคราะห์ AI K-Means และ Product Recommendations
 │   │   └── services/
