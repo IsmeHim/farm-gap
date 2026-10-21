@@ -1,0 +1,632 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="farmgap-er-real-schema" name="FarmGAP ER Diagram (18 Tables from schema.sql)">
+    <mxGraphModel dx="1850" dy="1280" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1750" pageHeight="1320" background="#FFFFFF" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="tbl_users" value="1. users (ผู้ใช้งานระบบฟาร์ม)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#166534;strokeColor=#14532D;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#F0FDF4;rounded=1;arcSize=4;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="320" height="177" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r0" value="[PK] id : INT AUTO_INCREMENT" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=1;fontColor=#991B1B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_users">
+          <mxGeometry y="30" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r1" value="[UK] email : VARCHAR(255)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_users">
+          <mxGeometry y="51" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r2" value="        password_hash : VARCHAR(255)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_users">
+          <mxGeometry y="72" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r3" value="        display_name : VARCHAR(255)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_users">
+          <mxGeometry y="93" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r4" value="        farm_name : VARCHAR(255)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_users">
+          <mxGeometry y="114" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r5" value="        role : ENUM('owner','worker')" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_users">
+          <mxGeometry y="135" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_users_r6" value="        created_at : TIMESTAMP" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_users">
+          <mxGeometry y="156" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crops" value="2. crops (คลังข้อมูลชนิดผัก)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#166534;strokeColor=#14532D;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#F0FDF4;rounded=1;arcSize=4;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="280" width="320" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crops_r0" value="[PK] id : INT AUTO_INCREMENT" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=1;fontColor=#991B1B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crops">
+          <mxGeometry y="30" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crops_r1" value="[FK] user_id : INT NULL" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crops">
+          <mxGeometry y="51" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crops_r2" value="        name : VARCHAR(100)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crops">
+          <mxGeometry y="72" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crops_r3" value="        scientific_name : VARCHAR(150)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crops">
+          <mxGeometry y="93" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crops_r4" value="        category : VARCHAR(50)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crops">
+          <mxGeometry y="114" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crops_r5" value="        growth_days : INT DEFAULT 30" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crops">
+          <mxGeometry y="135" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crops_r6" value="        nursery_days : INT DEFAULT 14" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crops">
+          <mxGeometry y="156" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crops_r7" value="        harvest_unit : VARCHAR(50)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crops">
+          <mxGeometry y="177" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crops_r8" value="        default_bag_size : VARCHAR(100)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crops">
+          <mxGeometry y="198" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crops_r9" value="        default_price : DECIMAL(10,2)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crops">
+          <mxGeometry y="219" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_cost_logs" value="17. cost_logs (บัญชีต้นทุนการเกษตร)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#0F766E;strokeColor=#115E59;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#F0FDFA;rounded=1;arcSize=4;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="580" width="320" height="198" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_cost_logs_r0" value="[PK] id : INT AUTO_INCREMENT" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=1;fontColor=#991B1B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_cost_logs">
+          <mxGeometry y="30" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_cost_logs_r1" value="[FK] user_id : INT NOT NULL" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_cost_logs">
+          <mxGeometry y="51" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_cost_logs_r2" value="[FK] plot_id : INT NULL" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_cost_logs">
+          <mxGeometry y="72" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_cost_logs_r3" value="        log_date : DATE NOT NULL" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_cost_logs">
+          <mxGeometry y="93" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_cost_logs_r4" value="        category : VARCHAR(100)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_cost_logs">
+          <mxGeometry y="114" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_cost_logs_r5" value="        description : TEXT" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_cost_logs">
+          <mxGeometry y="135" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_cost_logs_r6" value="        amount : DECIMAL(12,2)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_cost_logs">
+          <mxGeometry y="156" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_cost_logs_r7" value="        created_by : VARCHAR(255)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_cost_logs">
+          <mxGeometry y="177" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_storage_logs" value="16. storage_logs (การจัดเก็บและขนส่ง)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#0F766E;strokeColor=#115E59;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#F0FDFA;rounded=1;arcSize=4;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="820" width="320" height="219" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_storage_logs_r0" value="[PK] id : INT AUTO_INCREMENT" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=1;fontColor=#991B1B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_storage_logs">
+          <mxGeometry y="30" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_storage_logs_r1" value="[FK] user_id : INT NOT NULL" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_storage_logs">
+          <mxGeometry y="51" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_storage_logs_r2" value="[FK] harvest_id : INT" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_storage_logs">
+          <mxGeometry y="72" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_storage_logs_r3" value="        log_date : DATE NOT NULL" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_storage_logs">
+          <mxGeometry y="93" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_storage_logs_r4" value="        storage_location : VARCHAR(255)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_storage_logs">
+          <mxGeometry y="114" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_storage_logs_r5" value="        shipped_to / buyer : VARCHAR(255)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_storage_logs">
+          <mxGeometry y="135" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_storage_logs_r6" value="        vehicle : VARCHAR(255)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_storage_logs">
+          <mxGeometry y="156" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_storage_logs_r7" value="        vehicle_clean_status : BOOLEAN" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_storage_logs">
+          <mxGeometry y="177" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_storage_logs_r8" value="        delivery_condition : VARCHAR(50)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_storage_logs">
+          <mxGeometry y="198" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_audit_logs" value="18. audit_logs (ประวัติแก้ไขข้อมูล)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#0F766E;strokeColor=#115E59;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#F0FDFA;rounded=1;arcSize=4;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1080" width="320" height="198" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_audit_logs_r0" value="[PK] id : INT AUTO_INCREMENT" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=1;fontColor=#991B1B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_audit_logs">
+          <mxGeometry y="30" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_audit_logs_r1" value="        table_name : VARCHAR(255)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_audit_logs">
+          <mxGeometry y="51" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_audit_logs_r2" value="        record_id : INT" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_audit_logs">
+          <mxGeometry y="72" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_audit_logs_r3" value="        action : VARCHAR(50)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_audit_logs">
+          <mxGeometry y="93" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_audit_logs_r4" value="        user_email : VARCHAR(255)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_audit_logs">
+          <mxGeometry y="114" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_audit_logs_r5" value="        old_values : JSON" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_audit_logs">
+          <mxGeometry y="135" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_audit_logs_r6" value="        new_values : JSON" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_audit_logs">
+          <mxGeometry y="156" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_audit_logs_r7" value="        created_at : TIMESTAMP" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_audit_logs">
+          <mxGeometry y="177" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_plots" value="3. plots (แปลงปลูกและแคร่ปลูก)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#166534;strokeColor=#14532D;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#F0FDF4;rounded=1;arcSize=4;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="470" y="40" width="320" height="366" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_plots_r0" value="[PK] id : INT AUTO_INCREMENT" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=1;fontColor=#991B1B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_plots">
+          <mxGeometry y="30" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_plots_r1" value="[FK] user_id : INT NOT NULL" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_plots">
+          <mxGeometry y="51" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_plots_r2" value="        plot_number : INT DEFAULT 1" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_plots">
+          <mxGeometry y="72" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_plots_r3" value="        name : VARCHAR(255)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_plots">
+          <mxGeometry y="93" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_plots_r4" value="        dimension : VARCHAR(100)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_plots">
+          <mxGeometry y="114" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_plots_r5" value="        soil_recipe : TEXT" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_plots">
+          <mxGeometry y="135" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_plots_r6" value="        soil_prep_date : DATE" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_plots">
+          <mxGeometry y="156" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_plots_r7" value="        seed_prep_date : DATE" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_plots">
+          <mxGeometry y="177" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_plots_r8" value="        seed_crop_id : INT" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_plots">
+          <mxGeometry y="198" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_plots_r9" value="        crop_name : VARCHAR(255)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_plots">
+          <mxGeometry y="219" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_plots_r10" value="        area_sqm : DECIMAL(10,2)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_plots">
+          <mxGeometry y="240" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_plots_r11" value="        planting_date : DATE" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_plots">
+          <mxGeometry y="261" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_plots_r12" value="        expected_harvest_date : DATE" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_plots">
+          <mxGeometry y="282" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_plots_r13" value="        field_safety_status : VARCHAR(50)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_plots">
+          <mxGeometry y="303" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_plots_r14" value="        status : VARCHAR(50)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_plots">
+          <mxGeometry y="324" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_plots_r15" value="        current_batch_id : INT NULL" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_plots">
+          <mxGeometry y="345" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_planting_batches" value="4. planting_batches (รอบการปลูกพืช)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#166534;strokeColor=#14532D;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#F0FDF4;rounded=1;arcSize=4;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="470" y="470" width="320" height="324" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_planting_batches_r0" value="[PK] id : INT AUTO_INCREMENT" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=1;fontColor=#991B1B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_planting_batches">
+          <mxGeometry y="30" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_planting_batches_r1" value="[FK] user_id : INT NOT NULL" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_planting_batches">
+          <mxGeometry y="51" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_planting_batches_r2" value="[FK] plot_id : INT NOT NULL" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_planting_batches">
+          <mxGeometry y="72" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_planting_batches_r3" value="[FK] crop_id : INT NOT NULL" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_planting_batches">
+          <mxGeometry y="93" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_planting_batches_r4" value="        batch_code : VARCHAR(50)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_planting_batches">
+          <mxGeometry y="114" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_planting_batches_r5" value="        start_date : DATE NOT NULL" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_planting_batches">
+          <mxGeometry y="135" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_planting_batches_r6" value="        expected_harvest_date : DATE NOT NULL" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_planting_batches">
+          <mxGeometry y="156" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_planting_batches_r7" value="        actual_harvest_date : DATE NULL" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_planting_batches">
+          <mxGeometry y="177" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_planting_batches_r8" value="        total_damaged_count : INT DEFAULT 0" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_planting_batches">
+          <mxGeometry y="198" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_planting_batches_r9" value="        total_harvested_count : INT DEFAULT 0" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_planting_batches">
+          <mxGeometry y="219" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_planting_batches_r10" value="        seed_prep_date : DATE NULL" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_planting_batches">
+          <mxGeometry y="240" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_planting_batches_r11" value="        soil_recipe : TEXT NULL" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_planting_batches">
+          <mxGeometry y="261" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_planting_batches_r12" value="        soil_prep_date : DATE NULL" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_planting_batches">
+          <mxGeometry y="282" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_planting_batches_r13" value="        status : VARCHAR(50)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_planting_batches">
+          <mxGeometry y="303" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crop_activities" value="5. crop_activities (กิจกรรมในแปลง)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#166534;strokeColor=#14532D;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#F0FDF4;rounded=1;arcSize=4;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="470" y="840" width="320" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crop_activities_r0" value="[PK] id : INT AUTO_INCREMENT" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=1;fontColor=#991B1B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crop_activities">
+          <mxGeometry y="30" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crop_activities_r1" value="[FK] user_id : INT NOT NULL" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crop_activities">
+          <mxGeometry y="51" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crop_activities_r2" value="[FK] plot_id : INT NOT NULL" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crop_activities">
+          <mxGeometry y="72" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crop_activities_r3" value="[FK] batch_id : INT NULL" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crop_activities">
+          <mxGeometry y="93" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crop_activities_r4" value="        activity_date : DATE NOT NULL" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crop_activities">
+          <mxGeometry y="114" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crop_activities_r5" value="        stage : VARCHAR(50)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crop_activities">
+          <mxGeometry y="135" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crop_activities_r6" value="        title : VARCHAR(255)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crop_activities">
+          <mxGeometry y="156" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crop_activities_r7" value="        materials_used : TEXT" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crop_activities">
+          <mxGeometry y="177" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crop_activities_r8" value="        operator_name : VARCHAR(255)" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crop_activities">
+          <mxGeometry y="198" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_crop_activities_r9" value="        source_type / source_id : VARCHAR / INT" style="text;strokeColor=#14532D;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_crop_activities">
+          <mxGeometry y="219" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_pest_logs" value="7. pest_logs (สำรวจโรคและแมลง)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#0F766E;strokeColor=#115E59;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#F0FDFA;rounded=1;arcSize=4;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="470" y="1120" width="320" height="219" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_pest_logs_r0" value="[PK] id : INT AUTO_INCREMENT" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=1;fontColor=#991B1B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_pest_logs">
+          <mxGeometry y="30" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_pest_logs_r1" value="[FK] user_id : INT NOT NULL" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_pest_logs">
+          <mxGeometry y="51" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_pest_logs_r2" value="[FK] plot_id : INT NOT NULL" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_pest_logs">
+          <mxGeometry y="72" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_pest_logs_r3" value="[FK] batch_id : INT NULL" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_pest_logs">
+          <mxGeometry y="93" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_pest_logs_r4" value="        log_date : DATE NOT NULL" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_pest_logs">
+          <mxGeometry y="114" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_pest_logs_r5" value="        pest_or_disease : VARCHAR(255)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_pest_logs">
+          <mxGeometry y="135" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_pest_logs_r6" value="        damaged_count : INT DEFAULT 0" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_pest_logs">
+          <mxGeometry y="156" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_pest_logs_r7" value="        severity : VARCHAR(50)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_pest_logs">
+          <mxGeometry y="177" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_pest_logs_r8" value="        treatment_method : TEXT" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_pest_logs">
+          <mxGeometry y="198" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_chemical_logs" value="6. chemical_logs (ปุ๋ย/สารเคมี &amp; PHI)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#0F766E;strokeColor=#115E59;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#F0FDFA;rounded=1;arcSize=4;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="920" y="40" width="320" height="261" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_chemical_logs_r0" value="[PK] id : INT AUTO_INCREMENT" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=1;fontColor=#991B1B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_chemical_logs">
+          <mxGeometry y="30" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_chemical_logs_r1" value="[FK] user_id : INT NOT NULL" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_chemical_logs">
+          <mxGeometry y="51" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_chemical_logs_r2" value="[FK] plot_id : INT NOT NULL" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_chemical_logs">
+          <mxGeometry y="72" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_chemical_logs_r3" value="        log_date : DATE NOT NULL" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_chemical_logs">
+          <mxGeometry y="93" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_chemical_logs_r4" value="        chem_type : VARCHAR(100)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_chemical_logs">
+          <mxGeometry y="114" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_chemical_logs_r5" value="        product_name : VARCHAR(255)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_chemical_logs">
+          <mxGeometry y="135" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_chemical_logs_r6" value="        amount / unit : DECIMAL / VARCHAR" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_chemical_logs">
+          <mxGeometry y="156" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_chemical_logs_r7" value="        reason : TEXT" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_chemical_logs">
+          <mxGeometry y="177" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_chemical_logs_r8" value="        safety_ppe : BOOLEAN" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_chemical_logs">
+          <mxGeometry y="198" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_chemical_logs_r9" value="        phi_days : INT DEFAULT 0" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_chemical_logs">
+          <mxGeometry y="219" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_chemical_logs_r10" value="        worker_name : VARCHAR(255)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_chemical_logs">
+          <mxGeometry y="240" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_harvest_logs" value="8. harvest_logs (บันทึกเก็บเกี่ยว &amp; Lot)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#0F766E;strokeColor=#115E59;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#F0FDFA;rounded=1;arcSize=4;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="920" y="340" width="320" height="303" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_harvest_logs_r0" value="[PK] id : INT AUTO_INCREMENT" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=1;fontColor=#991B1B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_harvest_logs">
+          <mxGeometry y="30" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_harvest_logs_r1" value="[FK] user_id : INT NOT NULL" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_harvest_logs">
+          <mxGeometry y="51" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_harvest_logs_r2" value="[FK] plot_id : INT NOT NULL" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_harvest_logs">
+          <mxGeometry y="72" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_harvest_logs_r3" value="[FK] batch_id : INT NULL" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_harvest_logs">
+          <mxGeometry y="93" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_harvest_logs_r4" value="[FK] product_id : INT NULL" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_harvest_logs">
+          <mxGeometry y="114" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_harvest_logs_r5" value="        harvest_date : DATE NOT NULL" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_harvest_logs">
+          <mxGeometry y="135" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_harvest_logs_r6" value="        quantity / unit : DECIMAL / VARCHAR" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_harvest_logs">
+          <mxGeometry y="156" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_harvest_logs_r7" value="        lot_code : VARCHAR(100)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_harvest_logs">
+          <mxGeometry y="177" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_harvest_logs_r8" value="        stocked_quantity : INT DEFAULT 0" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_harvest_logs">
+          <mxGeometry y="198" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_harvest_logs_r9" value="        stock_status : VARCHAR(50)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_harvest_logs">
+          <mxGeometry y="219" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_harvest_logs_r10" value="        quality_grade : VARCHAR(50)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_harvest_logs">
+          <mxGeometry y="240" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_harvest_logs_r11" value="        harvest_hygiene : VARCHAR(50)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_harvest_logs">
+          <mxGeometry y="261" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_harvest_logs_r12" value="        revenue : DECIMAL(12,2)" style="text;strokeColor=#115E59;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_harvest_logs">
+          <mxGeometry y="282" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_products" value="9. products (สินค้าและสต็อกพร้อมขาย)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#1E40AF;strokeColor=#1E3A8A;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#EFF6FF;rounded=1;arcSize=4;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="920" y="690" width="320" height="219" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_products_r0" value="[PK] id : INT AUTO_INCREMENT" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=1;fontColor=#991B1B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_products">
+          <mxGeometry y="30" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_products_r1" value="[FK] plot_id : INT NULL" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_products">
+          <mxGeometry y="51" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_products_r2" value="        name : VARCHAR(255)" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_products">
+          <mxGeometry y="72" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_products_r3" value="        category : VARCHAR(100)" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_products">
+          <mxGeometry y="93" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_products_r4" value="        price : DECIMAL(10,2)" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_products">
+          <mxGeometry y="114" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_products_r5" value="        unit : VARCHAR(50)" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_products">
+          <mxGeometry y="135" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_products_r6" value="        stock_quantity : DECIMAL(10,2)" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_products">
+          <mxGeometry y="156" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_products_r7" value="        image_url : TEXT" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_products">
+          <mxGeometry y="177" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_products_r8" value="        status : VARCHAR(50)" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_products">
+          <mxGeometry y="198" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_product_recommendations" value="14. product_recommendations (แนะนำคู่กัน)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#1E40AF;strokeColor=#1E3A8A;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#EFF6FF;rounded=1;arcSize=4;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="920" y="950" width="320" height="135" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_product_recommendations_r0" value="[PK] id : INT AUTO_INCREMENT" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=1;fontColor=#991B1B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_product_recommendations">
+          <mxGeometry y="30" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_product_recommendations_r1" value="[FK] product_id : INT NOT NULL" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_product_recommendations">
+          <mxGeometry y="51" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_product_recommendations_r2" value="[FK] recommended_product_id : INT NOT NULL" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_product_recommendations">
+          <mxGeometry y="72" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_product_recommendations_r3" value="        score : DECIMAL(5,4)" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_product_recommendations">
+          <mxGeometry y="93" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_product_recommendations_r4" value="        reason : VARCHAR(255)" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_product_recommendations">
+          <mxGeometry y="114" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_order_items" value="13. order_items (รายการสินค้าในออเดอร์)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#1E40AF;strokeColor=#1E3A8A;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#EFF6FF;rounded=1;arcSize=4;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="920" y="1140" width="320" height="156" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_order_items_r0" value="[PK] id : INT AUTO_INCREMENT" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=1;fontColor=#991B1B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_order_items">
+          <mxGeometry y="30" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_order_items_r1" value="[FK] order_id : INT NOT NULL" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_order_items">
+          <mxGeometry y="51" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_order_items_r2" value="[FK] product_id : INT NOT NULL" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_order_items">
+          <mxGeometry y="72" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_order_items_r3" value="        quantity : DECIMAL(10,2)" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_order_items">
+          <mxGeometry y="93" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_order_items_r4" value="        unit_price : DECIMAL(10,2)" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_order_items">
+          <mxGeometry y="114" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_order_items_r5" value="        subtotal : DECIMAL(10,2)" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_order_items">
+          <mxGeometry y="135" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_customer_clusters" value="11. customer_clusters (กลุ่มลูกค้า K-Means)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#6B21A8;strokeColor=#581C87;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#FAF5FF;rounded=1;arcSize=4;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1370" y="80" width="320" height="135" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_customer_clusters_r0" value="[PK] id : INT AUTO_INCREMENT" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=1;fontColor=#991B1B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_customer_clusters">
+          <mxGeometry y="30" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_customer_clusters_r1" value="        cluster_name : VARCHAR(100)" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_customer_clusters">
+          <mxGeometry y="51" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_customer_clusters_r2" value="        description : TEXT" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_customer_clusters">
+          <mxGeometry y="72" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_customer_clusters_r3" value="        preferred_crops : JSON" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_customer_clusters">
+          <mxGeometry y="93" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_customer_clusters_r4" value="        created_at : TIMESTAMP" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_customer_clusters">
+          <mxGeometry y="114" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_customers" value="10. customers (ข้อมูลลูกค้าสมาชิก LINE)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#6B21A8;strokeColor=#581C87;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#FAF5FF;rounded=1;arcSize=4;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1370" y="300" width="320" height="198" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_customers_r0" value="[PK] id : INT AUTO_INCREMENT" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=1;fontColor=#991B1B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_customers">
+          <mxGeometry y="30" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_customers_r1" value="[UK] line_user_id : VARCHAR(255)" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_customers">
+          <mxGeometry y="51" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_customers_r2" value="[FK] cluster_id : INT NULL" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_customers">
+          <mxGeometry y="72" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_customers_r3" value="        display_name : VARCHAR(255)" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_customers">
+          <mxGeometry y="93" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_customers_r4" value="        picture_url : TEXT" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_customers">
+          <mxGeometry y="114" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_customers_r5" value="        phone : VARCHAR(50)" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_customers">
+          <mxGeometry y="135" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_customers_r6" value="        address : TEXT" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_customers">
+          <mxGeometry y="156" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_customers_r7" value="        created_at : TIMESTAMP" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_customers">
+          <mxGeometry y="177" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_orders" value="12. orders (คำสั่งซื้อสินค้าออนไลน์)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#1E40AF;strokeColor=#1E3A8A;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#EFF6FF;rounded=1;arcSize=4;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1370" y="580" width="320" height="261" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_orders_r0" value="[PK] id : INT AUTO_INCREMENT" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=1;fontColor=#991B1B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_orders">
+          <mxGeometry y="30" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_orders_r1" value="[UK] order_code : VARCHAR(50)" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_orders">
+          <mxGeometry y="51" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_orders_r2" value="[FK] customer_id : INT NOT NULL" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_orders">
+          <mxGeometry y="72" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_orders_r3" value="        total_amount : DECIMAL(12,2)" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_orders">
+          <mxGeometry y="93" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_orders_r4" value="        status : VARCHAR(50)" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_orders">
+          <mxGeometry y="114" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_orders_r5" value="        delivery_type : VARCHAR(50)" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_orders">
+          <mxGeometry y="135" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_orders_r6" value="        payment_method : VARCHAR(50)" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_orders">
+          <mxGeometry y="156" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_orders_r7" value="        delivery_date : DATE" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_orders">
+          <mxGeometry y="177" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_orders_r8" value="        slip_image_url : LONGTEXT" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_orders">
+          <mxGeometry y="198" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_orders_r9" value="        tracking_number : VARCHAR(100)" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_orders">
+          <mxGeometry y="219" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_orders_r10" value="        notes : TEXT" style="text;strokeColor=#1E3A8A;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_orders">
+          <mxGeometry y="240" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_line_chat_sessions" value="15. line_chat_sessions (เซสชันแชท LINE)" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#6B21A8;strokeColor=#581C87;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#FAF5FF;rounded=1;arcSize=4;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="1370" y="940" width="320" height="177" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_line_chat_sessions_r0" value="[PK] id : INT AUTO_INCREMENT" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=1;fontColor=#991B1B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_line_chat_sessions">
+          <mxGeometry y="30" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_line_chat_sessions_r1" value="[UK] line_user_id : VARCHAR(255)" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_line_chat_sessions">
+          <mxGeometry y="51" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_line_chat_sessions_r2" value="[FK] order_id : INT NULL" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=2;fontColor=#1E40AF;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_line_chat_sessions">
+          <mxGeometry y="72" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_line_chat_sessions_r3" value="        state : VARCHAR(50)" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_line_chat_sessions">
+          <mxGeometry y="93" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_line_chat_sessions_r4" value="        draft_data : JSON NULL" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_line_chat_sessions">
+          <mxGeometry y="114" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_line_chat_sessions_r5" value="        updated_at : TIMESTAMP" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_line_chat_sessions">
+          <mxGeometry y="135" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="tbl_line_chat_sessions_r6" value="        created_at : TIMESTAMP" style="text;strokeColor=#581C87;fillColor=none;spacingLeft=8;spacingRight=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=11;fontStyle=0;fontColor=#1E293B;whiteSpace=wrap;html=1;" vertex="1" parent="tbl_line_chat_sessions">
+          <mxGeometry y="156" width="320" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="e_u_plots" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.15;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_users" target="tbl_plots">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_u_crops" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_users" target="tbl_crops">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_u_batches" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.7;exitDx=0;exitDy=0;entryX=0;entryY=0.15;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_users" target="tbl_planting_batches">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_u_costs" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.2;exitY=1;exitDx=0;exitDy=0;entryX=0.2;entryY=0;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_users" target="tbl_cost_logs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_u_storage" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.1;exitY=1;exitDx=0;exitDy=0;entryX=0.1;entryY=0;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_users" target="tbl_storage_logs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_crops_batches" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.6;exitDx=0;exitDy=0;entryX=0;entryY=0.35;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_crops" target="tbl_planting_batches">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_plots_batches" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_plots" target="tbl_planting_batches">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_plots_act" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.2;exitY=1;exitDx=0;exitDy=0;entryX=0.2;entryY=0;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_plots" target="tbl_crop_activities">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_batches_act" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_planting_batches" target="tbl_crop_activities">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_batches_pests" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.8;exitY=1;exitDx=0;exitDy=0;entryX=0.8;entryY=0;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_planting_batches" target="tbl_pest_logs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_plots_chem" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_plots" target="tbl_chemical_logs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_plots_harvest" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.65;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_plots" target="tbl_harvest_logs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_batches_harvest" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_planting_batches" target="tbl_harvest_logs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_harvest_storage" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.8;exitDx=0;exitDy=0;entryX=1;entryY=0.3;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_harvest_logs" target="tbl_storage_logs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_plots_costs" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.85;exitDx=0;exitDy=0;entryX=1;entryY=0.3;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_plots" target="tbl_cost_logs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_plots_products" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.9;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_plots" target="tbl_products">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_harvest_products" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_harvest_logs" target="tbl_products">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_prod_rec" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_products" target="tbl_product_recommendations">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_prod_items" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.8;exitY=1;exitDx=0;exitDy=0;entryX=0.8;entryY=0;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_products" target="tbl_order_items">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_clust_cust" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_customer_clusters" target="tbl_customers">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_cust_orders" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_customers" target="tbl_orders">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_orders_items" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.85;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_orders" target="tbl_order_items">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_orders_chat" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;startArrow=ERmandOne;startFill=0;endArrow=ERmany;endFill=0;strokeColor=#334155;strokeWidth=1.4;" edge="1" parent="1" source="tbl_orders" target="tbl_line_chat_sessions">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,189 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="farmgap-dfd-lv1" name="DFD Level 1 (Aligned with 18 Tables in schema.sql)">
+    <mxGraphModel dx="1450" dy="950" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1650" pageHeight="1180" background="#FFFFFF" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="ext_owner" value="&lt;b&gt;เจ้าของฟาร์ม (Owner)&lt;/b&gt;&lt;br/&gt;&lt;font style='font-size:11px;color:#334155;'&gt;(users.role = 'owner')&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#DCFCE7;strokeColor=#166534;strokeWidth=2;fontFamily=Tahoma;fontSize=13;fontColor=#0F172A;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="220" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="ext_farmer" value="&lt;b&gt;คนงานฟาร์ม (Worker)&lt;/b&gt;&lt;br/&gt;&lt;font style='font-size:11px;color:#334155;'&gt;(users.role = 'worker')&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FEF3C7;strokeColor=#B45309;strokeWidth=2;fontFamily=Tahoma;fontSize=13;fontColor=#0F172A;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="330" width="220" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="ext_customer" value="&lt;b&gt;ลูกค้าสมาชิก LINE OA&lt;/b&gt;&lt;br/&gt;&lt;font style='font-size:11px;color:#334155;'&gt;(customers / LINE User)&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#1E40AF;strokeWidth=2;fontFamily=Tahoma;fontSize=13;fontColor=#0F172A;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="740" width="220" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="p1" value="Process 1.0" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=1;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#166534;strokeColor=#166534;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#F0FDF4;rounded=1;arcSize=12;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="500" y="55" width="350" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="p1_body" value="&lt;b&gt;จัดการผู้ใช้ ชนิดผัก และแปลง/แคร่ปลูก&lt;/b&gt;&lt;br/&gt;&lt;font style='font-size:11px;color:#334155;'&gt;ตั้งค่าแปลง/แคร่ (plots), คลังชนิดผัก (crops), เริ่มรอบปลูกใหม่ (planting_batches)&lt;/font&gt;" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;spacingLeft=8;spacingRight=8;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=12;fontColor=#0F172A;whiteSpace=wrap;html=1;" vertex="1" parent="p1">
+          <mxGeometry y="28" width="350" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="p2" value="Process 2.0" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=1;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#166534;strokeColor=#166534;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#F0FDF4;rounded=1;arcSize=12;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="500" y="235" width="350" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="p2_body" value="&lt;b&gt;บันทึกกิจกรรมเพาะปลูกและควบคุมค่า PHI&lt;/b&gt;&lt;br/&gt;&lt;font style='font-size:11px;color:#334155;'&gt;เตรียมดิน/เพาะกล้า (crop_activities), พ่นสาร/ปุ๋ย (chemical_logs &amp;amp; PHI Lock), สำรวจแมลง (pest_logs)&lt;/font&gt;" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;spacingLeft=8;spacingRight=8;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=12;fontColor=#0F172A;whiteSpace=wrap;html=1;" vertex="1" parent="p2">
+          <mxGeometry y="28" width="350" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="p3" value="Process 3.0" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=1;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#0F766E;strokeColor=#0F766E;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#F0FDFA;rounded=1;arcSize=12;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="500" y="415" width="350" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="p3_body" value="&lt;b&gt;เก็บเกี่ยว นำเข้าสต็อกอัตโนมัติ และออกรายงาน GAP&lt;/b&gt;&lt;br/&gt;&lt;font style='font-size:11px;color:#334155;'&gt;เก็บเกี่ยว (harvest_logs), ซิงก์สต็อก (products), ขนส่ง (storage_logs), รายงาน GAP &amp;amp; QR (/trace/:lot)&lt;/font&gt;" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;spacingLeft=8;spacingRight=8;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=12;fontColor=#0F172A;whiteSpace=wrap;html=1;" vertex="1" parent="p3">
+          <mxGeometry y="28" width="350" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="p4" value="Process 4.0" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=1;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#1E40AF;strokeColor=#1E40AF;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#EFF6FF;rounded=1;arcSize=12;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="500" y="595" width="350" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="p4_body" value="&lt;b&gt;จัดการคำสั่งซื้อ LINE OA &amp;amp; แจ้งเตือน Flex Message&lt;/b&gt;&lt;br/&gt;&lt;font style='font-size:11px;color:#334155;'&gt;สั่งซื้อผ่าน LIFF/In-Chat (orders, order_items), ตรวจสลิป, แจ้งสถานะจัดส่งในแชท LINE&lt;/font&gt;" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;spacingLeft=8;spacingRight=8;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=12;fontColor=#0F172A;whiteSpace=wrap;html=1;" vertex="1" parent="p4">
+          <mxGeometry y="28" width="350" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="p5" value="Process 5.0" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=1;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#6B21A8;strokeColor=#6B21A8;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#FAF5FF;rounded=1;arcSize=12;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="500" y="775" width="350" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="p5_body" value="&lt;b&gt;วิเคราะห์กลุ่มลูกค้า K-Means &amp;amp; ผู้ช่วยแชทบอท Gemini AI&lt;/b&gt;&lt;br/&gt;&lt;font style='font-size:11px;color:#334155;'&gt;จัดกลุ่ม 4 มิติ (customer_clusters), แนะนำผักคู่กัน (product_recommendations), บอท Gemini (line_chat_sessions)&lt;/font&gt;" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;spacingLeft=8;spacingRight=8;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=12;fontColor=#0F172A;whiteSpace=wrap;html=1;" vertex="1" parent="p5">
+          <mxGeometry y="28" width="350" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="p6" value="Process 6.0" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=1;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#1E40AF;strokeColor=#1E40AF;fontColor=#FFFFFF;fontFamily=Tahoma;fontSize=12;swimlaneFillColor=#EFF6FF;rounded=1;arcSize=12;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="500" y="955" width="350" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="p6_body" value="&lt;b&gt;จัดการบัญชีต้นทุนฟาร์มและตรวจสอบประวัติระบบ&lt;/b&gt;&lt;br/&gt;&lt;font style='font-size:11px;color:#334155;'&gt;บันทึกต้นทุนการผลิต (cost_logs), คำนวณรายได้-กำไรสุทธิ, บันทึกประวัติแก้ไขข้อมูล (audit_logs)&lt;/font&gt;" style="text;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;spacingLeft=8;spacingRight=8;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontFamily=Tahoma;fontSize=12;fontColor=#0F172A;whiteSpace=wrap;html=1;" vertex="1" parent="p6">
+          <mxGeometry y="28" width="350" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="d1" value="&lt;b&gt;D1: users &amp; crops&lt;/b&gt;  |  ตาราง users, crops" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;top=1;bottom=1;left=1;fillColor=#FEFCE8;strokeColor=#B45309;strokeWidth=1.8;fontFamily=Tahoma;fontSize=11;fontColor=#0F172A;align=left;spacingLeft=10;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="60" width="450" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="d2" value="&lt;b&gt;D2: plots &amp; planting_batches&lt;/b&gt;  |  ตาราง plots, planting_batches" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;top=1;bottom=1;left=1;fillColor=#FEFCE8;strokeColor=#B45309;strokeWidth=1.8;fontFamily=Tahoma;fontSize=11;fontColor=#0F172A;align=left;spacingLeft=10;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="150" width="450" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="d3" value="&lt;b&gt;D3: gap_activity_logs&lt;/b&gt;  |  ตาราง crop_activities, chemical_logs, pest_logs" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;top=1;bottom=1;left=1;fillColor=#FEFCE8;strokeColor=#B45309;strokeWidth=1.8;fontFamily=Tahoma;fontSize=11;fontColor=#0F172A;align=left;spacingLeft=10;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="275" width="450" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="d4" value="&lt;b&gt;D4: harvest &amp; storage&lt;/b&gt;  |  ตาราง harvest_logs, storage_logs" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;top=1;bottom=1;left=1;fillColor=#FEFCE8;strokeColor=#B45309;strokeWidth=1.8;fontFamily=Tahoma;fontSize=11;fontColor=#0F172A;align=left;spacingLeft=10;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="415" width="450" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="d5" value="&lt;b&gt;D5: products &amp; recommendations&lt;/b&gt;  |  ตาราง products, product_recommendations" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;top=1;bottom=1;left=1;fillColor=#FEFCE8;strokeColor=#B45309;strokeWidth=1.8;fontFamily=Tahoma;fontSize=11;fontColor=#0F172A;align=left;spacingLeft=10;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="510" width="450" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="d6" value="&lt;b&gt;D6: customers &amp; orders&lt;/b&gt;  |  ตาราง customers, orders, order_items" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;top=1;bottom=1;left=1;fillColor=#FEFCE8;strokeColor=#B45309;strokeWidth=1.8;fontFamily=Tahoma;fontSize=11;fontColor=#0F172A;align=left;spacingLeft=10;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="635" width="450" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="d7" value="&lt;b&gt;D7: ai_clusters &amp; chat_sessions&lt;/b&gt;  |  ตาราง customer_clusters, line_chat_sessions" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;top=1;bottom=1;left=1;fillColor=#FEFCE8;strokeColor=#B45309;strokeWidth=1.8;fontFamily=Tahoma;fontSize=11;fontColor=#0F172A;align=left;spacingLeft=10;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="805" width="450" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="d8" value="&lt;b&gt;D8: cost_logs &amp; audit_logs&lt;/b&gt;  |  ตาราง cost_logs, audit_logs" style="shape=partialRectangle;whiteSpace=wrap;html=1;right=0;top=1;bottom=1;left=1;fillColor=#FEFCE8;strokeColor=#B45309;strokeWidth=1.8;fontFamily=Tahoma;fontSize=11;fontColor=#0F172A;align=left;spacingLeft=10;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="980" width="450" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="e_o_p1" value="ตั้งค่าแปลง/แคร่, ชนิดผัก, เริ่มรอบปลูก" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.35;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#166534;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="ext_owner" target="p1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_o_p6" value="บันทึกต้นทุนการเกษตร (cost_logs)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.3;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#166534;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="ext_owner" target="p6">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="105" y="1010" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_p3_o" value="รายงานตรวจประเมิน GAP (มกษ. 9001)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.25;exitDx=0;exitDy=0;entryX=0.7;entryY=1;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#0F766E;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="p3" target="ext_owner">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="400" y="442" />
+              <mxPoint x="195" y="442" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_p6_o" value="สรุปต้นทุน-กำไร &amp;amp; ประวัติ Audit" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.8;exitDx=0;exitDy=0;entryX=0.15;entryY=1;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#1E40AF;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="p6" target="ext_owner">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="75" y="1043" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_f_p2" value="บันทึกเตรียมดิน, เพาะกล้า, สารเคมี (PHI), โรคแมลง" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#B45309;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="ext_farmer" target="p2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_p2_f" value="วันเก็บเกี่ยวปลอดภัย &amp;amp; สถานะล็อก PHI" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.8;exitDx=0;exitDy=0;entryX=1;entryY=0.65;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#B45309;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="p2" target="ext_farmer">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_f_p3" value="บันทึกเก็บเกี่ยวผลผลิตและนำเข้าสต็อก" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.85;exitDx=0;exitDy=0;entryX=0;entryY=0.6;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#0F766E;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="ext_farmer" target="p3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_c_p3" value="สแกน QR Code (/trace/:lot)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0;entryY=0.85;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#0F766E;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="ext_customer" target="p3">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="150" y="508" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_c_p4" value="สั่งซื้อผักสด LIFF/In-Chat &amp;amp; แนบสลิป" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#1E40AF;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="ext_customer" target="p4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_p4_c" value="การ์ดสถานะจัดส่ง Flex Message" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.8;exitDx=0;exitDy=0;entryX=1;entryY=0.55;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#1E40AF;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="p4" target="ext_customer">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_c_p5" value="แชทถามสต็อก/วันเก็บเกี่ยว &amp;amp; สั่งซื้อ" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.8;exitDx=0;exitDy=0;entryX=0;entryY=0.4;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#6B21A8;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="ext_customer" target="p5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_p5_c" value="คำตอบ Gemini AI &amp;amp; แนะนำผักซื้อคู่กัน" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.75;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#6B21A8;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="p5" target="ext_customer">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="150" y="857" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ds_p1_d1" value="ข้อมูลผู้ใช้และคลังชนิดผัก" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#334155;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="p1" target="d1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ds_p1_d2" value="สร้างแปลง/แคร่ และรหัสรอบปลูก (batch_code)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.8;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#334155;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="p1" target="d2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ds_d2_p2" value="ข้อมูลแปลงและรอบปลูกปัจจุบัน" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.8;exitDx=0;exitDy=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#334155;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="d2" target="p2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ds_p2_d3" value="บันทึกกิจกรรมแปลง, ค่า phi_days, สำรวจโรคแมลง" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.6;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#334155;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="p2" target="d3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ds_d3_p3" value="ตรวจสอบวันปลอดภัย PHI &amp;amp; ดึงข้อมูลออกรายงาน GAP" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.85;exitDx=0;exitDy=0;entryX=1;entryY=0.2;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#0F766E;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="d3" target="p3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ds_p3_d4" value="บันทึกล็อตเก็บเกี่ยว (lot_code) &amp;amp; การขนส่ง" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.45;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#0F766E;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="p3" target="d4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ds_p3_d5" value="ซิงก์จำนวนสต็อกสินค้าอัตโนมัติ (stocked_quantity)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.8;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#0F766E;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="p3" target="d5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ds_d5_p4" value="ดึงรายการผักพร้อมขายและตัดสต็อก" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.85;exitDx=0;exitDy=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#1E40AF;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="d5" target="p4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ds_p4_d6" value="บันทึกข้อมูลลูกค้า คำสั่งซื้อ และสลิปโอนเงิน" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.65;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#1E40AF;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="p4" target="d6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ds_d5_p5" value="ดึงสต็อกจริงเข้าบริบท Gemini &amp;amp; บันทึกคู่ผักแนะนำ" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#6B21A8;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="d5" target="p5">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1060" y="580" />
+              <mxPoint x="1060" y="802" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ds_d6_p5" value="ประวัติคำสั่งซื้อเพื่อจัดกลุ่ม K-Means 4 มิติ" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.85;exitDx=0;exitDy=0;entryX=1;entryY=0.45;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#6B21A8;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="d6" target="p5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ds_p5_d7" value="บันทึกกลุ่มลูกค้า &amp;amp; สถานะเซสชันแชท LINE" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.7;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#6B21A8;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="p5" target="d7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ds_d6_p6" value="ข้อมูลยอดขายจากคำสั่งซื้อ" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#1E40AF;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="d6" target="p6">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1090" y="720" />
+              <mxPoint x="1090" y="982" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ds_p6_d8" value="บันทึกต้นทุนฟาร์มและประวัติการแก้ไขข้อมูล" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.65;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;endArrow=block;endFill=1;strokeColor=#1E40AF;strokeWidth=1.6;fontFamily=Tahoma;fontSize=10.5;fontColor=#0F172A;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="p6" target="d8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
