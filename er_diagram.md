@@ -1,110 +1,136 @@
 # แผนภาพแสดงความสัมพันธ์ข้อมูล (Entity Relationship Diagram: ERD)
 
-นี่คือรายละเอียดและแผนภาพ ER Diagram ของระบบ **FarmGAP** ซึ่งพัฒนาขึ้นโดยอ้างอิงโครงสร้างฐานข้อมูลจากไฟล์ [schema.sql](backend/db/schema.sql) ในระบบฐานข้อมูล MySQL
+เอกสารฉบับนี้แสดงรายละเอียดโครงสร้างฐานข้อมูลและแผนภาพความสัมพันธ์ของข้อมูล (ER Diagram) ของระบบ **FarmGAP** ฉบับสมบูรณ์ ซึ่งตรงกับฐานข้อมูล MySQL จริง (`farmgap`) และไฟล์ [`backend/db/schema.sql`](backend/db/schema.sql) ทุกประการ (จำนวน **18 ตาราง**)
 
 ---
 
-## 1. สรุปการอัปเดตฐานข้อมูลล่าสุด
+## 1. สรุปการจัดกลุ่มตารางฐานข้อมูลทั้ง 18 ตาราง
 
-ฐานข้อมูลในระบบ FarmGAP ได้ถูกออกแบบให้รองรับการจัดการฟาร์มแบบครบวงจรจากการปลูกจนถึงการส่งมอบสินค้า โดยแบ่งเป็นกลุ่มข้อมูลหลักดังนี้:
+ฐานข้อมูลของระบบ **FarmGAP** แบ่งออกเป็น 4 กลุ่มโดเมนหลักตามสถาปัตยกรรมของระบบ ได้แก่:
 
-- **users**: เก็บข้อมูลบัญชีผู้ใช้และฟาร์มของผู้ดูแลระบบ
-- **plots**: เก็บข้อมูลแปลงปลูก พืชที่ปลูก และสถานะแปลง
-- **activity tables**: ได้แก่ `water_logs`, `chemical_logs`, `pest_logs`, `harvest_logs` สำหรับบันทึกกิจกรรมในแต่ละแปลง
-- **support tables**: ได้แก่ `workers`, `cost_logs` สำหรับข้อมูลคนงานและต้นทุนแปลง
-- **storage_logs**: ใช้บันทึกการจัดเก็บและขนส่งผลผลิตหลังจากเก็บเกี่ยว
-- **customer & sales tables**: ได้แก่ `customer_clusters`, `customers`, `products`, `orders`, `order_items`, `product_recommendations` สำหรับจัดการลูกค้า สินค้า และคำสั่งซื้อ
-- **audit_logs**: ใช้บันทึกประวัติการเพิ่ม/แก้ไข/ลบข้อมูล เพื่อความปลอดภัยและตรวจสอบย้อนหลัง
+1. **กลุ่มจัดการฟาร์ม แปลงปลูก และรอบการปลูก (Core Farm & Crop Cycle — 5 ตาราง)**
+   - `users`: ข้อมูลบัญชีผู้ใช้งาน เจ้าของฟาร์ม ตั้งค่าการรับชำระเงิน (ธนาคาร/PromptPay) และ LINE User ID สำหรับรับแจ้งเตือน
+   - `crops`: คลังข้อมูลชนิดผัก อายุการเจริญเติบโต ระยะเวลาเพาะกล้า และขนาดบรรจุภัณฑ์มาตรฐาน
+   - `plots`: ข้อมูลแปลงปลูก/แคร่ปลูก สูตรดิน สถานะแปลงปัจจุบัน (`empty`, `growing`, `harvest_ready`) และข้อมูลการเพาะกล้าเบื้องต้น
+   - `planting_batches`: ข้อมูลรอบการปลูก (`BATCH-...`) ที่เชื่อมโยงแปลงปลูกและชนิดผัก พร้อมยอดต้นเสียหายและยอดเก็บเกี่ยวสะสม
+   - `crop_activities`: ไทม์ไลน์บันทึกกิจกรรมประจำแปลงและรอบการปลูกตามเกณฑ์ GAP
 
-ในเวอร์ชันล่าสุด ระบบจะเน้นให้แต่ละผู้ใช้เห็นข้อมูลของตัวเองเท่านั้น โดยเชื่อมข้อมูลจาก `users` ไปยังทุกตารางอื่น ๆ ผ่าน `user_id` เพื่อป้องกันการรั่วไหลของข้อมูลระหว่างฟาร์มต่าง ๆ
+2. **กลุ่มบันทึกมาตรฐาน GAP และการควบคุมคุณภาพ (GAP Compliance & Logs — 6 ตาราง)**
+   - `chemical_logs`: บันทึกการใส่ปุ๋ย/ชีวภัณฑ์ การสวมใส่อุปกรณ์ป้องกัน (PPE) และระยะเวลาปลอดภัยก่อนเก็บเกี่ยว (PHI)
+   - `pest_logs`: บันทึกการสำรวจโรคและแมลงศัตรูพืช จำนวนต้นที่เสียหาย และวิธีการจัดการ
+   - `harvest_logs`: บันทึกการเก็บเกี่ยวผลผลิต รหัสล็อต (`lot_code`) การคัดเกรด และการนำเข้าสต็อกสินค้าพร้อมขาย
+   - `storage_logs`: บันทึกการจัดเก็บและขนส่งผลผลิตตามมาตรฐาน GAP ข้อ 6 (เชื่อมโยงกับคำสั่งซื้อที่จัดส่ง)
+   - `cost_logs`: บันทึกบัญชีต้นทุนและค่าใช้จ่ายในการผลิต
+   - `audit_logs`: บันทึกประวัติการเพิ่ม แก้ไข และลบข้อมูลสำคัญในระบบ (Audit Trail)
 
----
+3. **กลุ่มพาณิชย์อิเล็กทรอนิกส์และคำสั่งซื้อ (E-Commerce & Inventory — 4 ตาราง)**
+   - `products`: รายการสินค้าผักสดพร้อมขาย ราคา และจำนวนสต็อกคงเหลือ
+   - `orders`: ข้อมูลคำสั่งซื้อ สถานะการชำระเงิน รูปสลิปโอนเงิน และข้อมูลผู้รับปลายทาง
+   - `order_items`: รายการสินค้าย่อยในแต่ละคำสั่งซื้อ พร้อมผูกวันที่เก็บเกี่ยวและรหัสล็อต (`lot_code`)
+   - `product_recommendations`: ตารางความสัมพันธ์แนะนำสินค้าซื้อคู่กัน (Market Basket Analysis Co-occurrence)
 
-## 2. แนวคิดของ ER Diagram แบบเข้าใจง่าย
-
-ER Diagram นี้แสดงความสัมพันธ์ของข้อมูลแบบ “ผู้ใช้ → แปลง → กิจกรรม → ผลผลิต → การจัดเก็บ” ดังนี้:
-
-1. **ผู้ใช้ (users)** เป็นศูนย์กลาง
-   - หนึ่งผู้ใช้สามารถมีได้หลายแปลงปลูก (`plots`)
-   - หนึ่งผู้ใช้สามารถบันทึกกิจกรรมต่าง ๆ ได้หลายรายการในหลายตาราง (`water_logs`, `chemical_logs`, `pest_logs`, `cost_logs` และอื่น ๆ)
-
-2. **แปลงปลูก (plots)** เป็นจุดเชื่อมหลัก
-   - แปลงหนึ่ง ๆ สามารถมีบันทึกการให้น้ำ การใช้สารเคมี การพบศัตรูพืช การเก็บเกี่ยว และการประเมิน GAP ได้หลายรายการ
-   - ดังนั้น `plots` จึงเป็นตารางที่เชื่อมกับหลายตารางกิจกรรม
-
-3. **การเก็บเกี่ยวและการเก็บรักษา**
-   - เมื่อมีการเก็บเกี่ยวผลผลิตใน `harvest_logs` แล้ว ระบบสามารถเชื่อมต่อไปยัง `storage_logs` เพื่อบันทึกการจัดเก็บและขนส่ง
-   - แนวคิดนี้ช่วยให้ติดตามผลผลิตจากแปลงไปจนถึงลูกค้าได้
-
-4. **การตรวจสอบและประวัติ**
-   - `audit_logs` จะเก็บทุกการเปลี่ยนแปลงในข้อมูล เพื่อให้ตรวจย้อนกลับได้
-
-5. **ลูกค้าและคำสั่งซื้อ**
-   - `customer_clusters` ใช้จัดกลุ่มลูกค้าแบบเดียวกันไว้ด้วยกัน
-   - `customers` เก็บข้อมูลลูกค้าที่มีการสั่งซื้อจากระบบ
-   - `products` เก็บข้อมูลสินค้า เช่น ผักสลัดที่ปลูกและขาย
-   - `orders` เก็บคำสั่งซื้อทั้งหมดของลูกค้า
-   - `order_items` เก็บรายการสินค้าที่อยู่ในคำสั่งซื้อแต่ละรายการ
-   - `product_recommendations` ใช้เก็บคำแนะนำสินค้าแบบ cross-sell เพื่อแนะนำสินค้าที่เกี่ยวข้อง
+4. **กลุ่มลูกค้า LINE OA และปัญญาประดิษฐ์ (LINE OA, Chatbot & AI Analytics — 3 ตาราง)**
+   - `customer_clusters`: กลุ่มลูกค้าจากการวิเคราะห์ด้วยอัลกอริทึม K-Means Clustering ($K=3$)
+   - `customers`: ข้อมูลสมาชิกและลูกค้าที่เชื่อมต่อผ่าน LINE Official Account
+   - `line_chat_sessions`: ตารางจัดการสถานะการสนทนา (State Machine) และตะกร้าสินค้าชั่วคราวในแชทบอท LINE
 
 ---
 
-## 3. แผนภาพ ER Diagram (Mermaid)
+## 2. แผนภาพ ER Diagram (Mermaid)
 
 ```mermaid
 erDiagram
     users {
         int id PK
-        string email UK
-        string password_hash
-        string display_name
-        string farm_name
-        enum role "owner/worker"
+        varchar email UK
+        varchar username UK
+        varchar password_hash
+        varchar display_name
+        varchar farm_name
+        varchar phone
+        enum role "owner, worker, user"
+        varchar bank_name
+        varchar bank_account_no
+        varchar bank_account_name
+        varchar promptpay_number
+        varchar line_user_id
+        varchar frontend_url
+        timestamp created_at
+    }
+
+    crops {
+        int id PK
+        int user_id FK
+        varchar name
+        varchar scientific_name
+        varchar category
+        int growth_days
+        int nursery_days
+        varchar harvest_unit
+        varchar default_bag_size
+        decimal default_price
+        varchar icon
+        text notes
         timestamp created_at
     }
 
     plots {
         int id PK
+        int plot_number
         int user_id FK
-        string name
-        string crop_name
-        decimal area_sqm
-        date planting_date
-        date expected_harvest_date
-        string water_source
-        string water_source_type
-        date soil_test_date
-        string soil_test_result
-        string field_safety_status
+        varchar name
+        varchar dimension
         text soil_recipe
         date soil_prep_date
         date seed_prep_date
-        text seed_notes
         int seed_crop_id
-        string status
+        varchar crop_name
+        decimal area_sqm
+        date planting_date
+        date expected_harvest_date
+        varchar field_safety_status
+        varchar status
         int current_batch_id
         text notes
-        string created_by
-        string updated_by
+        varchar created_by
+        varchar updated_by
         timestamp updated_at
         timestamp created_at
     }
 
-    water_logs {
+    planting_batches {
+        int id PK
+        int user_id FK
+        varchar batch_code
+        int plot_id FK
+        int crop_id FK
+        int total_damaged_count
+        int total_harvested_count
+        date start_date
+        date expected_harvest_date
+        date actual_harvest_date
+        varchar status
+        text notes
+        date seed_prep_date
+        text soil_recipe
+        date soil_prep_date
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    crop_activities {
         int id PK
         int user_id FK
         int plot_id FK
-        date log_date
-        string water_source
-        string water_source_type
-        string water_quality
-        boolean contamination_check
-        decimal amount_liters
-        string worker_name
-        text notes
-        string created_by
-        string updated_by
-        timestamp updated_at
+        int batch_id FK
+        date activity_date
+        varchar stage
+        varchar title
+        text materials_used
+        text details
+        varchar operator_name
+        varchar source_type
+        int source_id
         timestamp created_at
     }
 
@@ -112,21 +138,22 @@ erDiagram
         int id PK
         int user_id FK
         int plot_id FK
+        int batch_id FK
         date log_date
-        string chem_type
-        string product_name
+        varchar chem_type
+        varchar product_name
         decimal amount
-        string unit
+        varchar unit
         text reason
-        string application_method
+        varchar application_method
         boolean safety_ppe
-        string manufacturer
-        string chemical_label
+        varchar manufacturer
+        varchar chemical_label
         int phi_days
-        string worker_name
+        varchar worker_name
         text notes
-        string created_by
-        string updated_by
+        varchar created_by
+        varchar updated_by
         timestamp updated_at
         timestamp created_at
     }
@@ -135,14 +162,18 @@ erDiagram
         int id PK
         int user_id FK
         int plot_id FK
+        int batch_id FK
         date log_date
-        string pest_or_disease
-        string severity
+        varchar pest_or_disease
+        int damaged_count
+        varchar damage_cause
+        varchar damage_unit
+        varchar severity
         text treatment_method
-        string worker_name
+        varchar worker_name
         text notes
-        string created_by
-        string updated_by
+        varchar created_by
+        varchar updated_by
         timestamp updated_at
         timestamp created_at
     }
@@ -151,87 +182,55 @@ erDiagram
         int id PK
         int user_id FK
         int plot_id FK
+        int batch_id FK
         date harvest_date
         decimal quantity
-        string unit
-        string quality_grade
-        string lot_code
+        varchar unit
+        boolean is_partial
+        int harvested_plants_count
+        varchar destination
+        int total_packs
+        int stocked_quantity
+        varchar stock_status
+        int product_id FK
+        varchar quality_grade
+        varchar lot_code
         decimal revenue
-        string harvest_hygiene
+        varchar harvest_hygiene
         text postharvest_handling
-        string worker_name
+        varchar worker_name
         text notes
-        string created_by
-        string updated_by
+        varchar created_by
+        varchar updated_by
         timestamp updated_at
         timestamp created_at
     }
 
-    storage_logs {
+    products {
         int id PK
-        int user_id FK
-        int harvest_id "Implicit Ref: harvest_logs.id"
-        date log_date
-        string storage_location
-        string shipped_to
-        string buyer
-        string vehicle
-        boolean vehicle_clean_status
-        text storage_conditions
-        time transport_time
-        string delivery_condition
-        string worker_name
-        text notes
-        string created_by
-        string updated_by
-        timestamp updated_at
+        int plot_id FK
+        varchar name
+        varchar category
+        decimal price
+        varchar unit
+        decimal stock_quantity
+        text image_url
+        varchar status
         timestamp created_at
+        timestamp updated_at
     }
 
-    workers {
+    product_recommendations {
         int id PK
-        int user_id FK
-        string name
-        string role
-        string phone
-        boolean hygiene_training
-        date training_date
-        boolean personal_hygiene_check
-        string health_status
-        string created_by
-        string updated_by
-        timestamp updated_at
-        timestamp created_at
-    }
-
-    cost_logs {
-        int id PK
-        int user_id FK
-        int plot_id "Implicit Ref: plots.id"
-        date log_date
-        string category
-        text description
-        decimal amount
-        string created_by
-        string updated_by
-        timestamp updated_at
-        timestamp created_at
-    }
-
-    audit_logs {
-        int id PK
-        string table_name
-        int record_id
-        string action
-        string user_email
-        json old_values
-        json new_values
-        timestamp created_at
+        int product_id FK
+        int recommended_product_id FK
+        decimal score
+        varchar reason
     }
 
     customer_clusters {
         int id PK
-        string cluster_name
+        varchar cluster_name
         text description
         json preferred_crops
         timestamp created_at
@@ -239,39 +238,28 @@ erDiagram
 
     customers {
         int id PK
-        string line_user_id UK
-        string display_name
+        varchar line_user_id UK
+        varchar display_name
         text picture_url
-        string phone
+        varchar phone
         text address
         int cluster_id FK
         timestamp created_at
     }
 
-    products {
-        int id PK
-        int plot_id FK
-        string name
-        string category
-        decimal price
-        string unit
-        decimal stock_quantity
-        text image_url
-        string status
-        timestamp created_at
-        timestamp updated_at
-    }
-
     orders {
         int id PK
-        string order_code UK
+        varchar order_code UK
         int customer_id FK
         decimal total_amount
-        string status
-        string delivery_type
-        date delivery_date
-        text slip_image_url
+        varchar status
+        varchar delivery_type
+        varchar payment_method
+        longtext slip_image_url
         text notes
+        varchar recipient_name
+        varchar recipient_phone
+        text recipient_address
         timestamp created_at
         timestamp updated_at
     }
@@ -283,274 +271,341 @@ erDiagram
         decimal quantity
         decimal unit_price
         decimal subtotal
+        date harvest_date
+        varchar lot_code
     }
 
-    product_recommendations {
+    line_chat_sessions {
         int id PK
-        int product_id FK
-        int recommended_product_id FK
-        decimal score
-        string reason
+        varchar line_user_id UK
+        varchar state
+        int order_id FK
+        json draft_data
+        timestamp updated_at
+        timestamp created_at
     }
 
+    storage_logs {
+        int id PK
+        int user_id FK
+        int order_id FK
+        date log_date
+        varchar storage_location
+        varchar shipped_to
+        varchar buyer
+        varchar vehicle
+        boolean vehicle_clean_status
+        text storage_conditions
+        time transport_time
+        varchar delivery_condition
+        varchar worker_name
+        text notes
+        varchar created_by
+        varchar updated_by
+        timestamp updated_at
+        timestamp created_at
+    }
+
+    cost_logs {
+        int id PK
+        int user_id FK
+        int plot_id FK
+        date log_date
+        varchar category
+        text description
+        decimal amount
+        varchar created_by
+        varchar updated_by
+        timestamp updated_at
+        timestamp created_at
+    }
+
+    audit_logs {
+        int id PK
+        varchar table_name
+        int record_id
+        varchar action
+        varchar user_email
+        json old_values
+        json new_values
+        timestamp created_at
+    }
+
+    users ||--o{ crops : "manages"
     users ||--o{ plots : "owns"
-    users ||--o{ water_logs : "records"
-    users ||--o{ chemical_logs : "records"
-    users ||--o{ pest_logs : "records"
-    users ||--o{ harvest_logs : "records"
-    users ||--o{ storage_logs : "records"
-    users ||--o{ workers : "manages"
-    users ||--o{ cost_logs : "records"
+    users ||--o{ planting_batches : "operates"
+    users ||--o{ crop_activities : "records"
+    users ||--o{ chemical_logs : "applies"
+    users ||--o{ pest_logs : "inspects"
+    users ||--o{ harvest_logs : "harvests"
+    users ||--o{ storage_logs : "dispatches"
+    users ||--o{ cost_logs : "spends"
 
-    plots ||--o{ water_logs : "has"
-    plots ||--o{ chemical_logs : "has"
-    plots ||--o{ pest_logs : "has"
-    plots ||--o{ harvest_logs : "has"
-    plots ||--o{ cost_logs : "incurs (logical)"
-    plots ||--o{ products : "produces"
+    plots ||--o{ planting_batches : "hosts"
+    plots ||--o{ crop_activities : "logs"
+    plots ||--o{ chemical_logs : "sprayed_on"
+    plots ||--o{ pest_logs : "inspected_on"
+    plots ||--o{ harvest_logs : "harvested_from"
+    plots ||--o{ products : "supplies"
+    plots ||--o{ cost_logs : "incurs"
 
-    customer_clusters ||--o{ customers : "groups"
+    crops ||--o{ planting_batches : "planted_as"
+
+    planting_batches ||--o{ crop_activities : "tracks"
+    planting_batches ||--o{ chemical_logs : "treated_in"
+    planting_batches ||--o{ pest_logs : "monitored_in"
+    planting_batches ||--o{ harvest_logs : "yields"
+
+    products ||--o{ harvest_logs : "stocked_into"
+    products ||--o{ order_items : "ordered_in"
+    products ||--o{ product_recommendations : "pairs_with"
+
+    customer_clusters ||--o{ customers : "segments"
     customers ||--o{ orders : "places"
     orders ||--o{ order_items : "contains"
-    products ||--o{ order_items : "sold_in"
-    products ||--o{ product_recommendations : "recommended_to"
-    products ||--o{ product_recommendations : "recommended_product"
-
-    harvest_logs ||--o{ storage_logs : "stored_in (logical)"
+    orders ||--o{ line_chat_sessions : "active_in"
+    orders ||--o{ storage_logs : "shipped_via"
 ```
 
 ---
 
-## 4. คำอธิบายความสัมพันธ์สำคัญใน ER Diagram
+## 3. รายละเอียดโครงสร้างตารางฐานข้อมูลทั้ง 18 ตาราง (Schema Details)
 
-- `users ||--o{ plots` หมายถึง หนึ่งผู้ใช้สามารถมีแปลงปลูกได้หลายแปลง
-- `users ||--o{ water_logs` หมายถึง หนึ่งผู้ใช้สามารถบันทึกประวัติการให้น้ำได้หลายรายการ
-- `plots ||--o{ water_logs` หมายถึง แปลงหนึ่งสามารถมีบันทึกการให้น้ำหลายครั้ง
-- `plots ||--o{ chemical_logs` หมายถึง แปลงหนึ่งสามารถมีบันทึกการใช้สารเคมีหลายครั้ง
-- `plots ||--o{ pest_logs` หมายถึง แปลงหนึ่งสามารถมีบันทึกศัตรูพืช/โรคหลายครั้ง
-- `plots ||--o{ harvest_logs` หมายถึง แปลงหนึ่งสามารถเก็บเกี่ยวได้หลายล็อต
-- `harvest_logs ||--o{ storage_logs` หมายถึง ล็อตหนึ่งอาจมีบันทึกการเก็บรักษา/ขนส่งหลายรายการ
-- `users ||--o{ workers` หมายถึง ผู้ใช้สามารถมีคนงานได้หลายคน
-- `audit_logs` ไม่ได้เชื่อมกับตารางใดโดยตรงใน ERD นี้ เพราะเป็นตารางเก็บประวัติทั่วไปสำหรับทุกตาราง
-- `customer_clusters ||--o{ customers` หมายถึง กลุ่มลูกค้าหนึ่งสามารถมีลูกค้าได้หลายคน
-- `customers ||--o{ orders` หมายถึง ลูกค้าหนึ่งสามารถมีคำสั่งซื้อได้หลายคำสั่ง
-- `orders ||--o{ order_items` หมายถึง คำสั่งซื้อหนึ่งสามารถมีสินค้าหลายรายการ
-- `products ||--o{ order_items` หมายถึง สินค้าหนึ่งสามารถอยู่ในคำสั่งซื้อหลายคำสั่ง
-- `products ||--o{ product_recommendations` หมายถึง สินค้าหนึ่งสามารถถูกแนะนำกับสินค้าต่าง ๆ ได้หลายตัว
+### 1) `users` (ตารางผู้ใช้งานระบบและตั้งค่าฟาร์ม)
+* `id`: `INT AUTO_INCREMENT` **[PK]** — รหัสผู้ใช้งาน
+* `email`: `VARCHAR(255) UNIQUE NOT NULL` **[UK]** — อีเมลสำหรับเข้าสู่ระบบ
+* `username`: `VARCHAR(100) UNIQUE NULL` **[UK]** — ชื่อผู้ใช้สำหรับเข้าสู่ระบบ
+* `password_hash`: `VARCHAR(255) NOT NULL` — รหัสผ่านที่เข้ารหัสด้วย bcrypt
+* `display_name`: `VARCHAR(255)` — ชื่อผู้ใช้งานที่แสดงในระบบ
+* `farm_name`: `VARCHAR(255)` — ชื่อฟาร์ม
+* `phone`: `VARCHAR(50)` — เบอร์โทรศัพท์ติดต่อฟาร์ม
+* `role`: `ENUM('owner','worker','user')` — สิทธิ์การใช้งานระบบ
+* `bank_name`: `VARCHAR(100)` — ชื่อธนาคารสำหรับรับโอนเงิน
+* `bank_account_no`: `VARCHAR(50)` — เลขที่บัญชีธนาคาร
+* `bank_account_name`: `VARCHAR(150)` — ชื่อบัญชีธนาคาร
+* `promptpay_number`: `VARCHAR(50)` — หมายเลขพร้อมเพย์สำหรับสร้าง QR Code รับชำระเงินอัตโนมัติ
+* `line_user_id`: `VARCHAR(255)` — LINE User ID ของเจ้าของฟาร์มสำหรับรับแจ้งเตือนออเดอร์/สลิปใหม่
+* `frontend_url`: `VARCHAR(255)` — URL หน้าเว็บหลักของระบบ
+* `created_at`: `TIMESTAMP` — วันเวลาที่สร้างบัญชี
 
----
+### 2) `crops` (ตารางคลังข้อมูลชนิดผัก)
+* `id`: `INT AUTO_INCREMENT` **[PK]** — รหัสชนิดผัก
+* `user_id`: `INT NULL` **[FK -> users.id]** — ผู้สร้างข้อมูลชนิดผัก
+* `name`: `VARCHAR(100) NOT NULL` — ชื่อชนิดผัก (เช่น ผักบุ้งจีน, กรีนโอ๊ค, เรดโอ๊ค)
+* `scientific_name`: `VARCHAR(150)` — ชื่อวิทยาศาสตร์
+* `category`: `VARCHAR(50)` — หมวดหมู่พืช (เช่น ผักสลัด, ผักกินใบ)
+* `growth_days`: `INT DEFAULT 30` — อายุการปลูกจนถึงวันเก็บเกี่ยว (วัน)
+* `nursery_days`: `INT DEFAULT 14` — ระยะเวลาเพาะกล้า (วัน)
+* `harvest_unit`: `VARCHAR(50) DEFAULT 'กก.'` — หน่วยวัดผลผลิต
+* `default_bag_size`: `VARCHAR(100)` — ขนาดถุงบรรจุมาตรฐาน
+* `default_price`: `DECIMAL(10,2)` — ราคาขายมาตรฐานต่อถุง
+* `icon`: `VARCHAR(50)` — ไอคอนแสดงผล
+* `notes`: `TEXT` — หมายเหตุวิธีเพาะปลูก
+* `created_at`: `TIMESTAMP` — วันเวลาที่สร้างรายการ
 
-## 5. รายละเอียดตารางฐานข้อมูล (Schema Details)
+### 3) `plots` (ตารางแปลงปลูกและแคร่ปลูก)
+* `id`: `INT AUTO_INCREMENT` **[PK]** — รหัสแปลงปลูก
+* `plot_number`: `INT DEFAULT 1` — ลำดับที่ของแปลง/แคร่ปลูก
+* `user_id`: `INT NOT NULL` **[FK -> users.id]** — เจ้าของแปลงปลูก
+* `name`: `VARCHAR(255) NOT NULL` — ชื่อแปลง/แคร่ปลูก
+* `dimension`: `VARCHAR(100)` — ขนาดแคร่ปลูก (เช่น แคร่ 2 x 6 เมตร)
+* `soil_recipe`: `TEXT` — สูตรผสมดินประจำรอบปัจจุบัน
+* `soil_prep_date`: `DATE NULL` — วันที่เตรียมดินของรอบปัจจุบัน
+* `seed_prep_date`: `DATE NULL` — วันที่เริ่มเพาะกล้าของรอบปัจจุบัน
+* `seed_crop_id`: `INT NULL` — รหัสชนิดผักที่กำลังเพาะกล้าในแปลงว่าง
+* `crop_name`: `VARCHAR(255) NULL` — ชื่อผักที่กำลังปลูกอยู่ในแปลงขณะนั้น (รีเซ็ตเป็น `-` เมื่อแปลงว่าง)
+* `area_sqm`: `DECIMAL(10,2)` — ขนาดพื้นที่แปลง (ตารางเมตร)
+* `planting_date`: `DATE NULL` — วันที่ย้ายกล้าลงปลูกในรอบปัจจุบัน
+* `expected_harvest_date`: `DATE NULL` — วันคาดการณ์เก็บเกี่ยวของรอบปัจจุบัน
+* `field_safety_status`: `VARCHAR(50) DEFAULT 'ปลอดภัย'` — สถานะความปลอดภัยของแปลง
+* `status`: `VARCHAR(50) DEFAULT 'empty'` — สถานะแปลง (`empty`, `growing`, `harvest_ready`)
+* `current_batch_id`: `INT NULL` — รหัสรอบการปลูกปัจจุบันที่กำลังดำเนินการอยู่
+* `notes`: `TEXT` — หมายเหตุประจำแปลง
+* `created_by`, `updated_by`, `updated_at`, `created_at` — ข้อมูลผู้สร้างและเวลาแก้ไขล่าสุด
 
-ระบบฐานข้อมูลของ **FarmGAP** ประกอบด้วย **16 ตาราง** โดยมีรายละเอียดและหน้าที่ดังนี้:
+### 4) `planting_batches` (ตารางรอบการปลูกพืช)
+* `id`: `INT AUTO_INCREMENT` **[PK]** — รหัสรอบการปลูก
+* `user_id`: `INT NOT NULL` **[FK -> users.id]** — เจ้าของรอบการปลูก
+* `batch_code`: `VARCHAR(50) NOT NULL` — รหัสอ้างอิงรอบการปลูก (เช่น `BATCH-261001-P3-882`)
+* `plot_id`: `INT NOT NULL` **[FK -> plots.id]** — แปลงปลูกที่ใช้ในรอบนี้
+* `crop_id`: `INT NOT NULL` **[FK -> crops.id]** — ชนิดผักที่ปลูกในรอบนี้
+* `total_damaged_count`: `INT DEFAULT 0` — จำนวนต้นที่เสียหายสะสมในรอบนี้
+* `total_harvested_count`: `INT DEFAULT 0` — จำนวนต้นที่เก็บเกี่ยวแล้วสะสมในรอบนี้
+* `start_date`: `DATE NOT NULL` — วันที่เริ่มปลูกลงแปลง
+* `expected_harvest_date`: `DATE NOT NULL` — วันที่คาดว่าจะเก็บเกี่ยว
+* `actual_harvest_date`: `DATE NULL` — วันที่เก็บเกี่ยวจริง
+* `status`: `VARCHAR(50) DEFAULT 'growing'` — สถานะรอบการปลูก (`growing`, `harvest_ready`, `harvested`)
+* `notes`: `TEXT` — หมายเหตุรอบการปลูก
+* `seed_prep_date`: `DATE NULL` — วันที่เพาะเมล็ดของรอบนี้
+* `soil_recipe`: `TEXT NULL` — สูตรดินที่ใช้ในรอบนี้
+* `soil_prep_date`: `DATE NULL` — วันที่เตรียมดินของรอบนี้
+* `created_at`, `updated_at` — วันเวลาที่สร้างและอัปเดตข้อมูล
 
-### 1) users (ตารางข้อมูลผู้ใช้งานและผู้ดูแลระบบ)
-*ใช้จัดเก็บข้อมูลโปรไฟล์ บัญชีผู้ใช้ และสิทธิ์การใช้งาน*
-* **id**: `INT AUTO_INCREMENT` **[PK]** - รหัสผู้ใช้หลัก
-* **email**: `VARCHAR(255) UNIQUE NOT NULL` - อีเมลสำหรับใช้เข้าระบบ (ห้ามซ้ำ)
-* **password_hash**: `VARCHAR(255) NOT NULL` - รหัสผ่านที่เข้ารหัสความปลอดภัยแล้ว
-* **display_name**: `VARCHAR(255)` - ชื่อผู้แสดงผล
-* **farm_name**: `VARCHAR(255)` - ชื่อฟาร์มหรือวิสาหกิจชุมชน
-* **role**: `ENUM('owner', 'worker') DEFAULT 'owner'` - บทบาทหน้าที่ในระบบ
-* **created_at**: `TIMESTAMP` - วันเวลาที่สร้างบัญชีผู้ใช้
+### 5) `crop_activities` (ตารางไทม์ไลน์กิจกรรมในแปลงปลูก)
+* `id`: `INT AUTO_INCREMENT` **[PK]** — รหัสกิจกรรม
+* `user_id`: `INT NOT NULL` **[FK -> users.id]** — ผู้บันทึกกิจกรรม
+* `plot_id`: `INT NOT NULL` **[FK -> plots.id]** — แปลงปลูกที่ทำกิจกรรม
+* `batch_id`: `INT NULL` **[FK -> planting_batches.id]** — รหัสรอบการปลูกของกิจกรรมนี้
+* `activity_date`: `DATE NOT NULL` — วันที่ปฏิบัติงาน
+* `stage`: `VARCHAR(50) NOT NULL` — ขั้นตอนการปลูก (`soil_prep`, `seeding`, `nursery`, `planting`, `growing`, `fertilizing`, `pest_control`, `harvest`)
+* `title`: `VARCHAR(255) NOT NULL` — หัวข้อกิจกรรม
+* `materials_used`: `TEXT NULL` — วัสดุ/ปัจจัยการผลิตที่ใช้
+* `details`: `TEXT NULL` — รายละเอียดการปฏิบัติงาน
+* `operator_name`: `VARCHAR(255)` — ชื่อผู้ปฏิบัติงาน
+* `source_type`: `VARCHAR(32) NULL` — ประเภทตารางต้นทางที่ซิงค์ข้อมูลมา (`chemical`, `pest`)
+* `source_id`: `INT NULL` — รหัสอ้างอิงจากตารางต้นทางที่ซิงค์มา
+* `created_at`: `TIMESTAMP` — วันเวลาที่บันทึก
 
-### 2) plots (ตารางแปลงเพาะปลูก)
-*เก็บรายละเอียดแปลงเกษตร พืชที่ปลูก ประวัติการตรวจดิน และข้อมูลความปลอดภัยเบื้องต้นตามเกณฑ์ GAP*
-* **id**: `INT AUTO_INCREMENT` **[PK]** - รหัสแปลงหลัก
-* **user_id**: `INT NOT NULL` **[FK -> users.id]** - รหัสผู้ดูแลแปลงนี้
-* **name**: `VARCHAR(255) NOT NULL` - ชื่อแปลงปลูก
-* **crop_name**: `VARCHAR(255) NOT NULL` - พืชที่ปลูกในแปลงนั้น ๆ
-* **area_sqm**: `DECIMAL(10,2)` - ขนาดพื้นที่ (ตารางเมตร)
-* **planting_date**: `DATE NOT NULL` - วันที่เริ่มปลูก
-* **expected_harvest_date**: `DATE` - วันที่คาดว่าจะเก็บเกี่ยวผลผลิต
-* **water_source**: `VARCHAR(255)` - แหล่งน้ำที่นำมาใช้ (เช่น อ่างเก็บน้ำ, คลองธรรมชาติ)
-* **water_source_type**: `VARCHAR(100)` - ประเภทแหล่งน้ำ (เช่น แหล่งน้ำเปิด, บ่อน้ำบาดาล)
-* **soil_test_date**: `DATE` - วันที่สุ่มตรวจสภาพดินล่าสุด
-* **soil_test_result**: `VARCHAR(255)` - ผลการตรวจวิเคราะห์ดิน
-* **field_safety_status**: `VARCHAR(50) DEFAULT 'ปลอดภัย'` - สถานะความปลอดภัยของแปลงปลูก
-* **soil_recipe**: `TEXT` - สูตรปรุงดินประจำแปลง
-* **soil_prep_date**: `DATE` - วันที่ปรุงดิน
-* **seed_prep_date**: `DATE` - วันที่เพาะเมล็ด
-* **seed_notes**: `TEXT` - บันทึก/สูตรการเพาะเมล็ด
-* **seed_crop_id**: `INT` - รหัสผักที่เพาะเมล็ดไว้
-* **status**: `VARCHAR(50) DEFAULT 'empty'` - สถานะของแปลงปลูก (empty / growing / harvest_ready)
-* **current_batch_id**: `INT` - รหัสรอบการเพาะปลูกปัจจุบัน (planting_batches)
-* **notes**: `TEXT` - บันทึกอื่น ๆ เพิ่มเติม
-* *ฟิลด์ระบบบันทึกประวัติ*: `created_by`, `updated_by`, `updated_at`, `created_at`
+### 6) `chemical_logs` (ตารางบันทึกปุ๋ย สารชีวภัณฑ์ และการควบคุมระยะปลอดภัย PHI)
+* `id`: `INT AUTO_INCREMENT` **[PK]** — รหัสบันทึก
+* `user_id`: `INT NOT NULL` **[FK -> users.id]** — ผู้บันทึก
+* `plot_id`: `INT NOT NULL` **[FK -> plots.id]** — แปลงที่ใช้ปุ๋ย/สารชีวภัณฑ์
+* `batch_id`: `INT NULL` **[FK -> planting_batches.id]** — รอบการปลูกที่ใช้สาร
+* `log_date`: `DATE NOT NULL` — วันที่ใส่ปุ๋ย/พ่นสาร
+* `chem_type`: `VARCHAR(100) NOT NULL` — ประเภทสาร (ปุ๋ยอินทรีย์, น้ำหมักชีวภาพ, สารชีวภัณฑ์)
+* `product_name`: `VARCHAR(255) NOT NULL` — ชื่อปุ๋ยหรือสารที่ใช้
+* `amount`, `unit`: `DECIMAL(10,2)`, `VARCHAR(50)` — ปริมาณและหน่วยที่ใช้
+* `reason`: `TEXT` — เหตุผลในการใช้
+* `application_method`: `VARCHAR(100)` — วิธีการนำไปใช้
+* `safety_ppe`: `BOOLEAN DEFAULT FALSE` — การสวมใส่อุปกรณ์ป้องกันความปลอดภัย (PPE)
+* `manufacturer`, `chemical_label`: `VARCHAR(255)` — แหล่งผลิตและฉลากอ้างอิง
+* `phi_days`: `INT DEFAULT 0` — จำนวนวันระยะปลอดภัยก่อนเก็บเกี่ยว (Pre-Harvest Interval)
+* `worker_name`: `VARCHAR(255)` — ผู้ปฏิบัติงาน
+* `notes`, `created_by`, `updated_by`, `updated_at`, `created_at`
 
-### 3) water_logs (ตารางบันทึกการรดน้ำ)
-*เก็บข้อมูลการให้น้ำพืชตามหลักปฏิบัติเกษตรที่ดี เพื่อป้องกันการปนเปื้อนเชื้อโรคและสารเคมีในน้ำ*
-* **id**: `INT AUTO_INCREMENT` **[PK]** - รหัสบันทึก
-* **user_id**: `INT NOT NULL` **[FK -> users.id]**
-* **plot_id**: `INT NOT NULL` **[FK -> plots.id]** - แปลงปลูกที่ได้รับการรดน้ำ
-* **log_date**: `DATE NOT NULL` - วันที่ดำเนินงาน
-* **water_source**: `VARCHAR(255)` - แหล่งน้ำที่ดึงมาใช้รดน้ำในรอบนี้
-* **water_source_type**: `VARCHAR(100)` - ประเภทของแหล่งน้ำ
-* **water_quality**: `VARCHAR(100)` - ผลการประเมินคุณภาพน้ำ (เช่น ใส, ไม่มีกลิ่น)
-* **contamination_check**: `BOOLEAN DEFAULT FALSE` - การประเมินโอกาสปนเปื้อน (True = มีความเสี่ยง, False = ปลอดภัย)
-* **amount_liters**: `DECIMAL(10,2)` - ปริมาณน้ำที่ใช้ (ลิตร)
-* **worker_name**: `VARCHAR(255)` - ชื่อผู้ปฏิบัติงานรดน้ำ
-* *ฟิลด์ระบบบันทึกประวัติ*: `notes`, `created_by`, `updated_by`, `updated_at`, `created_at`
+### 7) `pest_logs` (ตารางบันทึกการสำรวจโรคและแมลงศัตรูพืช)
+* `id`: `INT AUTO_INCREMENT` **[PK]** — รหัสบันทึก
+* `user_id`: `INT NOT NULL` **[FK -> users.id]** — ผู้บันทึก
+* `plot_id`: `INT NOT NULL` **[FK -> plots.id]** — แปลงที่สำรวจพบ
+* `batch_id`: `INT NULL` **[FK -> planting_batches.id]** — รอบการปลูกที่สำรวจพบ
+* `log_date`: `DATE NOT NULL` — วันที่สำรวจ
+* `pest_or_disease`: `VARCHAR(255) NOT NULL` — ชนิดโรคหรือแมลงศัตรูพืชที่พบ
+* `damaged_count`: `INT DEFAULT 0` — จำนวนต้นที่เสียหายและตัดจำหน่ายออก
+* `damage_cause`: `VARCHAR(100) NULL` — สาเหตุความเสียหาย
+* `damage_unit`: `VARCHAR(50) DEFAULT 'ต้น'` — หน่วยความเสียหาย
+* `severity`: `VARCHAR(50)` — ระดับความรุนแรง
+* `treatment_method`: `TEXT` — วิธีการป้องกันและกำจัด
+* `worker_name`, `notes`, `created_by`, `updated_by`, `updated_at`, `created_at`
 
-### 4) chemical_logs (ตารางบันทึกการใช้สารเคมี/สารปรับปรุงบำรุงดิน)
-*มีความสำคัญสูงมากต่อมาตรฐาน GAP เพื่อยืนยันว่าเว้นระยะปลอดภัยก่อนเก็บเกี่ยว (PHI) ครบถ้วน*
-* **id**: `INT AUTO_INCREMENT` **[PK]**
-* **user_id**: `INT NOT NULL` **[FK -> users.id]**
-* **plot_id**: `INT NOT NULL` **[FK -> plots.id]** - แปลงปลูกที่พ่นสารเคมี
-* **log_date**: `DATE NOT NULL` - วันที่พ่นสารเคมี
-* **chem_type**: `VARCHAR(100) NOT NULL` - ประเภทสารเคมี (เช่น ปุ๋ยเคมี, ยาปราบศัตรูพืช, ยาป้องกันเชื้อรา)
-* **product_name**: `VARCHAR(255) NOT NULL` - ชื่อการค้าของสารเคมี
-* **amount**: `DECIMAL(10,2)` - ปริมาณที่ใช้
-* **unit**: `VARCHAR(50)` - หน่วยวัดปริมาณ (เช่น กรัม, ซีซี, กิโลกรัม)
-* **reason**: `TEXT` - วัตถุประสงค์ของการฉีดพ่น (เช่น ป้องกันหนอนเจาะสมอฝ้าย)
-* **application_method**: `VARCHAR(100)` - วิธีการพ่น (เช่น ใช้ถังสะพายหลังพ่น, ติดสปริงเกอร์)
-* **safety_ppe**: `BOOLEAN DEFAULT FALSE` - ผู้พ่นสวมใส่อุปกรณ์ป้องกันร่างกาย (PPE) หรือไม่ (ตามมาตรฐาน GAP)
-* **manufacturer**: `VARCHAR(255)` - ชื่อผู้ผลิต/แบรนด์
-* **chemical_label**: `VARCHAR(255)` - ข้อมูลทะเบียนวัตถุอันตราย หรือฉลากกำกับ
-* **phi_days**: `INT DEFAULT 0` - ระยะเวลาเว้นการเก็บเกี่ยวขั้นต่ำหลังจากพ่นสาร (Pre-Harvest Interval - วัน)
-* **worker_name**: `VARCHAR(255)` - ชื่อคนงานผู้ฉีดพ่น
-* *ฟิลด์ระบบบันทึกประวัติ*: `notes`, `created_by`, `updated_by`, `updated_at`, `created_at`
+### 8) `harvest_logs` (ตารางบันทึกการเก็บเกี่ยวและรหัสล็อต Traceability)
+* `id`: `INT AUTO_INCREMENT` **[PK]** — รหัสการเก็บเกี่ยว
+* `user_id`: `INT NOT NULL` **[FK -> users.id]** — ผู้บันทึก
+* `plot_id`: `INT NOT NULL` **[FK -> plots.id]** — แปลงที่เก็บเกี่ยว
+* `batch_id`: `INT NULL` **[FK -> planting_batches.id]** — รอบการปลูกที่เก็บเกี่ยว
+* `harvest_date`: `DATE NOT NULL` — วันที่เก็บเกี่ยวผลผลิต
+* `quantity`, `unit`: `DECIMAL(10,2)`, `VARCHAR(50)` — น้ำหนักผลผลิตรวม (กก.)
+* `is_partial`: `BOOLEAN DEFAULT FALSE` — สถานะการทยอยเก็บเกี่ยวบางส่วน (`true`) หรือเก็บเกี่ยวปิดรอบแปลง (`false`)
+* `harvested_plants_count`: `INT DEFAULT 0` — จำนวนต้นที่ตัดเก็บเกี่ยวในครั้งนี้
+* `destination`: `VARCHAR(50)` — ปลายทางผลผลิต (`cold_storage` หรือ `line_store`)
+* `total_packs`: `INT DEFAULT 0` — จำนวนถุงที่บรรจุได้ทั้งหมด
+* `stocked_quantity`: `INT DEFAULT 0` — จำนวนถุงที่นำเข้าสต็อกหน้าร้านแล้ว
+* `stock_status`: `VARCHAR(50)` — สถานะการนำเข้าสต็อก (`unstocked`, `partial`, `fully_stocked`)
+* `product_id`: `INT NULL` **[FK -> products.id]** — รหัสสินค้าหน้าร้านที่รับสต็อกจากล็อตนี้
+* `quality_grade`: `VARCHAR(50)` — เกรดคุณภาพผลผลิต
+* `lot_code`: `VARCHAR(100)` — รหัสล็อตผลผลิตสำหรับสร้าง QR Code สืบย้อนกลับ
+* `revenue`: `DECIMAL(12,2)` — มูลค่าผลผลิตตามราคาประเมิน
+* `harvest_hygiene`, `postharvest_handling`, `worker_name`, `notes`, `created_by`, `updated_by`, `updated_at`, `created_at`
 
-### 5) pest_logs (ตารางบันทึกข้อมูลศัตรูพืชและการระบาด)
-*บันทึกข้อมูลการระบาดของโรคและศัตรูพืชในแปลง*
-* **id**: `INT AUTO_INCREMENT` **[PK]**
-* **user_id**: `INT NOT NULL` **[FK -> users.id]**
-* **plot_id**: `INT NOT NULL` **[FK -> plots.id]**
-* **log_date**: `DATE NOT NULL` - วันที่เข้าตรวจสอบแล้วพบ
-* **pest_or_disease**: `VARCHAR(255) NOT NULL` - ชนิดศัตรูพืชหรือโรคที่พบ (เช่น โรคราน้ำค้าง, เพลี้ยแป้ง)
-* **severity**: `VARCHAR(50)` - ระดับความรุนแรงของการระบาด (เช่น น้อย, ปานกลาง, วิกฤต)
-* **treatment_method**: `TEXT` - วิธีการแก้ไข/รักษาเยียวยาเบื้องต้น
-* **worker_name**: `VARCHAR(255)` - ผู้ตรวจสอบ
-* *ฟิลด์ระบบบันทึกประวัติ*: `notes`, `created_by`, `updated_by`, `updated_at`, `created_at`
+### 9) `products` (ตารางสินค้าและสต็อกพร้อมขายหน้าร้าน LINE)
+* `id`: `INT AUTO_INCREMENT` **[PK]** — รหัสสินค้า
+* `plot_id`: `INT NULL` **[FK -> plots.id]** — แปลงปลูกต้นทางล่าสุดของสินค้า
+* `name`: `VARCHAR(255) NOT NULL` — ชื่อสินค้า
+* `category`: `VARCHAR(100)` — หมวดหมู่สินค้า
+* `price`: `DECIMAL(10,2) NOT NULL` — ราคาขายต่อหน่วย (บาท)
+* `unit`: `VARCHAR(50)` — หน่วยขาย (เช่น ถุง, กก.)
+* `stock_quantity`: `DECIMAL(10,2) DEFAULT 0` — จำนวนสินค้าคงเหลือพร้อมขาย
+* `image_url`: `TEXT` — ลิงก์รูปภาพสินค้า
+* `status`: `VARCHAR(50) DEFAULT 'available'` — สถานะการวางจำหน่าย (`available`, `out_of_stock`)
+* `created_at`, `updated_at`
 
-### 6) harvest_logs (ตารางบันทึกการเก็บเกี่ยวผลผลิต)
-*ตรวจสอบการเก็บเกี่ยว ล็อตสินค้า สุขลักษณะขณะเก็บเกี่ยว รายได้ และรหัสล็อต (Lot Code) สำหรับทวนสอบย้อนกลับ (Traceability)*
-* **id**: `INT AUTO_INCREMENT` **[PK]**
-* **user_id**: `INT NOT NULL` **[FK -> users.id]**
-* **plot_id**: `INT NOT NULL` **[FK -> plots.id]** - แปลงที่ได้ผลผลิตมา
-* **harvest_date**: `DATE NOT NULL` - วันที่เก็บเกี่ยว
-* **quantity**: `DECIMAL(10,2) NOT NULL` - น้ำหนักหรือจำนวนผลผลิตที่เก็บได้
-* **unit**: `VARCHAR(50) DEFAULT 'kg'` - หน่วยน้ำหนัก (ปกติเป็นกิโลกรัม)
-* **quality_grade**: `VARCHAR(50)` - ระดับเกรดความมีคุณภาพ (เช่น เกรด A, เกรด B)
-* **lot_code**: `VARCHAR(100)` - รหัสล็อตสินค้าเพื่อติดตามย้อนกลับ
-* **revenue**: `DECIMAL(12,2)` - รายได้ที่ได้รับจากการขายล็อตนี้ (ถ้ามีข้อมูล)
-* **harvest_hygiene**: `VARCHAR(50)` - สภาพสุขอนามัยในกระบวนการเก็บเกี่ยว (เช่น ล้างตะกร้า, ล้างมือ)
-* **postharvest_handling**: `TEXT` - การจัดการหลังการเก็บเกี่ยว (เช่น การผึ่งให้แห้ง, การคัดแยก)
-* **worker_name**: `VARCHAR(255)` - ชื่อหัวหน้า/ผู้เก็บเกี่ยวผลผลิต
-* *ฟิลด์ระบบบันทึกประวัติ*: `notes`, `created_by`, `updated_by`, `updated_at`, `created_at`
+### 10) `customers` (ตารางข้อมูลลูกค้าสมาชิก LINE OA)
+* `id`: `INT AUTO_INCREMENT` **[PK]** — รหัสลูกค้า
+* `line_user_id`: `VARCHAR(255) UNIQUE NOT NULL` **[UK]** — LINE User ID ของลูกค้า
+* `display_name`: `VARCHAR(255)` — ชื่อโปรไฟล์ LINE หรือชื่อผู้รับ
+* `picture_url`: `TEXT` — ลิงก์รูปโปรไฟล์ LINE
+* `phone`: `VARCHAR(50)` — เบอร์โทรศัพท์ลูกค้า
+* `address`: `TEXT` — ที่อยู่สำหรับจัดส่งสินค้า
+* `cluster_id`: `INT NULL` **[FK -> customer_clusters.id]** — กลุ่มลูกค้าจากการจัดกลุ่มด้วย K-Means
+* `created_at`: `TIMESTAMP`
 
-### 7) storage_logs (ตารางบันทึกการคลังสินค้าและขนส่ง)
-*จัดเก็บประวัติสถานที่จัดเก็บผลผลิต การขายให้ผู้ซื้อ ยานพาหนะ และการตรวจสอบสภาพการขนส่งตามมาตรฐาน GAP*
-* **id**: `INT AUTO_INCREMENT` **[PK]**
-* **user_id**: `INT NOT NULL` **[FK -> users.id]**
-* **harvest_id**: `INT` *(ความสัมพันธ์ทางตรรกะ -> harvest_logs.id)* - เชื่อมโยงรอบการเก็บเกี่ยวผลผลิต
-* **log_date**: `DATE NOT NULL` - วันที่ทำการจัดเก็บหรือส่งมอบสินค้า
-* **storage_location**: `VARCHAR(255)` - สถานที่/โรงเรือนจัดเก็บผลผลิต
-* **shipped_to**: `VARCHAR(255)` - สถานที่ส่งมอบสินค้าปลายทาง
-* **buyer**: `VARCHAR(255)` - ชื่อผู้ซื้อหรือคู่ค้า
-* **vehicle**: `VARCHAR(255)` - หมายเลขทะเบียนหรือรายละเอียดรถขนส่ง
-* **vehicle_clean_status**: `BOOLEAN DEFAULT FALSE` - การประเมินความสะอาดของตู้บรรทุก/พาหนะขนส่ง
-* **storage_conditions**: `TEXT` - สภาพแวดล้อมห้องเก็บ (เช่น การควบคุมอุณหภูมิ, ความชื้น)
-* **transport_time**: `TIME` - เวลาหรือระยะเวลาการเดินทางขนส่ง
-* **delivery_condition**: `VARCHAR(50)` - สภาพผลผลิตขณะขนส่งถึงมือผู้ซื้อ
-* **worker_name**: `VARCHAR(255)` - ผู้บันทึกหรือผู้ขนส่ง
-* *ฟิลด์ระบบบันทึกประวัติ*: `notes`, `created_by`, `updated_by`, `updated_at`, `created_at`
+### 11) `customer_clusters` (ตารางกลุ่มลูกค้าจากอัลกอริทึม K-Means Clustering)
+* `id`: `INT AUTO_INCREMENT` **[PK]** — รหัสกลุ่มลูกค้า
+* `cluster_name`: `VARCHAR(100) NOT NULL` — ชื่อกลุ่มลูกค้า
+* `description`: `TEXT` — คำอธิบายพฤติกรรมการสั่งซื้อของกลุ่ม
+* `preferred_crops`: `JSON` — รายการสินค้าที่กลุ่มนี้นิยมซื้อสูงสุด
+* `created_at`: `TIMESTAMP`
 
-### 8) workers (ตารางรายชื่อคนงานและข้อมูลสุขลักษณะ)
-*บันทึกความสะอาด สุขอนามัย และประวัติการฝึกอบรมสุขอนามัยของคนงาน เพื่อให้สอดรับกับข้อกำหนดด้านสุขอนามัยของแรงงานตาม GAP*
-* **id**: `INT AUTO_INCREMENT` **[PK]**
-* **user_id**: `INT NOT NULL` **[FK -> users.id]**
-* **name**: `VARCHAR(255) NOT NULL` - ชื่อคนงาน
-* **role**: `VARCHAR(100)` - บทบาท/หน้าที่ในฟาร์ม (เช่น ผู้ฉีดพ่นยา, คนงานเก็บเกี่ยว)
-* **phone**: `VARCHAR(50)` - เบอร์โทรศัพท์ติดต่อ
-* **hygiene_training**: `BOOLEAN DEFAULT FALSE` - ผ่านการฝึกอบรมสุขอนามัยแล้วหรือไม่ (True = ผ่านแล้ว)
-* **training_date**: `DATE` - วันที่เข้ารับการอบรมล่าสุด
-* **personal_hygiene_check**: `BOOLEAN DEFAULT FALSE` - สภาพความสะอาดส่วนบุคคลผ่านเกณฑ์ตรวจประเมินเบื้องต้น
-* **health_status**: `VARCHAR(50)` - สถานะสุขภาพ/การเจ็บป่วย (ป้องกันโรคระบาดปนเปื้อนในอาหาร)
-* *ฟิลด์ระบบบันทึกประวัติ*: `created_by`, `updated_by`, `updated_at`, `created_at`
+### 12) `orders` (ตารางคำสั่งซื้อสินค้า)
+* `id`: `INT AUTO_INCREMENT` **[PK]** — รหัสคำสั่งซื้อ
+* `order_code`: `VARCHAR(50) UNIQUE NOT NULL` **[UK]** — เลขที่ใบสั่งซื้อ (เช่น `ORD-20261020-1234`)
+* `customer_id`: `INT NOT NULL` **[FK -> customers.id]** — รหัสลูกค้าที่สั่งซื้อ
+* `total_amount`: `DECIMAL(12,2) NOT NULL` — ยอดเงินรวมสุทธิ (บาท)
+* `status`: `VARCHAR(50) DEFAULT 'pending'` — สถานะคำสั่งซื้อ (`pending`, `paid`, `shipping`, `completed`, `cancelled`)
+* `delivery_type`: `VARCHAR(50) DEFAULT 'delivery'` — รูปแบบการรับสินค้า (`delivery`, `pickup`)
+* `payment_method`: `VARCHAR(50) DEFAULT 'transfer'` — ช่องทางชำระเงิน (`transfer`, `cod`)
+* `slip_image_url`: `LONGTEXT` — ลิงก์ภาพหลักฐานการโอนเงิน (สลิป)
+* `notes`: `TEXT` — หมายเหตุคำสั่งซื้อ
+* `recipient_name`: `VARCHAR(255) NULL` — ชื่อผู้รับสินค้าของออเดอร์นี้ (Snapshot)
+* `recipient_phone`: `VARCHAR(50) NULL` — เบอร์โทรศัพท์ผู้รับสินค้าของออเดอร์นี้
+* `recipient_address`: `TEXT NULL` — ที่อยู่จัดส่งผู้รับสินค้าของออเดอร์นี้
+* `created_at`, `updated_at`
 
-### 9) cost_logs (ตารางบันทึกรายจ่าย/ต้นทุนการผลิต)
-*ใช้คำนวณต้นทุนการผลิตแยกตามแปลงหรือกิจกรรม เพื่อวิเคราะห์ความคุ้มทุน*
-* **id**: `INT AUTO_INCREMENT` **[PK]**
-* **user_id**: `INT NOT NULL` **[FK -> users.id]**
-* **plot_id**: `INT` *(ความสัมพันธ์ทางตรรกะ -> plots.id)* - แหล่งต้นทุนเกิด ณ แปลงใด (ค่าว่างคือรายจ่ายของฟาร์มโดยรวม)
-* **log_date**: `DATE NOT NULL` - วันที่มีค่าใช้จ่ายเกิดขึ้น
-* **category**: `VARCHAR(100) NOT NULL` - ประเภทค่าใช้จ่าย (เช่น ค่าเมล็ดพันธุ์, ค่าปุ๋ย, ค่าจ้างแรงงาน, ค่าน้ำไฟ)
-* **description**: `TEXT` - รายละเอียดค่าใช้จ่ายเพิ่มเติม
-* **amount**: `DECIMAL(12,2) NOT NULL` - จำนวนเงินจ่ายจริง (บาท)
-* *ฟิลด์ระบบบันทึกประวัติ*: `created_by`, `updated_by`, `updated_at`, `created_at`
+### 13) `order_items` (ตารางรายการสินค้าย่อยในแต่ละคำสั่งซื้อ)
+* `id`: `INT AUTO_INCREMENT` **[PK]** — รหัสรายการสินค้าย่อย
+* `order_id`: `INT NOT NULL` **[FK -> orders.id]** — รหัสคำสั่งซื้อหลัก
+* `product_id`: `INT NOT NULL` **[FK -> products.id]** — รหัสสินค้าที่สั่งซื้อ
+* `quantity`: `DECIMAL(10,2) NOT NULL` — จำนวนที่สั่งซื้อ
+* `unit_price`: `DECIMAL(10,2) NOT NULL` — ราคาขายต่อหน่วย ณ เวลาที่สั่งซื้อ
+* `subtotal`: `DECIMAL(10,2) NOT NULL` — ราคารวมย่อยของรายการนี้
+* `harvest_date`: `DATE NULL` — วันที่เก็บเกี่ยวของล็อตสินค้าที่จัดส่งในรายการนี้
+* `lot_code`: `VARCHAR(100) NULL` — รหัสล็อต (`lot_code`) สำหรับตรวจสอบย้อนกลับจากใบสั่งซื้อ
 
-### 10) audit_logs (ตารางประวัติกิจกรรมการบันทึก)
-*บันทึกกิจกรรมความเคลื่อนไหวในระดับฐานข้อมูล ป้องกันการทุจริตข้อมูล และใช้ตรวจสอบย้อนหลังการแก้ไขข้อมูล (Data Auditing)*
-* **id**: `INT AUTO_INCREMENT` **[PK]** - รหัสล็อกเหตุการณ์
-* **table_name**: `VARCHAR(255) NOT NULL` - ชื่อตารางที่มีการทำรายการ (เช่น plots, chemical_logs)
-* **record_id**: `INT` - เลข Primary Key ของแถวข้อมูลนั้นๆ ที่ถูกจัดการ
-* **action**: `VARCHAR(50) NOT NULL` - การกระทำ (เช่น INSERT, UPDATE, DELETE)
-* **user_email**: `VARCHAR(255)` - อีเมลของผู้ใช้งานระบบที่ทำรายการ
-* **old_values**: `JSON` - ค่าข้อมูลเดิมในรูปแบบ JSON (ใช้บันทึกกรณีที่เป็นการแก้ไข/ลบ)
-* **new_values**: `JSON` - ค่าข้อมูลใหม่ในรูปแบบ JSON
-* **created_at**: `TIMESTAMP` - วันและเวลาที่เกิดเหตุการณ์การปรับปรุงข้อมูล
+### 14) `product_recommendations` (ตารางจับคู่สินค้าแนะนำซื้อคู่กัน)
+* `id`: `INT AUTO_INCREMENT` **[PK]** — รหัสรายการแนะนำ
+* `product_id`: `INT NOT NULL` **[FK -> products.id]** — รหัสสินค้าหลัก
+* `recommended_product_id`: `INT NOT NULL` **[FK -> products.id]** — รหัสสินค้าที่แนะนำให้ซื้อคู่กัน
+* `score`: `DECIMAL(5,4)` — ค่าคะแนนความสัมพันธ์จากการซื้อร่วมกัน (Co-occurrence Score)
+* `reason`: `VARCHAR(255)` — คำอธิบายเหตุผลการแนะนำ
 
-### 11) customer_clusters (ตารางกลุ่มลูกค้า)
-*ใช้จัดกลุ่มลูกค้าตามลักษณะหรือประเภทที่คล้ายกัน เพื่อใช้สำหรับการวางแผนการตลาดและการแนะนำสินค้าแบบตรงเป้าหมาย*
-* **id**: `INT AUTO_INCREMENT` **[PK]** - รหัสกลุ่มลูกค้า
-* **cluster_name**: `VARCHAR(100) NOT NULL` - ชื่อกลุ่มลูกค้า เช่น กลุ่มลูกค้าที่ชอบผักสลัดสด
-* **description**: `TEXT` - คำอธิบายเพิ่มเติมของกลุ่มลูกค้า
-* **preferred_crops**: `JSON` - พืชที่ลูกค้าในกลุ่มนี้ชอบหรือมีแนวโน้มซื้อบ่อย
-* **created_at**: `TIMESTAMP` - วันและเวลาที่สร้างกลุ่มลูกค้า
+### 15) `line_chat_sessions` (ตารางจัดการสถานะการสนทนาสั่งซื้อผ่าน LINE Chatbot)
+* `id`: `INT AUTO_INCREMENT` **[PK]** — รหัสเซสชัน
+* `line_user_id`: `VARCHAR(255) UNIQUE NOT NULL` **[UK]** — LINE User ID ของผู้สนทนา
+* `state`: `VARCHAR(50) NOT NULL DEFAULT 'IDLE'` — สถานะปัจจุบันของบทสนทนา (`IDLE`, `SELECTING_QTY`, `AWAITING_CONTACT`, `CONFIRMING_ORDER`, `AWAITING_PAYMENT`)
+* `order_id`: `INT NULL` **[FK -> orders.id]** — รหัสคำสั่งซื้อที่กำลังรอชำระเงินในแชท
+* `draft_data`: `JSON NULL` — ข้อมูลตะกร้าสินค้าและที่อยู่ชั่วคราวระหว่างการสนทนา
+* `updated_at`, `created_at`
 
-### 12) customers (ตารางลูกค้า)
-*เก็บข้อมูลลูกค้าที่เกี่ยวข้องกับระบบและมีการสั่งซื้อสินค้า*
-* **id**: `INT AUTO_INCREMENT` **[PK]** - รหัสลูกค้า
-* **line_user_id**: `VARCHAR(255) UNIQUE NOT NULL` - รหัสผู้ใช้ใน LINE สำหรับระบุตัวตนลูกค้า
-* **display_name**: `VARCHAR(255)` - ชื่อที่แสดงของลูกค้า
-* **picture_url**: `TEXT` - URL รูปภาพโปรไฟล์ลูกค้า
-* **phone**: `VARCHAR(50)` - เบอร์โทรศัพท์ติดต่อ
-* **address**: `TEXT` - ที่อยู่สำหรับจัดส่งสินค้า
-* **cluster_id**: `INT` **[FK -> customer_clusters.id]** - กลุ่มลูกค้าที่ลูกค้าตนนี้อยู่ใน
-* **created_at**: `TIMESTAMP` - วันและเวลาที่บันทึกข้อมูลลูกค้า
+### 16) `storage_logs` (ตารางบันทึกการเก็บรักษาและการขนส่งตามมาตรฐาน GAP ข้อ 6)
+* `id`: `INT AUTO_INCREMENT` **[PK]** — รหัสบันทึกการจัดเก็บ/ขนส่ง
+* `user_id`: `INT NOT NULL` **[FK -> users.id]** — ผู้บันทึก
+* `order_id`: `INT NULL` **[FK -> orders.id]** — รหัสคำสั่งซื้อที่ซิงค์ข้อมูลการจัดส่งมาโดยอัตโนมัติ
+* `log_date`: `DATE NOT NULL` — วันที่จัดส่ง/เก็บรักษา
+* `storage_location`: `VARCHAR(255)` — สถานที่เก็บรักษา/คลังกระจายสินค้า
+* `shipped_to`: `VARCHAR(255)` — สถานที่จัดส่งปลายทาง
+* `buyer`: `VARCHAR(255)` — ชื่อผู้ซื้อ/ผู้รับปลายทาง
+* `vehicle`: `VARCHAR(255)` — ยานพาหนะที่ใช้ขนส่ง
+* `vehicle_clean_status`: `BOOLEAN DEFAULT FALSE` — สถานะความสะอาดของยานพาหนะขนส่ง
+* `storage_conditions`: `TEXT` — สภาพการเก็บรักษาและควบคุมอุณหภูมิระหว่างขนส่ง
+* `transport_time`: `TIME` — เวลาที่ทำการขนส่ง
+* `delivery_condition`: `VARCHAR(50)` — สภาพผลผลิตเมื่อถึงมือผู้รับ
+* `worker_name`, `notes`, `created_by`, `updated_by`, `updated_at`, `created_at`
 
-### 13) products (ตารางสินค้า)
-*เก็บข้อมูลสินค้าในระบบ เช่น ผักสลัดที่ปลูกและจำหน่ายให้ลูกค้า*
-* **id**: `INT AUTO_INCREMENT` **[PK]** - รหัสสินค้า
-* **plot_id**: `INT` **[FK -> plots.id]** - แปลงปลูกที่ผลิตสินค้านี้ (ถ้ามีความสัมพันธ์กับแปลง)
-* **name**: `VARCHAR(255) NOT NULL` - ชื่อสินค้า
-* **category**: `VARCHAR(100) DEFAULT 'ผักสลัด'` - หมวดหมู่สินค้า
-* **price**: `DECIMAL(10,2) NOT NULL` - ราคาขายต่อหน่วย
-* **unit**: `VARCHAR(50) DEFAULT 'กก.'` - หน่วยนับสินค้า
-* **stock_quantity**: `DECIMAL(10,2) DEFAULT 0` - จำนวนสินค้าคงเหลือในสต็อก
-* **image_url**: `TEXT` - URL รูปภาพสินค้า
-* **status**: `VARCHAR(50) DEFAULT 'available'` - สถานะสินค้า เช่น วางขาย/หมด Stock
-* **created_at**: `TIMESTAMP` - วันและเวลาที่สร้างสินค้า
-* **updated_at**: `TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP` - วันและเวลาที่แก้ไขสินค้าล่าสุด
+### 17) `cost_logs` (ตารางบันทึกต้นทุนและค่าใช้จ่ายการผลิต)
+* `id`: `INT AUTO_INCREMENT` **[PK]** — รหัสรายการต้นทุน
+* `user_id`: `INT NOT NULL` **[FK -> users.id]** — ผู้บันทึก
+* `plot_id`: `INT NULL` **[FK -> plots.id]** — แปลงปลูกที่เกิดค่าใช้จ่าย (หรือ `NULL` สำหรับค่าใช้จ่ายส่วนกลางของฟาร์ม)
+* `log_date`: `DATE NOT NULL` — วันที่เกิดรายการค่าใช้จ่าย
+* `category`: `VARCHAR(100) NOT NULL` — หมวดหมู่ต้นทุน (เมล็ดพันธุ์, ปุ๋ย/วัสดุปลูก, แรงงาน, ค่าตรวจวิเคราะห์ ฯลฯ)
+* `description`: `TEXT` — รายละเอียดรายการค่าใช้จ่าย
+* `amount`: `DECIMAL(12,2) NOT NULL` — จำนวนเงิน (บาท)
+* `created_by`, `updated_by`, `updated_at`, `created_at`
 
-### 14) orders (ตารางคำสั่งซื้อ)
-*เก็บข้อมูลคำสั่งซื้อทั้งหมดของลูกค้าในระบบ*
-* **id**: `INT AUTO_INCREMENT` **[PK]** - รหัสคำสั่งซื้อ
-* **order_code**: `VARCHAR(50) UNIQUE NOT NULL` - รหัสคำสั่งซื้อที่ไม่ซ้ำ
-* **customer_id**: `INT NOT NULL` **[FK -> customers.id]** - ลูกค้าที่สั่งซื้อ
-* **total_amount**: `DECIMAL(12,2) NOT NULL` - จำนวนเงินรวมของคำสั่งซื้อ
-* **status**: `VARCHAR(50) DEFAULT 'pending'` - สถานะคำสั่งซื้อ เช่น pending, confirmed, shipped, completed
-* **delivery_type**: `VARCHAR(50) DEFAULT 'delivery'` - รูปแบบการจัดส่ง เช่น delivery, pickup
-* **delivery_date**: `DATE` - วันที่จัดส่งหรือรับสินค้า
-* **slip_image_url**: `TEXT` - URL รูปภาพสลิปชำระเงิน
-* **notes**: `TEXT` - หมายเหตุเพิ่มเติมของคำสั่งซื้อ
-* **created_at**: `TIMESTAMP` - วันและเวลาที่สร้างคำสั่งซื้อ
-* **updated_at**: `TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP` - วันและเวลาที่แก้ไขคำสั่งซื้อล่าสุด
-
-### 15) order_items (ตารางรายการสินค้าในคำสั่งซื้อ)
-*เก็บข้อมูลรายการสินค้าแต่ละชิ้นที่อยู่ในคำสั่งซื้อ*
-* **id**: `INT AUTO_INCREMENT` **[PK]** - รหัสรายการสินค้า
-* **order_id**: `INT NOT NULL` **[FK -> orders.id]** - คำสั่งซื้อที่รายการนี้เกี่ยวข้อง
-* **product_id**: `INT NOT NULL` **[FK -> products.id]** - สินค้าที่ถูกเลือกในคำสั่งซื้อ
-* **quantity**: `DECIMAL(10,2) NOT NULL` - จำนวนสินค้าในรายการนั้น
-* **unit_price**: `DECIMAL(10,2) NOT NULL` - ราคาต่อหน่วยของสินค้าในคำสั่งซื้อนั้น
-* **subtotal**: `DECIMAL(10,2) NOT NULL` - ยอดรวมของรายการสินค้านั้น
-
-### 16) product_recommendations (ตารางคำแนะนำสินค้า)
-*เก็บคำแนะนำสินค้าที่เกี่ยวข้องกัน เพื่อใช้ในฟีเจอร์แนะนำสินค้าให้ลูกค้า (Cross-sell / Recommendation)*
-* **id**: `INT AUTO_INCREMENT` **[PK]** - รหัสคำแนะนำสินค้า
-* **product_id**: `INT NOT NULL` **[FK -> products.id]** - สินค้าที่เป็นตัวหลัก
-* **recommended_product_id**: `INT NOT NULL` **[FK -> products.id]** - สินค้าที่ถูกแนะนำเพิ่มเติม
-* **score**: `DECIMAL(5,4) DEFAULT 1.0000` - คะแนนความเหมาะสมของคำแนะนำ
-* **reason**: `VARCHAR(255)` - เหตุผลหรือคำอธิบายว่าทำไมควรแนะนำสินค้านี้
+### 18) `audit_logs` (ตารางบันทึกประวัติการเปลี่ยนแปลงข้อมูลในระบบ)
+* `id`: `INT AUTO_INCREMENT` **[PK]** — รหัสประวัติการแก้ไข
+* `table_name`: `VARCHAR(255) NOT NULL` — ชื่อตารางที่มีการเปลี่ยนแปลงข้อมูล
+* `record_id`: `INT` — รหัสแถวข้อมูลที่ถูกดำเนินการ
+* `action`: `VARCHAR(50) NOT NULL` — ประเภทการกระทำ (`CREATE`, `UPDATE`, `DELETE`)
+* `user_email`: `VARCHAR(255)` — อีเมลของผู้ใช้งานที่ดำเนินการ
+* `old_values`: `JSON` — ข้อมูลเดิมก่อนการแก้ไข/ลบ
+* `new_values`: `JSON` — ข้อมูลใหม่หลังการเพิ่ม/แก้ไข
+* `created_at`: `TIMESTAMP` — วันเวลาที่เกิดรายการ

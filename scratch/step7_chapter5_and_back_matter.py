@@ -35,20 +35,28 @@ from step5_chapter3 import (
 from step6_chapter4 import append_chapter4
 
 
-def add_bib_entry(doc, text):
+def add_bib_entry(doc, raw_text):
     """
     ย่อหน้าบรรณานุกรมแบบ Hanging Indent (บรรทัดแรกชิดซ้าย บรรทัดถัดไปเยื้อง 0.5 นิ้ว)
-    ตามเกณฑ์คู่มือการพิมพ์รายงานวิจัย มรย.
+    จัดชิดซ้าย (Left-aligned) ตามมาตรฐานสากล APA 7th Edition และเกณฑ์คู่มือ มรย.
+    แก้ไขปัญหาตัวอักษรและคำเว้นระยะห่างผิดปกติ (Character Stretching) ที่เกิดจากการจัดกระจายแบบไทย (Thai Justify)
+    พร้อมรองรับการจัดตัวเอียง (*text*) สำหรับชื่อเอกสาร วารสาร และการประชุมวิชาการ
     """
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
     p.paragraph_format.left_indent = Inches(0.5)
     p.paragraph_format.first_line_indent = Inches(-0.5)
     p.paragraph_format.space_before = Pt(0)
-    p.paragraph_format.space_after = Pt(4)
+    p.paragraph_format.space_after = Pt(6)
     p.paragraph_format.line_spacing = 1.15
-    r = p.add_run(thai_word_wrap(text))
-    set_run_thai_font(r, "TH SarabunPSK", size_pt=16, bold=False)
+
+    parts = raw_text.split("*")
+    for idx, part in enumerate(parts):
+        if not part:
+            continue
+        is_italic = (idx % 2 == 1)
+        r = p.add_run(thai_word_wrap(part))
+        set_run_thai_font(r, "TH SarabunPSK", size_pt=16, bold=False, italic=is_italic)
 
 
 def append_chapter5(doc):
@@ -76,7 +84,7 @@ def append_chapter5(doc):
     add_numbered_item(
         doc,
         "5.1.1",
-        "ผลการพัฒนาระบบบริหารจัดการข้อมูลการเพาะปลูกผักตามมาตรฐาน GAP (มกษ. 9001) พบว่าระบบเว็บแอปพลิเคชันที่พัฒนาด้วย React.js, Node.js และฐานข้อมูล MySQL จำนวน 18 ตาราง สามารถบริหารจัดการข้อมูลการเพาะปลูกแบบแยกตามรหัสรอบการปลูก (planting_id) ได้อย่างครบวงจร ตั้งแต่การจัดการแปลงปลูกหลักและแคร่ปลูกย่อย การบันทึกการเตรียมดิน การเพาะกล้าในถาดหลุม การย้ายลงปลูกจริงพร้อมคำนวณอายุพืชสะสมต่อเนื่อง การบันทึกการให้น้ำ ปุ๋ย และสารป้องกันกำจัดศัตรูพืช การคำนวณระยะปลอดภัยก่อนการเก็บเกี่ยว (PHI) เพื่อล็อกปุ่มบันทึกการเก็บเกี่ยวอัตโนมัติเมื่อยังไม่พ้นระยะปลอดภัย ไปจนถึงการจัดพิมพ์รายงานมาตรฐาน GAP รูปแบบเอกสาร A4 แยกรายรอบการปลูกได้ทันที",
+        "ผลการพัฒนาระบบบริหารจัดการข้อมูลการเพาะปลูกผักตามมาตรฐาน GAP (มกษ. 9001) พบว่าระบบเว็บแอปพลิเคชันที่พัฒนาด้วย React.js, Node.js และฐานข้อมูล MySQL จำนวน 18 ตาราง สามารถบริหารจัดการข้อมูลการเพาะปลูกแบบแยกตามรหัสรอบการปลูก (planting_id) ได้อย่างครบวงจร ตั้งแต่การกำหนดค่าคลังชนิดพืชผัก (Crops Master Data) การจัดการแปลงปลูกหลักและแคร่ปลูกย่อย การบันทึกการเตรียมดิน การเพาะกล้าในถาดหลุม การย้ายลงปลูกจริงพร้อมคำนวณอายุพืชสะสมต่อเนื่อง การบันทึกการให้น้ำ ปุ๋ย และสารป้องกันกำจัดศัตรูพืช การคำนวณระยะปลอดภัยก่อนการเก็บเกี่ยว (PHI) เพื่อล็อกปุ่มบันทึกการเก็บเกี่ยวอัตโนมัติเมื่อยังไม่พ้นระยะปลอดภัย ไปจนถึงการจัดพิมพ์รายงานมาตรฐาน GAP รูปแบบเอกสาร A4 แยกรายรอบการปลูกได้ทันที",
         bold_prefix=True,
     )
     add_numbered_item(
@@ -88,7 +96,7 @@ def append_chapter5(doc):
     add_numbered_item(
         doc,
         "5.1.3",
-        "ผลการประยุกต์ใช้ปัญญาประดิษฐ์และการเรียนรู้ของเครื่อง พบว่าโมดูลวิเคราะห์ข้อมูลสามารถจัดกลุ่มพฤติกรรมลูกค้าด้วยอัลกอริทึม K-Means Clustering ออกเป็น 3 กลุ่มตามความถี่และมูลค่าการสั่งซื้อ พร้อมวิเคราะห์ความสัมพันธ์ของสินค้าที่มักซื้อคู่กัน (Co-occurrence Market Basket Analysis) เพื่อนำไปแสดงผลแนะนำสินค้าขายคู่ในหน้าตะกร้าสินค้า LINE LIFF ได้อย่างอัตโนมัติ ในขณะที่โมดูลผู้ช่วยสนทนาอัจฉริยะ Google Gemini AI ที่ใช้เทคนิคการแทรกบริบทข้อมูลสต็อกจริงแบบไดนามิก (Dynamic Context Injection) ร่วมกับกลไกสลับโมเดลสำรองอัตโนมัติ (Multi-Model Fallback) สามารถตอบคำถามเกี่ยวกับรายการผัก ราคา สต็อกคงเหลือ และสกัดคำสั่งซื้อจากข้อความสนทนาภาษาธรรมชาติของลูกค้าบน LINE OA ได้อย่างแม่นยำและต่อเนื่อง",
+        "ผลการประยุกต์ใช้ปัญญาประดิษฐ์และการเรียนรู้ของเครื่อง พบว่าโมดูลวิเคราะห์ข้อมูลสามารถจัดกลุ่มพฤติกรรมลูกค้าด้วยอัลกอริทึม K-Means Clustering ออกเป็น 3 กลุ่มตามคุณลักษณะ 4 มิติ ได้แก่ กลุ่มสลัดเลิฟเวอร์ (Salad Lovers) กลุ่มลูกค้าประจำเพื่อสุขภาพ (Health Regulars) และกลุ่มร้านอาหารและค้าส่ง (Bulk & B2B) เพื่อนำไปใช้ในการยิงแจ้งเตือนสินค้าพร้อมเก็บเกี่ยวและโปรโมชันเฉพาะกลุ่มเป้าหมาย (Targeted LINE Push Notification) ผ่านแผง AI แดชบอร์ดและโมดูลเก็บเกี่ยวเข้าสู่ LINE OA ของลูกค้าได้อย่างตรงกลุ่ม พร้อมวิเคราะห์ความสัมพันธ์ของสินค้าที่มักซื้อคู่กัน (Co-occurrence Market Basket Analysis) เพื่อนำไปแสดงผลแนะนำสินค้าขายคู่ในหน้าตะกร้าสินค้า LINE LIFF ได้อย่างอัตโนมัติ ในขณะที่โมดูลผู้ช่วยสนทนาอัจฉริยะ Google Gemini AI ที่ใช้เทคนิคการแทรกบริบทข้อมูลสต็อกจริงแบบไดนามิก (Dynamic Context Injection) ร่วมกับกลไกสลับโมเดลสำรองอัตโนมัติ (Multi-Model Fallback) สามารถตอบคำถามเกี่ยวกับรายการผัก ราคา สต็อกคงเหลือ และสกัดคำสั่งซื้อจากข้อความสนทนาภาษาธรรมชาติของลูกค้าบน LINE OA ได้อย่างแม่นยำและต่อเนื่อง",
         bold_prefix=True,
     )
     add_numbered_item(
@@ -111,19 +119,19 @@ def append_chapter5(doc):
     add_numbered_item(
         doc,
         "5.2.1",
-        "การผูกความสัมพันธ์ข้อมูลด้วยรหัสรอบการปลูก (planting_id) และการควบคุมค่า PHI อัตโนมัติ ช่วยแก้ไขจุดอ่อนของการจดบันทึกข้อมูลลงสมุดกระดาษแบบดั้งเดิมที่ข้อมูลมักกระจัดกระจายและเสี่ยงต่อการเก็บเกี่ยวผลผลิตก่อนครบกำหนดระยะปลอดภัย ซึ่งสอดคล้องกับแนวทางการปฏิบัติทางการเกษตรที่ดีสำหรับพืชอาหาร (มกษ. 9001-2564) ของสำนักงานมาตรฐานสินค้าเกษตรและอาหารแห่งชาติ และสอดคล้องกับงานวิจัยของ ศิริพร แซ่ตั้ง และคณะ (2565) ที่พบว่าการนำระบบสารสนเทศมาควบคุมเงื่อนไขระยะปลอดภัยก่อนการเก็บเกี่ยวช่วยลดความผิดพลาดของเกษตรกรและลดภาระเวลาในการจัดทำเอกสารรับรองมาตรฐานได้อย่างมีนัยสำคัญ",
+        "การผูกความสัมพันธ์ข้อมูลด้วยรหัสรอบการปลูก (planting_id) และการควบคุมค่า PHI อัตโนมัติ ช่วยแก้ไขจุดอ่อนของการจดบันทึกข้อมูลลงสมุดกระดาษแบบดั้งเดิมที่ข้อมูลมักกระจัดกระจายและเสี่ยงต่อการเก็บเกี่ยวผลผลิตก่อนครบกำหนดระยะปลอดภัย ซึ่งสอดคล้องกับแนวทางการปฏิบัติทางการเกษตรที่ดีสำหรับพืชอาหาร (มกษ. 9001-2564) ของสำนักงานมาตรฐานสินค้าเกษตรและอาหารแห่งชาติ และสอดคล้องกับงานวิจัยของ สิทธิศักดิ์ และคณะ (2562) ที่พบว่าการนำระบบฐานข้อมูลสารสนเทศมาควบคุมมาตรฐานการผลิตผักปลอดภัยช่วยลดความผิดพลาดของเกษตรกรและลดภาระเวลาในการจัดทำเอกสารรับรองมาตรฐานได้อย่างมีนัยสำคัญ",
         bold_prefix=True,
     )
     add_numbered_item(
         doc,
         "5.2.2",
-        "การเชื่อมโยงระบบตรวจสอบย้อนกลับด้วย QR Code เข้ากับระบบร้านค้าออนไลน์บน LINE LIFF และ LINE Flex Message ช่วยสร้างความเชื่อมั่นให้แก่ผู้บริโภคที่ใส่ใจสุขภาพและลดอุปสรรคในการเข้าถึงระบบดิจิทัล เนื่องจากผู้บริโภคในประเทศไทยคุ้นเคยกับการใช้งานแอปพลิเคชัน LINE ในชีวิตประจำวันอยู่แล้ว ซึ่งสอดคล้องกับผลการศึกษาของ ณัฐพล วงศ์สวัสดิ์ และปิยะดา ทองคำ (2566) และ ธนากร ศรีสุวรรณ (2566) ที่ระบุว่าการแสดงประวัติการเพาะปลูกผ่านการสแกน QR Code ร่วมกับการสั่งซื้อผ่าน LINE Official Account ช่วยเพิ่มอัตราการตัดสินใจซื้อซ้ำและลดขั้นตอนการสื่อสารที่ซ้ำซ้อนของร้านค้าเกษตร",
+        "การเชื่อมโยงระบบตรวจสอบย้อนกลับด้วย QR Code เข้ากับระบบร้านค้าออนไลน์บน LINE LIFF และระบบการแจ้งเตือนและการจัดการคำสั่งซื้อแบบสองทิศทางผ่าน LINE Flex Message ทั้งฝั่งลูกค้าและฝั่งเจ้าของฟาร์ม ช่วยสร้างความเชื่อมั่นให้แก่ผู้บริโภคที่ใส่ใจสุขภาพ ลดอุปสรรคในการเข้าถึงระบบดิจิทัล และช่วยให้เจ้าของฟาร์มสามารถบริหารจัดการออเดอร์ กดยืนยันการจัดส่ง และตัดสต็อกสินค้าตามเกณฑ์ GAP ข้อ 6 ได้ทันทีผ่านห้องแชท LINE บนสมาร์ตโฟนโดยไม่ต้องเปิดคอมพิวเตอร์ ซึ่งสอดคล้องกับผลการศึกษาของ ศุภชัย และดารณี (2561) และ ณัฐกร และคณะ (2567) ที่ระบุว่าการแสดงประวัติแหล่งเพาะปลูกผ่านการสแกน QR Code ร่วมกับการนำแพลตฟอร์ม LINE Official Account มาใช้เป็นช่องทางการจำหน่าย ช่วยเพิ่มความมั่นใจในการบริโภคสินค้าเกษตรปลอดภัยและช่วยลดขั้นตอนการสื่อสารที่ซ้ำซ้อนของร้านค้าชุมชนได้อย่างมีประสิทธิภาพ",
         bold_prefix=True,
     )
     add_numbered_item(
         doc,
         "5.2.3",
-        "การบูรณาการอัลกอริทึม K-Means Clustering การวิเคราะห์ตะกร้าสินค้า และโมเดลภาษา Google Gemini AI แบบแทรกบริบทข้อมูลจริง (Dynamic Context Injection) ช่วยยกระดับระบบจากเครื่องมือบันทึกข้อมูลทั่วไปให้เป็นระบบสนับสนุนการตัดสินใจทางการตลาดและการขายอัตโนมัติ โดยการแนบข้อมูลสต็อกคงเหลือจริงเข้าสู่ System Prompt ช่วยป้องกันปัญหาการสร้างข้อมูลเท็จของโมเดลภาษา (Hallucination) และกลไก Multi-Model Fallback ช่วยรับประกันความเสถียรของบริการแชทบอท ซึ่งสอดคล้องกับงานวิจัยของ ภาณุวัฒน์ เจริญสุข และคณะ (2567) และ Lewis et al. (2020) ที่ชี้ให้เห็นว่าการผสานฐานข้อมูลจริงเข้ากับโมเดลภาษาขนาดใหญ่ช่วยให้ระบบตอบโต้ลูกค้าในงานพาณิชย์อิเล็กทรอนิกส์ได้อย่างแม่นยำและน่าเชื่อถือ",
+        "การบูรณาการอัลกอริทึม K-Means Clustering จัดกลุ่มลูกค้า 3 กลุ่มสำหรับการยิงแจ้งเตือน LINE เฉพาะกลุ่ม การวิเคราะห์ตะกร้าสินค้า และโมเดลภาษา Google Gemini AI แบบแทรกบริบทข้อมูลจริง (Dynamic Context Injection) ช่วยยกระดับระบบจากเครื่องมือบันทึกข้อมูลทั่วไปให้เป็นระบบสนับสนุนการตัดสินใจทางการตลาดและการขายอัตโนมัติ โดยการแจ้งเตือนตรงกลุ่มช่วยให้ลูกค้าได้รับข้อความที่ไม่รบกวนและตรงความต้องการ การแนบข้อมูลสต็อกคงเหลือจริงเข้าสู่ System Prompt ช่วยป้องกันปัญหาการสร้างข้อมูลเท็จของโมเดลภาษา (Hallucination) และกลไก Multi-Model Fallback ช่วยรับประกันความเสถียรของบริการแชทบอท ซึ่งสอดคล้องกับผลการศึกษาของ Kijwattanaphokin & Lhaochot (2024), ภูมิภัทร และคณะ (2568) และ Lewis et al. (2020) ที่ชี้ให้เห็นว่าการแบ่งกลุ่มลูกค้าด้วยเคมีนร่วมกับตัวแปรพฤติกรรมการซื้อ และการนำเทคโนโลยีปัญญาประดิษฐ์และแชทบอทมาผสานกับฐานข้อมูลจริง ช่วยเพิ่มประสิทธิภาพในการให้บริการลูกค้าและการตัดสินใจทางการตลาดในยุคพาณิชย์อิเล็กทรอนิกส์ได้อย่างแม่นยำและน่าเชื่อถือ",
         bold_prefix=True,
     )
 
@@ -190,19 +198,27 @@ def append_bibliography(doc):
     add_centered_line(doc, "บรรณานุกรม", size_pt=20, bold=True, space_before_pt=0, space_after_pt=12)
 
     bib_items = [
-        "กรมวิชาการเกษตร. (2565). คู่มือการตรวจประเมินแหล่งผลิตพืชตามมาตรฐานการปฏิบัติทางการเกษตรที่ดีสำหรับพืชอาหาร (มกษ. 9001-2564). กรุงเทพฯ: กระทรวงเกษตรและสหกรณ์.",
-        "กิตติพงศ์ ใจดี และสมชาย รักเกษตร. (2565). การศึกษาเทคนิคการเหมืองข้อมูลเพื่อจำแนกกลุ่มลูกค้าและวิเคราะห์ความสัมพันธ์ของสินค้าเกษตรอินทรีย์. วารสารเทคโนโลยีสารสนเทศและการสื่อสาร, 15(2), 45-58.",
-        "ณัฐพล วงศ์สวัสดิ์ และปิยะดา ทองคำ. (2566). การพัฒนาระบบตรวจสอบย้อนกลับสินค้าเกษตรปลอดภัยด้วยเทคโนโลยีคิวอาร์โค้ดสำหรับกลุ่มเกษตรกรรายย่อย. วารสารวิทยาศาสตร์และเทคโนโลยี มหาวิทยาลัยราชภัฏยะลา, 8(1), 62-75.",
-        "ธนากร ศรีสุวรรณ. (2566). การพัฒนาระบบร้านค้าออนไลน์และแจ้งเตือนสถานะคำสั่งซื้อผ่านแพลตฟอร์ม LINE Official Account สำหรับวิสาหกิจชุมชน. วารสารวิชาการจัดการเทคโนโลยีสารสนเทศและนวัตกรรม, 10(3), 112-125.",
-        "ภาณุวัฒน์ เจริญสุข, อรอนงค์ มีสุข และวิชัย พัฒนา. (2567). การประยุกต์ใช้โมเดลภาษาขนาดใหญ่ร่วมกับฐานข้อมูลเชิงสัมพันธ์เพื่อพัฒนาแชทบอทรับคำสั่งซื้อสินค้าออนไลน์อัตโนมัติ. ใน รายงานสืบเนื่องจากการประชุมวิชาการระดับชาติทางด้านคอมพิวเตอร์และเทคโนโลยีสารสนเทศ ครั้งที่ 20 (หน้า 210-217). กรุงเทพฯ: มหาวิทยาลัยเทคโนโลยีพระจอมเกล้าพระนครเหนือ.",
-        "ศิริพร แซ่ตั้ง, วรพล สุขสวัสดิ์ และกานดา ใจงาม. (2565). ระบบสารสนเทศเพื่อการบริหารจัดการแปลงปลูกผักปลอดสารพิษและควบคุมระยะปลอดภัยก่อนการเก็บเกี่ยวตามมาตรฐาน GAP. วารสารวิจัยและพัฒนาวิทยาศาสตร์และเทคโนโลยี, 14(1), 88-102.",
-        "สำนักงานมาตรฐานสินค้าเกษตรและอาหารแห่งชาติ. (2564). มาตรฐานสินค้าเกษตร เรื่อง การปฏิบัติทางการเกษตรที่ดีสำหรับพืชอาหาร (มกษ. 9001-2564). กรุงเทพฯ: กระทรวงเกษตรและสหกรณ์.",
-        "Agrawal, R., Imieliński, T., & Swami, A. (1993). Mining association rules between sets of items in large databases. In Proceedings of the 1993 ACM SIGMOD International Conference on Management of Data (pp. 207-216). Washington, D.C.: ACM.",
-        "Google DeepMind. (2024). Gemini: A family of highly capable multimodal models. arXiv preprint arXiv:2312.11805.",
-        "Lewis, P., Perez, E., Piktus, A., Petroni, F., Karpukhin, V., Goyal, N., ... & Kiela, D. (2020). Retrieval-augmented generation for knowledge-intensive NLP tasks. In Advances in Neural Information Processing Systems (NeurIPS) (Vol. 33, pp. 9459-9474).",
-        "LINE Corporation. (2024). LINE Messaging API and LINE Front-end Framework (LIFF) Official Documentation. Retrieved from https://developers.line.biz/en/docs/",
-        "MacQueen, J. (1967). Some methods for classification and analysis of multivariate observations. In Proceedings of the Fifth Berkeley Symposium on Mathematical Statistics and Probability (Vol. 1, pp. 281-297). Oakland, CA: University of California Press.",
-        "Pressman, R. S., & Maxim, B. R. (2020). Software engineering: A practitioner's approach (9th ed.). New York, NY: McGraw-Hill Education.",
+        "กรมวิชาการเกษตร. (2565). *คู่มือการตรวจประเมินแหล่งผลิตพืชตามมาตรฐานการปฏิบัติทางการเกษตรที่ดีสำหรับพืชอาหาร (มกษ. 9001-2564)*. กรุงเทพฯ: กระทรวงเกษตรและสหกรณ์.",
+        "ณัฐกร สีถา, ภาสกร ธนศิระธรรม และดุษฎี เสนฤทธิ์. (2567). การพัฒนาช่องทางการขายสินค้าผลิตภัณฑ์เนื้อสัตว์แปรรูปด้วยแพลตฟอร์มแอปพลิเคชันไลน์. *วารสารการประยุกต์ใช้เทคโนโลยีสารสนเทศ*, *10*(1), 143-152. https://ph02.tci-thaijo.org/index.php/project-journal/article/view/253456",
+        "ภูมิภัทร รัตนประภา, ธนศักดิ์ วหาวิศาล และอรรถพล อารยเขมกุล. (2568). บทบาทของปัญญาประดิษฐ์ (AI) และแชทบอท ในการยกระดับการให้บริการลูกค้า และการสนับสนุนนักขาย. *วารสารโพธิศาสตร์ปริทัศน์*, *5*(2), 125-136. https://so09.tci-thaijo.org/index.php/BRJ",
+        "ศุภชัย สุขเจริญพงษ์ และดารณี ธรรมศิริ. (2561). การพัฒนาระบบตรวจสอบย้อนกลับด้วยเทคโนโลยีคิวอาร์โค้ดและบรรจุภัณฑ์ค้าปลีกสำหรับส้มโอในจังหวัดนครปฐม. *วารสารวิทยาการจัดการ มหาวิทยาลัยราชภัฏนครปฐม*, *5*(1), 67-78. https://doi.org/10.14456/jmsnpru.2018.6",
+        "สิทธิศักดิ์ อรรจนานนท์, เพ็ญศรี ปักกะสีนัง และดาเรศ วีระพันธ์. (2562). การพัฒนาระบบฐานข้อมูลควบคุมมาตรฐานเกษตรปลอดภัยผักเบอร์ 8 จังหวัดฉะเชิงเทรา. *วารสารการประยุกต์ใช้เทคโนโลยีสารสนเทศ*, *4*(2), 74-82. https://ph02.tci-thaijo.org/index.php/project-journal/article/view/184528",
+        "สำนักงานมาตรฐานสินค้าเกษตรและอาหารแห่งชาติ. (2564). *มาตรฐานสินค้าเกษตร เรื่อง การปฏิบัติทางการเกษตรที่ดีสำหรับพืชอาหาร (มกษ. 9001-2564)*. กรุงเทพฯ: กระทรวงเกษตรและสหกรณ์.",
+        "Agrawal, R., Imieliński, T., & Swami, A. (1993). Mining association rules between sets of items in large databases. In *Proceedings of the 1993 ACM SIGMOD International Conference on Management of Data* (pp. 207-216). Washington, D.C.: ACM. https://doi.org/10.1145/170035.170072",
+        "Google DeepMind. (2024). Gemini: A family of highly capable multimodal models. *arXiv preprint arXiv:2312.11805*. https://arxiv.org/abs/2312.11805",
+        "Google LLC. (2024). *Google AI Studio and Gemini REST API Reference*. Google for Developers. Retrieved from https://ai.google.dev/api/rest",
+        "Jones, M., Bradley, J., & Sakimura, N. (2015). *JSON Web Token (JWT)*. RFC 7519, Internet Engineering Task Force (IETF). https://doi.org/10.17487/RFC7519",
+        "Kijwattanaphokin, S., & Lhaochot, L. (2024). Customer segmentation using a hybrid approach of K-Means clustering and RFM: An online retail case study. *Journal of Liberal Arts and Social Sciences*, *12*(2). https://doi.org/10.53848/jlsco.v12i2.299053",
+        "Lewis, P., Perez, E., Piktus, A., Petroni, F., Karpukhin, V., Goyal, N., ... & Kiela, D. (2020). Retrieval-augmented generation for knowledge-intensive NLP tasks. In *Advances in Neural Information Processing Systems (NeurIPS)* (Vol. 33, pp. 9459-9474).",
+        "LINE Corporation. (2024). *LINE Messaging API and LINE Front-end Framework (LIFF) Official Documentation*. Retrieved from https://developers.line.biz/en/docs/",
+        "MacQueen, J. (1967). Some methods for classification and analysis of multivariate observations. In *Proceedings of the Fifth Berkeley Symposium on Mathematical Statistics and Probability* (Vol. 1, pp. 281-297). Oakland, CA: University of California Press.",
+        "Meta Open Source. (2024). *React: A JavaScript library for building user interfaces*. Retrieved from https://react.dev/",
+        "OpenJS Foundation. (2024a). *Express: Fast, unopinionated, minimalist web framework for Node.js*. Retrieved from https://expressjs.com/",
+        "OpenJS Foundation. (2024b). *Node.js: JavaScript runtime environment*. Retrieved from https://nodejs.org/",
+        "Oracle Corporation. (2024). *MySQL 8.0 Reference Manual*. Oracle Corporation. Retrieved from https://dev.mysql.com/doc/refman/8.0/en/",
+        "Pressman, R. S., & Maxim, B. R. (2020). *Software engineering: A practitioner's approach* (9th ed.). New York, NY: McGraw-Hill Education.",
+        "Provos, N., & Mazières, D. (1999). A future-adaptable password scheme. In *Proceedings of the FREENIX Track: 1999 USENIX Annual Technical Conference* (pp. 81-91). Monterey, CA: USENIX Association.",
+        "Tailwind Labs. (2024). *Tailwind CSS: A utility-first CSS framework*. Retrieved from https://tailwindcss.com/",
     ]
     for item in bib_items:
         add_bib_entry(doc, item)
@@ -229,9 +245,9 @@ def append_appendices(doc):
         ("FR-05", "การเก็บเกี่ยวและสร้างรหัส Lot", "บันทึกผลผลิตเข้าคลังสินค้า สร้างรหัส Lot อัตโนมัติ และสร้าง QR Code ประจำล็อต"),
         ("FR-06", "การออกรายงานมาตรฐาน GAP", "จัดพิมพ์รายงานประวัติการเพาะปลูกรายรอบการปลูกในรูปแบบเอกสารมาตรฐาน A4"),
         ("FR-07", "ระบบร้านค้าออนไลน์ LINE LIFF", "แสดงรายการผักสดที่มีสต็อกจริง แนะนำสินค้าคู่กัน รับคำสั่งซื้อ และอัปโหลดสลิปโอนเงิน"),
-        ("FR-08", "การแจ้งเตือนผ่าน Flex Message", "ส่งการ์ดข้อความแจ้งสถานะคำสั่งซื้อ การจัดส่ง และใบเสร็จรับเงินผ่าน LINE OA"),
+        ("FR-08", "การแจ้งเตือนและการจัดการผ่าน Flex Message", "ส่งการ์ดแจ้งสถานะคำสั่งซื้อแก่ลูกค้า และแจ้งเตือนออเดอร์ใหม่พร้อมสลิปเข้า LINE เจ้าของฟาร์มเพื่อกดยืนยันจัดส่ง ตัดสต็อก GAP และพิมพ์ใบเสร็จผ่าน LINE ได้ทันที"),
         ("FR-09", "การตรวจสอบย้อนกลับ QR Code", "แสดงหน้าเว็บไทม์ไลน์ประวัติการเพาะปลูกและสถานะความปลอดภัย PHI เมื่อสแกน QR Code"),
-        ("FR-10", "การวิเคราะห์กลุ่มลูกค้า K-Means", "จัดกลุ่มลูกค้าออกเป็น 3 กลุ่มตามความถี่และยอดซื้อ พร้อมวิเคราะห์สินค้าขายคู่ (Market Basket)"),
+        ("FR-10", "การจัดกลุ่มลูกค้า K-Means & แจ้งเตือน LINE", "จัดกลุ่มลูกค้าออกเป็น 3 กลุ่มตามคุณลักษณะ 4 มิติด้วย K-Means และยิงแจ้งเตือน LINE Flex Message ตรงกลุ่มเป้าหมาย"),
         ("FR-11", "ผู้ช่วยสนทนา Google Gemini AI", "ตอบคำถามจากข้อมูลสต็อกจริงแบบไดนามิก สกัดคำสั่งซื้อจากแชท และสลับโมเดลสำรองอัตโนมัติ"),
         ("FR-12", "ระบบบัญชีรายรับ-รายจ่ายฟาร์ม", "บันทึกรายรับจากการขายอัตโนมัติ บันทึกต้นทุนการผลิต และสรุปงบกำไรขาดทุนรายเดือน"),
     ]
@@ -258,24 +274,24 @@ def append_appendices(doc):
 
     dd_headers = ["ลำดับ", "ชื่อตาราง (Table Name)", "คีย์หลัก (PK) / คีย์นอก (FK)", "แอตทริบิวต์สำคัญและคำอธิบายโครงสร้างข้อมูล (จาก schema.sql)"]
     dd_rows = [
-        ("1", "users", "PK: id\nUK: email", "email, password_hash, display_name, farm_name, role ENUM('owner','worker'), created_at"),
+        ("1", "users", "PK: id\nUK: email, username", "email, username, password_hash, display_name, farm_name, phone, role, bank_name, bank_account_no, promptpay_number, line_user_id"),
         ("2", "crops", "PK: id\nFK: user_id", "name, scientific_name, category, growth_days, nursery_days, harvest_unit, default_bag_size, default_price"),
-        ("3", "plots", "PK: id\nFK: user_id", "plot_number, name, dimension, soil_recipe, soil_prep_date, seed_prep_date, crop_name, area_sqm, planting_date, expected_harvest_date, field_safety_status, status, current_batch_id"),
+        ("3", "plots", "PK: id\nFK: user_id", "plot_number, name, dimension, soil_recipe, soil_prep_date, seed_prep_date, seed_crop_id, crop_name, area_sqm, planting_date, expected_harvest_date, field_safety_status, status, current_batch_id"),
         ("4", "planting_batches", "PK: id\nFK: user_id, plot_id, crop_id", "batch_code, start_date, expected_harvest_date, actual_harvest_date, total_damaged_count, total_harvested_count, seed_prep_date, soil_recipe, soil_prep_date, status"),
-        ("5", "crop_activities", "PK: id\nFK: user_id, plot_id, batch_id", "activity_date, stage (soil_prep/seeding/planting/fertilizing/harvest), title, materials_used, details, operator_name, image_url"),
-        ("6", "chemical_logs", "PK: id\nFK: user_id, plot_id", "log_date, chem_type, product_name, amount, unit, reason, application_method, safety_ppe, phi_days, worker_name"),
+        ("5", "crop_activities", "PK: id\nFK: user_id, plot_id, batch_id", "activity_date, stage (soil_prep/seeding/planting/fertilizing/harvest), title, materials_used, details, operator_name, source_type, source_id"),
+        ("6", "chemical_logs", "PK: id\nFK: user_id, plot_id, batch_id", "log_date, chem_type, product_name, amount, unit, reason, application_method, safety_ppe, phi_days, worker_name"),
         ("7", "pest_logs", "PK: id\nFK: user_id, plot_id, batch_id", "log_date, pest_or_disease, damaged_count, damage_cause, severity, treatment_method, worker_name"),
-        ("8", "harvest_logs", "PK: id\nFK: user_id, plot_id, batch_id, product_id", "harvest_date, quantity, unit, lot_code, destination, stocked_quantity, stock_status, quality_grade, revenue, harvest_hygiene"),
-        ("9", "products", "PK: id\nFK: plot_id", "name, category, price, unit, stock_quantity, image_url, status (available/out_of_stock/hidden), updated_at"),
+        ("8", "harvest_logs", "PK: id\nFK: user_id, plot_id, batch_id, product_id", "harvest_date, quantity, unit, lot_code, destination, total_packs, stocked_quantity, stock_status, quality_grade, revenue, harvest_hygiene"),
+        ("9", "products", "PK: id\nFK: plot_id", "name, category, price, unit, stock_quantity, image_url, status (available/out_of_stock), updated_at"),
         ("10", "customers", "PK: id\nUK: line_user_id\nFK: cluster_id", "line_user_id, display_name, picture_url, phone, address, cluster_id, created_at"),
-        ("11", "customer_clusters", "PK: id", "cluster_name (Salad Lovers / Regulars / Bulk Buyers), description, preferred_crops (JSON), created_at"),
-        ("12", "orders", "PK: id\nUK: order_code\nFK: customer_id", "order_code, customer_id, total_amount, status, delivery_type, payment_method, delivery_date, slip_image_url, tracking_number, notes"),
-        ("13", "order_items", "PK: id\nFK: order_id, product_id", "order_id, product_id, quantity, unit_price, subtotal (รายการสินค้าแต่ละชนิดในคำสั่งซื้อ)"),
+        ("11", "customer_clusters", "PK: id", "cluster_name (Salad Lovers / Health Regulars / Bulk & B2B), description, preferred_crops (JSON), created_at"),
+        ("12", "orders", "PK: id\nUK: order_code\nFK: customer_id", "order_code, customer_id, total_amount, status, delivery_type, payment_method, slip_image_url, recipient_name, recipient_phone, recipient_address, notes"),
+        ("13", "order_items", "PK: id\nFK: order_id, product_id", "order_id, product_id, quantity, unit_price, subtotal, harvest_date, lot_code (รายการสินค้าและรหัสล็อตในคำสั่งซื้อ)"),
         ("14", "product_recommendations", "PK: id\nFK: product_id, recommended_product_id", "product_id, recommended_product_id, score DECIMAL(5,4), reason (คู่สินค้าแนะนำจาก Co-occurrence Matrix)"),
-        ("15", "line_chat_sessions", "PK: id\nUK: line_user_id\nFK: order_id", "line_user_id, state (IDLE/AWAITING_ADDRESS/AWAITING_SLIP), order_id, draft_data (JSON), updated_at"),
-        ("16", "storage_logs", "PK: id\nFK: user_id, harvest_id", "log_date, storage_location, shipped_to, buyer, vehicle, vehicle_clean_status, storage_conditions, delivery_condition"),
+        ("15", "line_chat_sessions", "PK: id\nUK: line_user_id\nFK: order_id", "line_user_id, state (IDLE/SELECTING_QTY/AWAITING_CONTACT/AWAITING_PAYMENT), order_id, draft_data (JSON), updated_at"),
+        ("16", "storage_logs", "PK: id\nFK: user_id, order_id", "log_date, storage_location, shipped_to, buyer, vehicle, vehicle_clean_status, storage_conditions, delivery_condition"),
         ("17", "cost_logs", "PK: id\nFK: user_id, plot_id", "log_date, category, description, amount DECIMAL(12,2), created_by (บันทึกบัญชีต้นทุนการเกษตร)"),
-        ("18", "audit_logs", "PK: id", "table_name, record_id, action (INSERT/UPDATE/DELETE), user_email, old_values (JSON), new_values (JSON), created_at"),
+        ("18", "audit_logs", "PK: id", "table_name, record_id, action (CREATE/UPDATE/DELETE), user_email, old_values (JSON), new_values (JSON), created_at"),
     ]
     build_styled_table(doc, dd_headers, dd_rows, col_widths=[0.45, 1.40, 1.30, 2.60], center_cols={0}, font_size_pt=13.5)
 
@@ -290,11 +306,12 @@ def append_appendices(doc):
 
     add_section_heading(doc, "ข.1 ขั้นตอนการใช้งานระบบสำหรับเจ้าของฟาร์มและเกษตรกร (Web Admin)")
     add_numbered_item(doc, "1.", "เข้าสู่ระบบผ่านเว็บเบราว์เซอร์ด้วยชื่อผู้ใช้งานและรหัสผ่านของผู้ดูแลฟาร์ม ระบบจะแสดงหน้าจอแดชบอร์ดภาพรวมฟาร์ม สถานะแคร่ปลูก และการแจ้งเตือนระยะปลอดภัย PHI", bold_prefix=True)
-    add_numbered_item(doc, "2.", "ตั้งค่าข้อมูลพื้นฐานของฟาร์มที่เมนู 'จัดการแปลงปลูกและแคร่ปลูก' พร้อมบันทึกประวัติการเตรียมดินและค่า pH ของดินก่อนเริ่มรอบการปลูก", bold_prefix=True)
-    add_numbered_item(doc, "3.", "บันทึกการเพาะเมล็ดในถาดหลุมที่เมนู 'บันทึกการเพาะกล้า' และเมื่อต้นกล้าแข็งแรงให้กดปุ่ม 'ย้ายลงแคร่ปลูก' ระบบจะสร้างรหัสรอบการปลูก (planting_id) และเริ่มนับอายุพืชสะสมต่อเนื่องทันที", bold_prefix=True)
-    add_numbered_item(doc, "4.", "ในระหว่างดูแลแปลงปลูก ให้บันทึกประวัติการให้น้ำ การใส่ปุ๋ยหมัก หรือการใช้สารชีวภัณฑ์ป้องกันศัตรูพืช หากสารที่ใช้มีค่าระยะปลอดภัย (PHI > 0 วัน) ระบบจะคำนวณวันปลอดภัยและล็อกปุ่มเก็บเกี่ยวอัตโนมัติ", bold_prefix=True)
-    add_numbered_item(doc, "5.", "เมื่อพืชมีอายุครบกำหนดและพ้นระยะปลอดภัย PHI แล้ว ให้กดปุ่ม 'บันทึกการเก็บเกี่ยว' ระบบจะสร้างรหัสล็อต (Lot ID) เพิ่มสต็อกสินค้าพร้อมขาย และสร้าง QR Code สำหรับพิมพ์ติดถุงผัก", bold_prefix=True)
-    add_numbered_item(doc, "6.", "สามารถกดปุ่ม 'พิมพ์รายงาน GAP (A4)' ในแต่ละรอบการปลูกเพื่อออกเอกสารสรุปประวัติการปฏิบัติงานตามมาตรฐาน มกษ. 9001 ได้ทันที", bold_prefix=True)
+    add_numbered_item(doc, "2.", "กำหนดค่าข้อมูลหลักที่เมนู 'คลังชนิดพืชผัก' (Crops Master Data) โดยระบุชื่อสายพันธุ์ ระยะเวลาเพาะกล้า (Nursery Days) ระยะเวลาเก็บเกี่ยวเป้าหมาย (Growth Days) ราคา และขนาดบรรจุภัณฑ์มาตรฐาน เพื่อเป็นฐานข้อมูลอ้างอิงในการคำนวณอัตโนมัติ", bold_prefix=True)
+    add_numbered_item(doc, "3.", "ตั้งค่าโครงสร้างฟาร์มที่เมนู 'จัดการแปลงปลูกและแคร่ปลูก' พร้อมบันทึกประวัติการเตรียมดิน การปรับสภาพความเป็นกรด-ด่าง (pH) และสารปรับปรุงดินก่อนเริ่มรอบการปลูก", bold_prefix=True)
+    add_numbered_item(doc, "4.", "บันทึกการเพาะเมล็ดในถาดหลุมที่เมนู 'บันทึกการเพาะกล้า' โดยเลือกชนิดพืชจากคลัง และเมื่อต้นกล้าพร้อมย้ายปลูกให้กดปุ่ม 'ย้ายลงแคร่ปลูก' ระบบจะสร้างรหัสรอบการปลูก (planting_id) และเริ่มคำนวณอายุพืชสะสมต่อเนื่อง (อายุเพาะกล้า + อายุบนแปลง)", bold_prefix=True)
+    add_numbered_item(doc, "5.", "ในระหว่างดูแลแปลงปลูก ให้บันทึกประวัติการให้น้ำ การใส่ปุ๋ยหมัก หรือการใช้สารชีวภัณฑ์ป้องกันศัตรูพืช หากสารที่ใช้มีค่าระยะปลอดภัย (PHI > 0 วัน) ระบบจะคำนวณวันปลอดภัย (Safe Harvest Date) และล็อกการเก็บเกี่ยวอัตโนมัติ", bold_prefix=True)
+    add_numbered_item(doc, "6.", "เมื่อพืชมีอายุครบกำหนดและพ้นระยะปลอดภัย PHI แล้ว ให้กดปุ่ม 'บันทึกการเก็บเกี่ยว' เพื่อระบุน้ำหนักผลผลิตและผลสุ่มตรวจสารตกค้าง (MRL) ระบบจะตัดรอบการปลูก สร้างรหัสรุ่น (Lot ID) เพิ่มสต็อกสินค้าพร้อมขาย และสร้าง Lot QR Code สำหรับติดบรรจุภัณฑ์", bold_prefix=True)
+    add_numbered_item(doc, "7.", "สามารถกดปุ่ม 'พิมพ์รายงาน GAP (A4)' เพื่อออกเอกสารบันทึกการปฏิบัติงานทางการ (บธ.-02 และ บธ.-04) ตามมาตรฐาน มกษ. 9001 หรือบริหารจัดการคำสั่งซื้อของลูกค้าผ่านระบบหลังบ้านและผ่านการแจ้งเตือน LINE Notifier ได้ทันที", bold_prefix=True)
 
     add_section_heading(doc, "ข.2 ขั้นตอนการใช้งานสำหรับลูกค้าและผู้บริโภคบน LINE Official Account")
     add_numbered_item(doc, "1.", "เพิ่มเพื่อนกับบัญชีทางการ LINE Official Account ของฟาร์มผัก จากนั้นสามารถเลือกสั่งซื้อได้ 2 ช่องทาง คือ กดปุ่มร้านค้าออนไลน์บน Rich Menu (LINE LIFF) หรือพิมพ์สนทนาสั่งซื้อกับบอทอัจฉริยะ Google Gemini AI ในห้องแชทโดยตรง", bold_prefix=True)

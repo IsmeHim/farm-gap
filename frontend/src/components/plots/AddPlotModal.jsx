@@ -93,19 +93,6 @@ export default function AddPlotModal({
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-medium focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"
                 />
               </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                  สูตรดินเริ่มต้น (GAP ข้อ 2)
-                </label>
-                <textarea
-                  rows={2}
-                  value={addPlotForm.soil_recipe}
-                  onChange={(e) => setAddPlotForm({ ...addPlotForm, soil_recipe: e.target.value })}
-                  placeholder="เช่น ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)"
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 font-medium placeholder:text-slate-400 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-xs leading-relaxed"
-                />
-              </div>
             </div>
           </div>
 

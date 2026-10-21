@@ -405,7 +405,6 @@ batchesRouter.delete('/:id', async (req, res) => {
              expected_harvest_date = NULL,
              current_batch_id = NULL,
              seed_prep_date = NULL,
-             seed_notes = NULL,
              seed_crop_id = NULL,
              soil_prep_date = NULL,
              soil_recipe = NULL,

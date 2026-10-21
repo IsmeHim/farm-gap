@@ -153,6 +153,44 @@ def set_header_text(section, text):
         set_run_thai_font(run, "TH SarabunPSK", size_pt=16, bold=False)
 
 
+def configure_front_matter_page_numbering(section, start_num=None, start_thai=None):
+    """
+    ตั้งค่าเลขหน้าสำหรับส่วนต้นเล่มแบบต่อเนื่อง (decimal) ด้วยฟิลด์ PAGE ของ Word
+    เพื่อให้เลขหน้าเรียงลำดับต่อเนื่องตั้งแต่หน้าแรกจนจบเล่มโดยไม่รีเซ็ต
+    """
+    header = section.header
+    header.is_linked_to_previous = False
+    p = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
+    p.text = ""
+    p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+    run = p.add_run()
+    set_run_thai_font(run, "TH SarabunPSK", size_pt=16, bold=False)
+    fld1 = OxmlElement("w:fldChar")
+    fld1.set(qn("w:fldCharType"), "begin")
+    instr = OxmlElement("w:instrText")
+    instr.set(qn("xml:space"), "preserve")
+    instr.text = "PAGE"
+    fld2 = OxmlElement("w:fldChar")
+    fld2.set(qn("w:fldCharType"), "separate")
+    fld3 = OxmlElement("w:fldChar")
+    fld3.set(qn("w:fldCharType"), "end")
+    run._r.extend([fld1, instr, fld2, fld3])
+
+    sectPr = section._sectPr
+    pgNumType = sectPr.find(qn("w:pgNumType"))
+    if pgNumType is None:
+        pgNumType = OxmlElement("w:pgNumType")
+        sectPr.append(pgNumType)
+    pgNumType.set(qn("w:fmt"), "decimal")
+    val = start_num if start_num is not None else start_thai
+    if val is not None:
+        pgNumType.set(qn("w:start"), str(val))
+    else:
+        if qn("w:start") in pgNumType.attrib:
+            del pgNumType.attrib[qn("w:start")]
+
+
 def add_centered_line(doc, text, size_pt=20, bold=True, space_before_pt=0, space_after_pt=0, line_spacing=1.0):
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -305,7 +343,7 @@ def add_metadata_table(doc, rows_data, col1_width_in=1.5, col2_width_in=4.27):
 
 def add_body_paragraph(doc, text, indent_in=0.5, space_after_pt=6, line_spacing=1.15):
     p = doc.add_paragraph()
-    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    p.alignment = WD_ALIGN_PARAGRAPH.THAI_JUSTIFY
     p.paragraph_format.first_line_indent = Inches(indent_in) if indent_in else Pt(0)
     p.paragraph_format.space_before = Pt(0)
     p.paragraph_format.space_after = Pt(space_after_pt)
@@ -373,7 +411,7 @@ def build_front_matter(output_path, logo_path):
     # =========================================================================
     sec_abs_th = doc.add_section(WD_SECTION.NEW_PAGE)
     set_section_margins(sec_abs_th)
-    set_header_text(sec_abs_th, "ก")
+    configure_front_matter_page_numbering(sec_abs_th, start_num=None)
 
     th_meta = [
         ("ชื่อโครงงาน", "ระบบบริหารจัดการฟาร์มผักและสั่งซื้อออนไลน์ด้วยปัญญาประดิษฐ์บน LINE Official Account"),
@@ -397,7 +435,7 @@ def build_front_matter(output_path, logo_path):
     )
     add_body_paragraph(
         doc,
-        "ระบบพัฒนาในรูปแบบเว็บแอปพลิเคชันด้วย React.js และ Node.js (Express.js) เชื่อมต่อฐานข้อมูล MySQL จำนวน 18 ตาราง รองรับการจัดการแปลงปลูก การเตรียมดิน การเพาะกล้าและการคำนวณอายุพืชสะสมรวมวันเพาะกล้า การบันทึกปุ๋ยและสารเคมีพร้อมระบบล็อกการเก็บเกี่ยวอัตโนมัติตามค่า PHI การบันทึกศัตรูพืช การเก็บเกี่ยวเข้าคลังสินค้า และการพิมพ์รายงาน GAP รูปแบบ A4 แยกรายรอบการปลูก ส่วนการจำหน่ายออนไลน์เชื่อมต่อกับ LINE Official Account (Messaging API, Flex Message และ LINE LIFF) ร่วมกับปัญญาประดิษฐ์ ได้แก่ อัลกอริทึม K-Means Clustering 4 มิติสำหรับจัดกลุ่มลูกค้า การวิเคราะห์สินค้าซื้อคู่กันด้วย Co-occurrence Matrix และโมเดลภาษา Google Gemini (gemini-3.5-flash-lite พร้อมกลไก Multi-Model Fallback) สำหรับตอบแชทและรับคำสั่งซื้ออัตโนมัติจากข้อมูลสต็อกจริง",
+        "ระบบพัฒนาในรูปแบบเว็บแอปพลิเคชันด้วย React.js และ Node.js (Express.js) เชื่อมต่อฐานข้อมูล MySQL จำนวน 18 ตาราง รองรับการจัดการแปลงปลูก การเตรียมดิน การเพาะกล้าและการคำนวณอายุพืชสะสมรวมวันเพาะกล้า การบันทึกปุ๋ยและสารเคมีพร้อมระบบล็อกการเก็บเกี่ยวอัตโนมัติตามค่า PHI การบันทึกศัตรูพืช การเก็บเกี่ยวเข้าคลังสินค้า และการพิมพ์รายงาน GAP รูปแบบ A4 แยกรายรอบการปลูก ส่วนการจำหน่ายออนไลน์เชื่อมต่อกับ LINE Official Account (Messaging API, Flex Message และ LINE LIFF) ร่วมกับปัญญาประดิษฐ์ ได้แก่ อัลกอริทึม K-Means Clustering 4 มิติ สำหรับจัดกลุ่มลูกค้าออกเป็น 3 กลุ่มพฤติกรรมเป้าหมาย (สลัดเลิฟเวอร์, ลูกค้าประจำเพื่อสุขภาพ, กลุ่มร้านอาหารและค้าส่ง) เพื่อใช้ยิงแจ้งเตือนสินค้าผักสดเฉพาะกลุ่มเป้าหมายผ่าน LINE Flex Message, การวิเคราะห์สินค้าซื้อคู่กันด้วย Co-occurrence Matrix และโมเดลภาษา Google Gemini (gemini-3.5-flash-lite พร้อมกลไก Multi-Model Fallback) สำหรับตอบแชทและรับคำสั่งซื้ออัตโนมัติจากข้อมูลสต็อกจริง",
         space_after_pt=4,
         line_spacing=1.0,
     )
@@ -427,7 +465,7 @@ def build_front_matter(output_path, logo_path):
     # =========================================================================
     sec_abs_en = doc.add_section(WD_SECTION.NEW_PAGE)
     set_section_margins(sec_abs_en)
-    set_header_text(sec_abs_en, "ข")
+    configure_front_matter_page_numbering(sec_abs_en, start_thai=None)
 
     en_meta = [
         ("Research Title", "A Vegetable Farm Management and Online Ordering System Using Artificial Intelligence on LINE Official Account"),
@@ -451,7 +489,7 @@ def build_front_matter(output_path, logo_path):
     )
     add_body_paragraph(
         doc,
-        "The system is developed as a web application using React.js and Node.js (Express.js) with an 18-table MySQL relational database. Core modules cover plot and planting bed management, soil preparation, seedling tracking with cumulative plant age calculation, chemical logging with automated PHI harvest locking, pest control, stock harvesting, and per-cycle A4 GAP report generation. The online storefront integrates with LINE Official Account via LINE Messaging API, Flex Messages, and LINE LIFF, incorporating three AI components: 4D K-Means Clustering for customer segmentation, a Co-occurrence Matrix for product recommendations, and the Google Gemini LLM (gemini-3.5-flash-lite with Multi-Model Fallback) for real-time stock-aware chatbot ordering.",
+        "The system is developed as a web application using React.js and Node.js (Express.js) with an 18-table MySQL relational database. Core modules cover plot and planting bed management, soil preparation, seedling tracking with cumulative plant age calculation, chemical logging with automated PHI harvest locking, pest control, stock harvesting, and per-cycle A4 GAP report generation. The online storefront integrates with LINE Official Account via LINE Messaging API, Flex Messages, and LINE LIFF, incorporating three AI components: 4D K-Means Clustering for 3-group customer segmentation (Salad Lovers, Health Regulars, and Bulk & B2B) enabling targeted LINE Flex Message notifications, a Co-occurrence Matrix for product recommendations, and the Google Gemini LLM (gemini-3.5-flash-lite with Multi-Model Fallback) for real-time stock-aware chatbot ordering.",
         space_after_pt=4,
         line_spacing=1.0,
     )
@@ -479,7 +517,7 @@ def build_front_matter(output_path, logo_path):
     # =========================================================================
     sec_ack = doc.add_section(WD_SECTION.NEW_PAGE)
     set_section_margins(sec_ack)
-    set_header_text(sec_ack, "ค")
+    configure_front_matter_page_numbering(sec_ack, start_thai=None)
 
     add_centered_line(doc, "กิตติกรรมประกาศ", size_pt=20, bold=True, space_before_pt=0, space_after_pt=12)
 
@@ -516,7 +554,7 @@ def build_front_matter(output_path, logo_path):
     # =========================================================================
     sec_toc = doc.add_section(WD_SECTION.NEW_PAGE)
     set_section_margins(sec_toc)
-    set_header_text(sec_toc, "ง")
+    configure_front_matter_page_numbering(sec_toc, start_thai=None)
 
     p_toc_title = doc.add_paragraph()
     p_toc_title.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -528,60 +566,60 @@ def build_front_matter(output_path, logo_path):
     add_toc_header_row(doc, "เรื่อง", "หน้า")
 
     toc_entries = [
-        ("บทคัดย่อ", "ก", 0.0, False),
-        ("ABSTRACT", "ข", 0.0, False),
-        ("กิตติกรรมประกาศ", "ค", 0.0, False),
-        ("สารบัญ", "ง", 0.0, False),
-        ("สารบัญตาราง", "ฉ", 0.0, False),
-        ("สารบัญภาพ", "ช", 0.0, False),
-        ("บทที่ 1 บทนำ", "1", 0.0, False),
-        ("1.1 ความเป็นมาและความสำคัญของปัญหา", "1", 0.5, False),
-        ("1.2 ปัญหาการวิจัย", "2", 0.5, False),
-        ("1.3 วัตถุประสงค์ของการวิจัย", "3", 0.5, False),
-        ("1.4 คำถามการวิจัย", "3", 0.5, False),
-        ("1.5 ประโยชน์ที่คาดว่าจะได้รับ", "4", 0.5, False),
-        ("1.6 ขอบเขตและข้อจำกัดของการวิจัย", "4", 0.5, False),
-        ("1.7 นิยามศัพท์เฉพาะ", "6", 0.5, False),
-        ("1.8 โครงสร้างรายงานวิจัย", "8", 0.5, False),
-        ("บทที่ 2 เอกสารและงานวิจัยที่เกี่ยวข้อง", "9", 0.0, False),
-        ("2.1 มาตรฐานการปฏิบัติทางการเกษตรที่ดีสำหรับพืชอาหาร (GAP มกษ. 9001)", "9", 0.5, False),
-        ("2.2 การคำนวณระยะปลอดภัยก่อนการเก็บเกี่ยว (Pre-Harvest Interval: PHI)", "10", 0.5, False),
-        ("2.3 ระบบตรวจสอบย้อนกลับสินค้าเกษตรด้วยคิวอาร์โค้ด (QR Code Traceability)", "11", 0.5, False),
-        ("2.4 แพลตฟอร์ม LINE Official Account, Messaging API และ LINE LIFF", "12", 0.5, False),
-        ("2.5 การจัดกลุ่มลูกค้าด้วย K-Means Clustering และการวิเคราะห์ตะกร้าสินค้า", "13", 0.5, False),
-        ("2.6 โมเดลภาษาขนาดใหญ่ Google Gemini และการแทรกบริบทแบบไดนามิก", "14", 0.5, False),
-        ("2.7 ทฤษฎีการวิเคราะห์และออกแบบระบบ (DFD, Use Case และ ER Diagram)", "15", 0.5, False),
-        ("2.8 งานวิจัยที่เกี่ยวข้อง", "16", 0.5, False),
-        ("บทที่ 3 วิธีดำเนินการวิจัย การออกแบบ และการพัฒนาระบบ", "19", 0.0, False),
-        ("3.1 แนวทางการดำเนินการวิจัยและพัฒนา", "19", 0.5, False),
-        ("3.2 การวิเคราะห์ความต้องการของระบบและกรณีใช้งาน (Use Cases)", "20", 0.5, False),
-        ("3.3 สถาปัตยกรรมของระบบ (System Architecture)", "22", 0.5, False),
-        ("3.4 แผนภาพกระแสข้อมูล (Data Flow Diagram: DFD ระดับ 0 และระดับ 1)", "24", 0.5, False),
-        ("3.5 การออกแบบฐานข้อมูลและแผนภาพความสัมพันธ์ข้อมูล (ER Diagram)", "26", 0.5, False),
-        ("3.6 การออกแบบอัลกอริทึมสำคัญและกลไกปัญญาประดิษฐ์ในระบบ", "29", 0.5, False),
-        ("3.7 การสร้างเครื่องมือและการเก็บรวบรวมข้อมูลประเมินผล", "32", 0.5, False),
-        ("3.8 สถิติที่ใช้ในการวิเคราะห์ข้อมูลและเกณฑ์การแปลผล", "33", 0.5, False),
-        ("บทที่ 4 ผลการทดลอง การประเมิน และการตรวจสอบ", "35", 0.0, False),
-        ("4.1 ผลการพัฒนาระบบบริหารจัดการฟาร์มผักตามมาตรฐาน GAP (ฝั่งเจ้าของฟาร์ม)", "35", 0.5, False),
-        ("4.2 ผลการพัฒนาระบบสั่งซื้อออนไลน์และตรวจสอบย้อนกลับบน LINE OA", "42", 0.5, False),
-        ("4.3 ผลการดำเนินงานของโมดูลปัญญาประดิษฐ์ (K-Means และ Google Gemini AI)", "47", 0.5, False),
-        ("4.4 ผลการทดสอบการทำงานของระบบตามกรณีศึกษา (Functional Test Results)", "50", 0.5, False),
-        ("4.5 ผลการประเมินโครงงานโดยผู้เชี่ยวชาญ (แบบประเมิน วค-4)", "52", 0.5, False),
-        ("4.6 ผลการประเมินโครงงานโดยผู้ใช้งาน (แบบประเมิน วค-5)", "53", 0.5, False),
-        ("บทที่ 5 อภิปรายผล สรุปผล และข้อเสนอแนะ", "55", 0.0, False),
-        ("5.1 สรุปผลการวิจัยตามวัตถุประสงค์", "55", 0.5, False),
-        ("5.2 การอภิปรายผลการวิจัย", "56", 0.5, False),
-        ("5.3 ข้อจำกัดของระบบที่พัฒนา", "57", 0.5, False),
-        ("5.4 ข้อเสนอแนะในการนำระบบไปใช้งานและการพัฒนาต่อยอด", "58", 0.5, False),
-        ("บรรณานุกรม", "60", 0.0, False),
-        ("ภาคผนวก ก รายการข้อกำหนด แผนภาพระบบ และพจนานุกรมข้อมูล", "63", 0.0, False),
-        ("ภาคผนวก ข คู่มือการใช้งานระบบและตัวอย่างรายงานมาตรฐาน GAP", "82", 0.0, False),
-        ("ภาคผนวก ค แบบฟอร์มเสนอโครงงาน (แบบ วค-1)", "90", 0.0, False),
-        ("ภาคผนวก ง แบบฟอร์มขอสอบโครงงาน (แบบ วค-2)", "93", 0.0, False),
-        ("ภาคผนวก จ แบบรายงานความก้าวหน้า (แบบ วค-3)", "96", 0.0, False),
-        ("ภาคผนวก ฉ แบบประเมินโครงงานโดยผู้เชี่ยวชาญ (แบบ วค-4)", "98", 0.0, False),
-        ("ภาคผนวก ช แบบประเมินโครงงานโดยผู้ใช้งาน (แบบ วค-5)", "105", 0.0, False),
-        ("ภาคผนวก ซ ประวัติผู้จัดทำโครงงาน", "112", 0.0, False),
+        ("บทคัดย่อ", "2", 0.0, False),
+        ("ABSTRACT", "4", 0.0, False),
+        ("กิตติกรรมประกาศ", "6", 0.0, False),
+        ("สารบัญ", "7", 0.0, False),
+        ("สารบัญตาราง", "10", 0.0, False),
+        ("สารบัญภาพ", "12", 0.0, False),
+        ("บทที่ 1 บทนำ", "13", 0.0, False),
+        ("1.1 ความเป็นมาและความสำคัญของปัญหา", "13", 0.5, False),
+        ("1.2 ปัญหาการวิจัย", "14", 0.5, False),
+        ("1.3 วัตถุประสงค์ของการวิจัย", "15", 0.5, False),
+        ("1.4 คำถามการวิจัย", "15", 0.5, False),
+        ("1.5 ประโยชน์ที่คาดว่าจะได้รับ", "16", 0.5, False),
+        ("1.6 ขอบเขตและข้อจำกัดของการวิจัย", "16", 0.5, False),
+        ("1.7 นิยามศัพท์เฉพาะ", "18", 0.5, False),
+        ("1.8 โครงสร้างรายงานวิจัย", "21", 0.5, False),
+        ("บทที่ 2 เอกสารและงานวิจัยที่เกี่ยวข้อง", "23", 0.0, False),
+        ("2.1 มาตรฐานการปฏิบัติทางการเกษตรที่ดีสำหรับพืชอาหาร (GAP มกษ. 9001)", "23", 0.5, False),
+        ("2.2 การคำนวณระยะปลอดภัยก่อนการเก็บเกี่ยว (Pre-Harvest Interval: PHI)", "24", 0.5, False),
+        ("2.3 ระบบตรวจสอบย้อนกลับสินค้าเกษตรด้วยคิวอาร์โค้ด (QR Code Traceability)", "25", 0.5, False),
+        ("2.4 แพลตฟอร์ม LINE Official Account, Messaging API และ LINE LIFF", "26", 0.5, False),
+        ("2.5 การจัดกลุ่มลูกค้าด้วย K-Means Clustering และการวิเคราะห์ตะกร้าสินค้า", "27", 0.5, False),
+        ("2.6 โมเดลภาษาขนาดใหญ่ Google Gemini และการแทรกบริบทแบบไดนามิก", "28", 0.5, False),
+        ("2.7 ทฤษฎีการวิเคราะห์และออกแบบระบบ (DFD, Use Case และ ER Diagram)", "29", 0.5, False),
+        ("2.8 งานวิจัยที่เกี่ยวข้อง", "29", 0.5, False),
+        ("บทที่ 3 วิธีดำเนินการวิจัย การออกแบบ และการพัฒนาระบบ", "32", 0.0, False),
+        ("3.1 แนวทางการดำเนินการวิจัยและพัฒนา", "32", 0.5, False),
+        ("3.2 การวิเคราะห์ความต้องการของระบบและกรณีใช้งาน (Use Cases)", "34", 0.5, False),
+        ("3.3 สถาปัตยกรรมของระบบ (System Architecture)", "36", 0.5, False),
+        ("3.4 แผนภาพกระแสข้อมูล (Data Flow Diagram: DFD ระดับ 0 และระดับ 1)", "38", 0.5, False),
+        ("3.5 การออกแบบฐานข้อมูลและแผนภาพความสัมพันธ์ข้อมูล (ER Diagram)", "40", 0.5, False),
+        ("3.6 การออกแบบอัลกอริทึมสำคัญและกลไกปัญญาประดิษฐ์ในระบบ", "54", 0.5, False),
+        ("3.7 การสร้างเครื่องมือและการเก็บรวบรวมข้อมูลประเมินผล", "56", 0.5, False),
+        ("3.8 สถิติที่ใช้ในการวิเคราะห์ข้อมูลและเกณฑ์การแปลผล", "57", 0.5, False),
+        ("บทที่ 4 ผลการทดลอง การประเมิน และการตรวจสอบ", "60", 0.0, False),
+        ("4.1 ผลการพัฒนาระบบบริหารจัดการฟาร์มผักตามมาตรฐาน GAP (ฝั่งเจ้าของฟาร์ม)", "60", 0.5, False),
+        ("4.2 ผลการพัฒนาระบบสั่งซื้อออนไลน์และตรวจสอบย้อนกลับบน LINE OA", "67", 0.5, False),
+        ("4.3 ผลการดำเนินงานของโมดูลปัญญาประดิษฐ์ (K-Means และ Google Gemini AI)", "71", 0.5, False),
+        ("4.4 ผลการทดสอบการทำงานของระบบตามกรณีศึกษา (Functional Test Results)", "72", 0.5, False),
+        ("4.5 ผลการประเมินโครงงานโดยผู้เชี่ยวชาญ (แบบประเมิน วค-4)", "73", 0.5, False),
+        ("4.6 ผลการประเมินโครงงานโดยผู้ใช้งาน (แบบประเมิน วค-5)", "73", 0.5, False),
+        ("บทที่ 5 อภิปรายผล สรุปผล และข้อเสนอแนะ", "74", 0.0, False),
+        ("5.1 สรุปผลการวิจัยตามวัตถุประสงค์", "74", 0.5, False),
+        ("5.2 การอภิปรายผลการวิจัย", "75", 0.5, False),
+        ("5.3 ข้อจำกัดของระบบที่พัฒนา", "76", 0.5, False),
+        ("5.4 ข้อเสนอแนะในการนำระบบไปใช้งานและการพัฒนาต่อยอด", "77", 0.5, False),
+        ("บรรณานุกรม", "79", 0.0, False),
+        ("ภาคผนวก ก รายการข้อกำหนด แผนภาพระบบ และพจนานุกรมข้อมูล", "82", 0.0, False),
+        ("ภาคผนวก ข คู่มือการใช้งานระบบและตัวอย่างรายงานมาตรฐาน GAP", "87", 0.0, False),
+        ("ภาคผนวก ค แบบฟอร์มเสนอโครงงาน (แบบ วค-1)", "89", 0.0, False),
+        ("ภาคผนวก ง แบบฟอร์มขอสอบโครงงาน (แบบ วค-2)", "90", 0.0, False),
+        ("ภาคผนวก จ แบบรายงานความก้าวหน้า (แบบ วค-3)", "91", 0.0, False),
+        ("ภาคผนวก ฉ แบบประเมินโครงงานโดยผู้เชี่ยวชาญ (แบบ วค-4)", "92", 0.0, False),
+        ("ภาคผนวก ช แบบประเมินโครงงานโดยผู้ใช้งาน (แบบ วค-5)", "93", 0.0, False),
+        ("ภาคผนวก ซ ประวัติผู้จัดทำโครงงาน", "94", 0.0, False),
     ]
     for title, page, indent, is_bold in toc_entries:
         add_toc_line(doc, title, page, indent_in=indent, bold=is_bold)
@@ -591,7 +629,7 @@ def build_front_matter(output_path, logo_path):
     # =========================================================================
     sec_lot = doc.add_section(WD_SECTION.NEW_PAGE)
     set_section_margins(sec_lot)
-    set_header_text(sec_lot, "ฉ")
+    configure_front_matter_page_numbering(sec_lot, start_thai=None)
 
     p_lot_title = doc.add_paragraph()
     p_lot_title.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -603,27 +641,46 @@ def build_front_matter(output_path, logo_path):
     add_toc_header_row(doc, "ตารางที่", "หน้า")
 
     lot_entries = [
-        ("ตารางที่ 2.1 สรุปเปรียบเทียบงานวิจัยที่เกี่ยวข้องกับระบบ FarmGAP", "18"),
-        ("ตารางที่ 3.1 รายการกรณีใช้งาน (Use Cases) ทั้ง 13 กรณีของระบบ FarmGAP", "21"),
-        ("ตารางที่ 3.2 รายชื่อตารางข้อมูลทั้ง 18 ตารางในฐานข้อมูลระบบ FarmGAP", "27"),
-        ("ตารางที่ 3.3 ลำดับโมเดลภาษา Google Gemini ในกลไก Multi-Model Fallback", "31"),
-        ("ตารางที่ 3.4 เกณฑ์การให้คะแนนและการแปลผลระดับคุณภาพของระบบ", "34"),
-        ("ตารางที่ 4.1 ผลการทดสอบการทำงานของระบบตามกรณีใช้งาน (Functional Testing)", "50"),
-        ("ตารางที่ 4.2 สรุปผลการประเมินโครงงานโดยผู้เชี่ยวชาญ 3 ท่าน (แบบประเมิน วค-4)", "52"),
-        ("ตารางที่ 4.3 สรุปผลการประเมินโครงงานโดยผู้ใช้งาน 3 ท่าน (แบบประเมิน วค-5)", "53"),
-        ("ตาราง Functional Requirements ของระบบ FarmGAP", "64"),
-        ("ตาราง Non-Functional Requirements ของระบบ FarmGAP", "65"),
-        ("ตารางพจนานุกรมข้อมูล (Data Dictionary) ทั้ง 18 ตารางของระบบ FarmGAP", "70"),
+        ("ตารางที่ 2.1 สรุปเปรียบเทียบงานวิจัยที่เกี่ยวข้องกับระบบ FarmGAP", "30"),
+        ("ตารางที่ 3.1 รายการกรณีใช้งาน (Use Cases) ทั้ง 13 กรณีของระบบ FarmGAP", "34"),
+        ("ตารางที่ 3.2 รายละเอียดการแตกกระบวนการย่อยของ DFD ระดับที่ 1", "39"),
+        ("ตารางที่ 3.3 รายชื่อตารางข้อมูลทั้ง 18 ตารางในฐานข้อมูลระบบ FarmGAP", "41"),
+        ("ตารางที่ 3.4 โครงสร้างตารางผู้ใช้งานระบบและตั้งค่าฟาร์ม (users)", "42"),
+        ("ตารางที่ 3.5 โครงสร้างตารางคลังข้อมูลชนิดผัก (crops)", "43"),
+        ("ตารางที่ 3.6 โครงสร้างตารางแปลงปลูกและแคร่ปลูก (plots)", "44"),
+        ("ตารางที่ 3.7 โครงสร้างตารางรอบการปลูกพืช (planting_batches)", "45"),
+        ("ตารางที่ 3.8 โครงสร้างตารางไทม์ไลน์กิจกรรมในแปลงปลูก (crop_activities)", "46"),
+        ("ตารางที่ 3.9 โครงสร้างตารางบันทึกปุ๋ยและสารชีวภัณฑ์ (chemical_logs)", "47"),
+        ("ตารางที่ 3.10 โครงสร้างตารางบันทึกการสำรวจโรคและแมลงศัตรูพืช (pest_logs)", "48"),
+        ("ตารางที่ 3.11 โครงสร้างตารางบันทึกการเก็บเกี่ยวผลผลิต (harvest_logs)", "49"),
+        ("ตารางที่ 3.12 โครงสร้างตารางสินค้าและสต็อกพร้อมขาย (products)", "50"),
+        ("ตารางที่ 3.13 โครงสร้างตารางข้อมูลลูกค้าสมาชิก LINE OA (customers)", "51"),
+        ("ตารางที่ 3.14 โครงสร้างตารางกลุ่มลูกค้า K-Means (customer_clusters)", "51"),
+        ("ตารางที่ 3.15 โครงสร้างตารางคำสั่งซื้อสินค้า (orders)", "52"),
+        ("ตารางที่ 3.16 โครงสร้างตารางรายการสินค้าย่อยในคำสั่งซื้อ (order_items)", "53"),
+        ("ตารางที่ 3.17 โครงสร้างตารางจับคู่สินค้าแนะนำซื้อคู่กัน (product_recommendations)", "53"),
+        ("ตารางที่ 3.18 โครงสร้างตารางจัดการสถานะการสนทนา LINE Chatbot (line_chat_sessions)", "54"),
+        ("ตารางที่ 3.19 โครงสร้างตารางบันทึกการเก็บรักษาและการขนส่ง (storage_logs)", "55"),
+        ("ตารางที่ 3.20 โครงสร้างตารางบันทึกต้นทุนและค่าใช้จ่าย (cost_logs)", "55"),
+        ("ตารางที่ 3.21 โครงสร้างตารางบันทึกประวัติการเปลี่ยนแปลงข้อมูล (audit_logs)", "56"),
+        ("ตารางที่ 3.22 ลำดับโมเดลภาษา Google Gemini ในกลไก Multi-Model Fallback", "56"),
+        ("ตารางที่ 3.23 เกณฑ์การให้คะแนนและการแปลผลระดับคุณภาพของระบบ", "58"),
+        ("ตารางที่ 4.1 ผลการทดสอบการทำงานของระบบตามกรณีใช้งาน (Functional Testing)", "72"),
+        ("ตารางที่ 4.2 สรุปผลการประเมินโครงงานโดยผู้เชี่ยวชาญ 3 ท่าน (แบบประเมิน วค-4)", "73"),
+        ("ตารางที่ 4.3 สรุปผลการประเมินโครงงานโดยผู้ใช้งาน 3 ท่าน (แบบประเมิน วค-5)", "73"),
+        ("ตาราง Functional Requirements ของระบบ FarmGAP", "82"),
+        ("ตาราง Non-Functional Requirements ของระบบ FarmGAP", "83"),
+        ("ตารางพจนานุกรมข้อมูล (Data Dictionary) ทั้ง 18 ตารางของระบบ FarmGAP", "84"),
     ]
     for title, page in lot_entries:
         add_toc_line(doc, title, page, indent_in=0.0, bold=False)
 
     # =========================================================================
-    # SECTION 7: สารบัญภาพ (หน้า ช)
+    # SECTION 7: สารบัญภาพ (หน้า 12)
     # =========================================================================
     sec_lof = doc.add_section(WD_SECTION.NEW_PAGE)
     set_section_margins(sec_lof)
-    set_header_text(sec_lof, "ช")
+    configure_front_matter_page_numbering(sec_lof, start_thai=None)
 
     p_lof_title = doc.add_paragraph()
     p_lof_title.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -635,22 +692,22 @@ def build_front_matter(output_path, logo_path):
     add_toc_header_row(doc, "ภาพที่", "หน้า")
 
     lof_entries = [
-        ("ภาพที่ 3.1 สถาปัตยกรรมของระบบ FarmGAP (System Architecture)", "23"),
-        ("ภาพที่ 3.2 แผนภาพบริบทของระบบ (Context Diagram / DFD ระดับ 0)", "24"),
-        ("ภาพที่ 3.3 แผนภาพกระแสข้อมูลระดับที่ 1 (Data Flow Diagram Level 1)", "25"),
-        ("ภาพที่ 3.4 แผนภาพกรณีใช้งานของระบบ (Use Case Diagram)", "26"),
-        ("ภาพที่ 3.5 แผนภาพความสัมพันธ์ของข้อมูล (Entity-Relationship Diagram: ER Diagram)", "28"),
-        ("ภาพที่ 4.1 หน้าจอแดชบอร์ดภาพรวมฟาร์มและสถิติสำคัญ (Dashboard)", "36"),
-        ("ภาพที่ 4.2 หน้าจอจัดการแปลงปลูก แคร่ปลูก และการบันทึกการเตรียมดิน", "37"),
-        ("ภาพที่ 4.3 หน้าจอบันทึกการเพาะกล้า การย้ายลงปลูก และการคำนวณอายุพืชสะสม", "38"),
-        ("ภาพที่ 4.4 หน้าจอบันทึกการใช้ปุ๋ยเคมีและระบบล็อกการเก็บเกี่ยวตามระยะปลอดภัย (PHI)", "39"),
-        ("ภาพที่ 4.5 หน้าจอบันทึกการเก็บเกี่ยวผลผลิตเข้าคลังสินค้าและการสร้างรหัส Lot", "40"),
-        ("ภาพที่ 4.6 ตัวอย่างรายงานมาตรฐาน GAP รูปแบบเอกสาร A4 แยกรายรอบการปลูก", "41"),
-        ("ภาพที่ 4.7 หน้าจอร้านค้าออนไลน์ผ่าน LINE LIFF และการสั่งซื้อสินค้า", "43"),
-        ("ภาพที่ 4.8 การ์ดแจ้งเตือนสถานะคำสั่งซื้อและการตรวจสอบสถานะจัดส่งผ่าน Flex Message", "44"),
-        ("ภาพที่ 4.9 หน้าจอตรวจสอบย้อนกลับแหล่งที่มาของผลผลิตผ่านการสแกน QR Code", "46"),
-        ("ภาพที่ 4.10 หน้าจอวิเคราะห์กลุ่มลูกค้าด้วย K-Means Clustering และการแนะนำสินค้าคู่กัน", "48"),
-        ("ภาพที่ 4.11 การสนทนาและรับคำสั่งซื้ออัตโนมัติด้วย Google Gemini AI บน LINE OA", "49"),
+        ("ภาพที่ 3.1 สถาปัตยกรรมของระบบ FarmGAP (System Architecture)", "37"),
+        ("ภาพที่ 3.2 แผนภาพบริบทของระบบ (Context Diagram / DFD ระดับ 0)", "38"),
+        ("ภาพที่ 3.3 แผนภาพกระแสข้อมูลระดับที่ 1 (Data Flow Diagram Level 1)", "39"),
+        ("ภาพที่ 3.4 แผนภาพกรณีใช้งานของระบบ (Use Case Diagram)", "35"),
+        ("ภาพที่ 3.5 แผนภาพความสัมพันธ์ของข้อมูล (Entity-Relationship Diagram: ER Diagram)", "41"),
+        ("ภาพที่ 4.1 หน้าจอแดชบอร์ดภาพรวมฟาร์มและสถิติสำคัญ (Dashboard)", "61"),
+        ("ภาพที่ 4.2 หน้าจอจัดการแปลงปลูก แคร่ปลูก และการบันทึกการเตรียมดิน", "62"),
+        ("ภาพที่ 4.3 หน้าจอบันทึกการเพาะกล้า การย้ายลงปลูก และการคำนวณอายุพืชสะสม", "63"),
+        ("ภาพที่ 4.4 หน้าจอบันทึกการใช้ปุ๋ยเคมีและระบบล็อกการเก็บเกี่ยวตามระยะปลอดภัย (PHI)", "64"),
+        ("ภาพที่ 4.5 หน้าจอบันทึกการเก็บเกี่ยวผลผลิตเข้าคลังสินค้าและการสร้างรหัส Lot", "65"),
+        ("ภาพที่ 4.6 ตัวอย่างรายงานมาตรฐาน GAP รูปแบบเอกสาร A4 แยกรายรอบการปลูก", "66"),
+        ("ภาพที่ 4.7 หน้าจอร้านค้าออนไลน์ผ่าน LINE LIFF และการสั่งซื้อสินค้า", "68"),
+        ("ภาพที่ 4.8 การ์ดแจ้งเตือนสถานะคำสั่งซื้อและการตรวจสอบสถานะจัดส่งผ่าน Flex Message", "69"),
+        ("ภาพที่ 4.9 หน้าจอตรวจสอบย้อนกลับแหล่งที่มาของผลผลิตผ่านการสแกน QR Code", "70"),
+        ("ภาพที่ 4.10 หน้าจอแดชบอร์ดแสดงผลการวิเคราะห์กลุ่มลูกค้าด้วย K-Means (K = 3) และปุ่มยิงแจ้งเตือน LINE เฉพาะกลุ่ม", "71"),
+        ("ภาพที่ 4.11 การสนทนาและรับคำสั่งซื้ออัตโนมัติด้วย Google Gemini AI บน LINE OA", "72"),
     ]
     for title, page in lof_entries:
         add_toc_line(doc, title, page, indent_in=0.0, bold=False)

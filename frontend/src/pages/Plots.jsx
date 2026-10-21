@@ -70,7 +70,7 @@ export default function Plots() {
     plot_number: '',
     dimension: 'แคร่ 2 x 6 เมตร',
     area_sqm: 12,
-    soil_recipe: 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)',
+    soil_recipe: '',
     soil_prep_date: getTodayLocalStr(),
     notes: '',
   });
@@ -233,7 +233,7 @@ export default function Plots() {
       plot_number: nextNum,
       dimension: 'แคร่ 2 x 6 เมตร',
       area_sqm: 12,
-      soil_recipe: 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)',
+      soil_recipe: '',
       notes: '',
     });
     setShowAddPlotModal(true);

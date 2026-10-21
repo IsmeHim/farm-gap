@@ -117,10 +117,6 @@ export async function initSessionTable(retries = 3) {
     await pool.query(`
       ALTER TABLE orders MODIFY COLUMN slip_image_url LONGTEXT
     `).catch(() => {});
-    // Ensure tracking_number column exists in orders table
-    await pool.query(`
-      ALTER TABLE orders ADD COLUMN tracking_number VARCHAR(100) NULL
-    `).catch(() => {});
     tableInitialized = true;
   } catch (err) {
     if (retries > 0) {

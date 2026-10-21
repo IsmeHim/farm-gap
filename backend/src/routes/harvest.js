@@ -100,7 +100,7 @@ harvestRouter.post('/smart-record', async (req, res) => {
       }
     }
 
-    let worker = worker_name || plot.default_worker_name || req.user.display_name;
+    let worker = worker_name || req.user.display_name;
     if (!worker) {
       const [u] = await pool.query('SELECT display_name FROM users WHERE id = ?', [req.user.id]);
       worker = u[0]?.display_name || 'เจ้าของฟาร์ม';
@@ -251,7 +251,6 @@ harvestRouter.post('/smart-record', async (req, res) => {
              expected_harvest_date = NULL, 
              current_batch_id = NULL,
              seed_prep_date = NULL,
-             seed_notes = NULL,
              seed_crop_id = NULL,
              soil_prep_date = NULL,
              soil_recipe = NULL,

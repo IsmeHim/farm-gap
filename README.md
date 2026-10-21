@@ -203,8 +203,13 @@ erDiagram
 | `email` | VARCHAR(255) UNIQUE | อีเมลสำหรับเข้าสู่ระบบ |
 | `password_hash` | VARCHAR(255) | รหัสผ่านที่เข้ารหัสด้วย bcrypt |
 | `display_name` | VARCHAR(255) | ชื่อที่ใช้แสดงในระบบ |
+| `username` | VARCHAR(100) UNIQUE | ชื่อผู้ใช้งานสำหรับเข้าสู่ระบบ |
 | `farm_name` | VARCHAR(255) | ชื่อฟาร์ม |
-| `role` | ENUM('owner','worker') | บทบาทผู้ใช้ (`owner` = เจ้าของ, `worker` = คนงาน) |
+| `phone` | VARCHAR(50) | เบอร์โทรศัพท์ติดต่อฟาร์ม |
+| `role` | ENUM('owner','worker','user') | บทบาทผู้ใช้ (`owner` = เจ้าของ, `worker` = คนงาน) |
+| `bank_name` / `bank_account_no` | VARCHAR | ชื่อธนาคารและเลขบัญชีรับโอนเงิน |
+| `promptpay_number` | VARCHAR(50) | หมายเลขพร้อมเพย์สำหรับสร้าง QR Code รับชำระเงิน |
+| `line_user_id` | VARCHAR(255) | LINE User ID ของเจ้าของฟาร์มสำหรับรับแจ้งเตือนออเดอร์ |
 | `created_at` | TIMESTAMP | วันเวลาที่สร้างบัญชี |
 
 #### 2. ตาราง `crops` (คลังข้อมูลชนิดผักและเกณฑ์การเติบโต)
@@ -235,7 +240,6 @@ erDiagram
 | `soil_prep_date` | DATE | วันที่เตรียมดินเสร็จสิ้น |
 | `seed_prep_date` | DATE | วันที่เริ่มเพาะเมล็ด |
 | `seed_crop_id` | INT | ชนิดพืชที่กำลังเพาะกล้า |
-| `seed_notes` | TEXT | บันทึกรายละเอียดการเพาะกล้า |
 | `crop_name` | VARCHAR(255) | ชื่อพืชที่ปลูกอยู่ในปัจจุบัน |
 | `area_sqm` | DECIMAL(10,2) | พื้นที่แปลง (ตารางเมตร) |
 | `planting_date` | DATE | วันที่ย้ายกล้าลงแปลงปลูก |
@@ -276,7 +280,6 @@ erDiagram
 | `materials_used` | TEXT | วัสดุ/สารที่ใช้ |
 | `details` | TEXT | รายละเอียดการปฏิบัติงาน |
 | `operator_name` | VARCHAR(255) | ชื่อผู้ปฏิบัติงาน |
-| `image_url` | TEXT | ลิงก์ภาพถ่ายกิจกรรม |
 | `source_type` / `source_id` | VARCHAR / INT | แหล่งที่มาของกิจกรรมกรณีซิงก์จากโมดูลอื่น |
 
 #### 6. ตาราง `chemical_logs` (บันทึกการใช้ปุ๋ย สารปรับปรุง และสารเคมี)
@@ -370,7 +373,9 @@ erDiagram
 | `delivery_type` | VARCHAR(50) | รูปแบบจัดส่ง (`delivery`, `pickup`) |
 | `payment_method` | VARCHAR(50) | วิธีชำระเงิน (`transfer` โอนเงิน, `cod` เก็บเงินปลายทาง) |
 | `slip_image_url` | LONGTEXT | ลิงก์ภาพสลิปการโอนเงิน |
-| `tracking_number` | VARCHAR(100) | หมายเลขพัสดุจัดส่ง (Tracking Number) |
+| `recipient_name` | VARCHAR(255) | ชื่อผู้รับสินค้าปลายทาง |
+| `recipient_phone` | VARCHAR(50) | เบอร์โทรศัพท์ผู้รับสินค้า |
+| `recipient_address` | TEXT | ที่อยู่จัดส่งปลายทาง |
 | `notes` | TEXT | หมายเหตุคำสั่งซื้อ |
 
 #### 13. ตาราง `order_items` (รายการสินค้าในแต่ละคำสั่งซื้อ)
@@ -382,6 +387,8 @@ erDiagram
 | `quantity` | DECIMAL(10,2) | จำนวนที่สั่ง |
 | `unit_price` | DECIMAL(10,2) | ราคาต่อหน่วย ณ เวลาสั่งซื้อ |
 | `subtotal` | DECIMAL(10,2) | ราคารวมของรายการ |
+| `harvest_date` | DATE | วันที่เก็บเกี่ยวผลผลิตของรายการนี้ |
+| `lot_code` | VARCHAR(100) | รหัสรุ่นผลผลิต (Lot Code) สำหรับตรวจสอบย้อนกลับ |
 
 #### 14. ตาราง `product_recommendations` (สินค้าแนะนำซื้อคู่กัน)
 | คอลัมน์ | ประเภทข้อมูล | รายละเอียด |

@@ -60,7 +60,7 @@ app.use('/api/plots', plotsRouter);
 app.use('/api/chemicals', chemicalsRouter);
 app.use('/api/pests', pestsRouter);
 app.use('/api/harvest', harvestRouter);
-app.use('/api/storage', crudRouter('storage_logs', ['harvest_id','order_id','log_date','storage_location','shipped_to','buyer','vehicle','vehicle_clean_status','storage_conditions','transport_time','delivery_condition','worker_name','notes']));
+app.use('/api/storage', crudRouter('storage_logs', ['order_id','log_date','storage_location','shipped_to','buyer','vehicle','vehicle_clean_status','storage_conditions','transport_time','delivery_condition','worker_name','notes']));
 app.use('/api/costs', crudRouter('cost_logs', ['plot_id','log_date','category','description','amount']));
 app.use('/api/report', reportRouter);
 app.use('/api/trace', traceRouter); // public

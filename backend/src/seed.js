@@ -162,8 +162,8 @@ async function seed() {
     // 10. Insert Storage Logs (GAP #6)
     console.log('📦 Seeding Storage Logs...');
     await pool.query(
-      `INSERT INTO storage_logs (user_id, harvest_id, log_date, storage_location, shipped_to, buyer, vehicle, vehicle_clean_status, storage_conditions, delivery_condition, worker_name, notes)
-       VALUES (?, 1, '2026-02-20', 'ห้องเย็นจัดเก็บผลผลิต GAP', 'ร้านกรีนสลัด & สั่งซื้อทาง LINE', 'ลูกค้าทั่วไป / LINE OA', 'รถกระบะห้องเย็น', 1, 'อุณหภูมิ 8-10C', 'สมบูรณ์สดใหม่', ownerName, 'ส่งมอบสดใหม่ทุกวัน')`,
+      `INSERT INTO storage_logs (user_id, log_date, storage_location, shipped_to, buyer, vehicle, vehicle_clean_status, storage_conditions, delivery_condition, worker_name, notes)
+       VALUES (?, '2026-02-20', 'ห้องเย็นจัดเก็บผลผลิต GAP', 'ร้านกรีนสลัด & สั่งซื้อทาง LINE', 'ลูกค้าทั่วไป / LINE OA', 'รถกระบะห้องเย็น', 1, 'อุณหภูมิ 8-10C', 'สมบูรณ์สดใหม่', ownerName, 'ส่งมอบสดใหม่ทุกวัน')`,
       [userId]
     );
 
@@ -266,9 +266,9 @@ async function seed() {
 
     for (const ord of ordersData) {
       const [oRes] = await pool.query(
-        `INSERT INTO orders (order_code, customer_id, total_amount, status, delivery_type, delivery_date, slip_image_url, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [ord.order_code, ord.customer_id, ord.total_amount, ord.status, ord.delivery_type, ord.delivery_date, ord.slip_image_url, ord.notes]
+        `INSERT INTO orders (order_code, customer_id, total_amount, status, delivery_type, slip_image_url, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [ord.order_code, ord.customer_id, ord.total_amount, ord.status, ord.delivery_type, ord.slip_image_url, ord.notes]
       );
       for (const it of ord.items) {
         await pool.query(

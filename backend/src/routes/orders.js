@@ -39,7 +39,7 @@ function generateOrderCode() {
 
 // สร้างรายการสั่งซื้อใหม่ (พร้อมตัดสต็อกผักอัตโนมัติ)
 ordersRouter.post('/', async (req, res) => {
-  const { customer_id, items, delivery_type, delivery_date, notes, recipient_name, recipient_phone, recipient_address } = req.body;
+  const { customer_id, items, delivery_type, notes, recipient_name, recipient_phone, recipient_address } = req.body;
 
   if (!customer_id || !items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Customer ID and at least one item are required' });
@@ -105,9 +105,9 @@ ordersRouter.post('/', async (req, res) => {
     const finalRecipientAddress = recipient_address || customerRows[0].address;
 
     const [orderResult] = await connection.query(
-      `INSERT INTO orders (order_code, customer_id, total_amount, status, delivery_type, delivery_date, notes, recipient_name, recipient_phone, recipient_address)
-       VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
-      [orderCode, customer_id, totalAmount, delivery_type || 'delivery', delivery_date || null, notes || null, finalRecipientName, finalRecipientPhone, finalRecipientAddress]
+      `INSERT INTO orders (order_code, customer_id, total_amount, status, delivery_type, notes, recipient_name, recipient_phone, recipient_address)
+       VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
+      [orderCode, customer_id, totalAmount, delivery_type || 'delivery', notes || null, finalRecipientName, finalRecipientPhone, finalRecipientAddress]
     );
 
     const orderId = orderResult.insertId;

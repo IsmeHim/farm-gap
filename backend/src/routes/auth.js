@@ -80,7 +80,7 @@ r.post('/login', async (req, res) => {
 r.get('/payment-info', async (req, res) => {
   try {
     const [rows] = await pool.query(
-      "SELECT farm_name, display_name, phone, bank_name, bank_account_no, bank_account_name, promptpay_number, promptpay_qr_url FROM users WHERE role = 'owner' LIMIT 1"
+      "SELECT farm_name, display_name, phone, bank_name, bank_account_no, bank_account_name, promptpay_number FROM users WHERE role = 'owner' LIMIT 1"
     );
     if (!rows[0]) return res.json({});
     res.json(rows[0]);
@@ -96,7 +96,7 @@ r.get('/me', async (req, res) => {
   try {
     const payload = jwt.verify(h.slice(7), process.env.JWT_SECRET);
     const [rows] = await pool.query(
-      'SELECT id, email, username, display_name, farm_name, phone, role, created_at, bank_name, bank_account_no, bank_account_name, promptpay_number, promptpay_qr_url, line_user_id, frontend_url FROM users WHERE id = ?',
+      'SELECT id, email, username, display_name, farm_name, phone, role, created_at, bank_name, bank_account_no, bank_account_name, promptpay_number, line_user_id, frontend_url FROM users WHERE id = ?',
       [payload.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'user not found' });
@@ -122,7 +122,6 @@ r.put('/profile', async (req, res) => {
       bank_account_no,
       bank_account_name,
       promptpay_number,
-      promptpay_qr_url,
       line_user_id,
       frontend_url,
     } = req.body;
@@ -142,7 +141,6 @@ r.put('/profile', async (req, res) => {
           bank_account_no = ?,
           bank_account_name = ?,
           promptpay_number = ?,
-          promptpay_qr_url = ?,
           line_user_id = ?,
           frontend_url = ?
         WHERE id = ?`,
@@ -156,7 +154,6 @@ r.put('/profile', async (req, res) => {
           bank_account_no !== undefined ? bank_account_no : null,
           bank_account_name !== undefined ? bank_account_name : null,
           promptpay_number !== undefined ? promptpay_number : null,
-          promptpay_qr_url !== undefined ? promptpay_qr_url : null,
           line_user_id !== undefined ? line_user_id : null,
           frontend_url !== undefined ? frontend_url : null,
           payload.id,
@@ -173,7 +170,6 @@ r.put('/profile', async (req, res) => {
           bank_account_no = ?,
           bank_account_name = ?,
           promptpay_number = ?,
-          promptpay_qr_url = ?,
           line_user_id = ?,
           frontend_url = ?
         WHERE id = ?`,
@@ -186,7 +182,6 @@ r.put('/profile', async (req, res) => {
           bank_account_no !== undefined ? bank_account_no : null,
           bank_account_name !== undefined ? bank_account_name : null,
           promptpay_number !== undefined ? promptpay_number : null,
-          promptpay_qr_url !== undefined ? promptpay_qr_url : null,
           line_user_id !== undefined ? line_user_id : null,
           frontend_url !== undefined ? frontend_url : null,
           payload.id,
@@ -195,7 +190,7 @@ r.put('/profile', async (req, res) => {
     }
 
     const [rows] = await pool.query(
-      'SELECT id, email, username, display_name, farm_name, role, created_at, bank_name, bank_account_no, bank_account_name, promptpay_number, promptpay_qr_url, line_user_id, frontend_url FROM users WHERE id = ?',
+      'SELECT id, email, username, display_name, farm_name, role, created_at, bank_name, bank_account_no, bank_account_name, promptpay_number, line_user_id, frontend_url FROM users WHERE id = ?',
       [payload.id]
     );
     const u = rows[0];

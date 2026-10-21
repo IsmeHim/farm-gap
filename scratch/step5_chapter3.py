@@ -4,7 +4,10 @@ from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.section import WD_SECTION
 from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 
+from data_dictionary_tables import DATA_DICTIONARY_TABLES
 from step2_front_matter import (
     build_front_matter,
     set_run_thai_font,
@@ -29,10 +32,22 @@ from step4_chapter2 import (
 )
 
 
-def add_figure_with_caption(doc, img_path, caption_text, width_in=5.75):
+def add_figure_with_caption(doc, img_path, caption_text, width_in=5.75, max_height_in=7.4):
     """
     แทรกรูปภาพจัดกึ่งกลาง พร้อมชื่อภาพใต้ภาพ (ตามเกณฑ์คู่มือ มรย. ข้อ 10: ชื่อภาพจะวางไว้ใต้ภาพ)
+    ปรับขนาดอัตโนมัติไม่ให้ภาพสูงเกินหน้ากระดาษ A4
     """
+    try:
+        from PIL import Image
+        with Image.open(img_path) as im:
+            w_px, h_px = im.size
+            if w_px > 0 and h_px > 0:
+                calc_h = width_in * (h_px / w_px)
+                if calc_h > max_height_in:
+                    width_in = max_height_in * (w_px / h_px)
+    except Exception:
+        pass
+
     p_img = doc.add_paragraph()
     p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_img.paragraph_format.space_before = Pt(8)
@@ -51,7 +66,7 @@ def add_figure_with_caption(doc, img_path, caption_text, width_in=5.75):
     set_run_thai_font(run_cap, "TH SarabunPSK", size_pt=16, bold=False)
 
 
-def build_styled_table(doc, headers, rows_data, col_widths, center_cols=None, font_size_pt=15):
+def build_styled_table(doc, headers, rows_data, col_widths, center_cols=None, font_size_pt=14, header_center=True):
     if center_cols is None:
         center_cols = set()
     table = doc.add_table(rows=len(rows_data) + 1, cols=len(headers))
@@ -59,11 +74,16 @@ def build_styled_table(doc, headers, rows_data, col_widths, center_cols=None, fo
     table.autofit = False
     format_academic_table(table)
 
+    # Repeat header row across pages and prevent splitting across page break
+    hdr_tr = table.rows[0]._tr.get_or_add_trPr()
+    hdr_tr.append(OxmlElement("w:tblHeader"))
+    hdr_tr.append(OxmlElement("w:cantSplit"))
+
     hdr_cells = table.rows[0].cells
     for idx, text in enumerate(headers):
         hdr_cells[idx].width = Inches(col_widths[idx])
         p = hdr_cells[idx].paragraphs[0]
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER if idx in center_cols else WD_ALIGN_PARAGRAPH.LEFT
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER if header_center else (WD_ALIGN_PARAGRAPH.CENTER if idx in center_cols else WD_ALIGN_PARAGRAPH.LEFT)
         p.paragraph_format.space_before = Pt(3)
         p.paragraph_format.space_after = Pt(3)
         p.paragraph_format.line_spacing = 1.0
@@ -71,7 +91,11 @@ def build_styled_table(doc, headers, rows_data, col_widths, center_cols=None, fo
         set_run_thai_font(r, "TH SarabunPSK", size_pt=font_size_pt, bold=True)
 
     for r_idx, row_vals in enumerate(rows_data):
-        row_cells = table.rows[r_idx + 1].cells
+        row = table.rows[r_idx + 1]
+        trPr = row._tr.get_or_add_trPr()
+        trPr.append(OxmlElement("w:cantSplit"))
+
+        row_cells = row.cells
         for c_idx, val in enumerate(row_vals):
             row_cells[c_idx].width = Inches(col_widths[c_idx])
             p = row_cells[c_idx].paragraphs[0]
@@ -122,7 +146,7 @@ def append_chapter3(doc, scratch_dir):
     add_numbered_item(
         doc,
         "3.1.3",
-        "การพัฒนาระบบและบูรณาการปัญญาประดิษฐ์ (Implementation & AI Integration) พัฒนาส่วนติดต่อผู้ใช้ฝั่งเจ้าของฟาร์มและหน้าเว็บ LIFF ด้วย React.js พัฒนาเซิร์ฟเวอร์ประมวลผลด้วย Node.js และ Express.js เชื่อมต่อ LINE Messaging API และพัฒนาโมดูลปัญญาประดิษฐ์ 3 ส่วน ได้แก่ อัลกอริทึม K-Means Clustering แบบ 4 มิติ, เมทริกซ์การเกิดร่วม (Co-occurrence Matrix) และผู้ช่วยสนทนา Google Gemini AI พร้อมกลไกสลับโมเดลสำรองอัตโนมัติ (Multi-Model Fallback)",
+        "การพัฒนาระบบและบูรณาการปัญญาประดิษฐ์ (Implementation & AI Integration) พัฒนาส่วนติดต่อผู้ใช้ฝั่งเจ้าของฟาร์มและหน้าเว็บ LIFF ด้วย React.js พัฒนาเซิร์ฟเวอร์ประมวลผลด้วย Node.js และ Express.js เชื่อมต่อ LINE Messaging API และพัฒนาโมดูลปัญญาประดิษฐ์ 3 ส่วน ได้แก่ อัลกอริทึม K-Means Clustering แบ่งกลุ่มลูกค้า 3 กลุ่มสำหรับการยิงแจ้งเตือน LINE เฉพาะกลุ่ม, เมทริกซ์การเกิดร่วม (Co-occurrence Matrix) สำหรับแนะนำผักที่มักซื้อคู่กัน และผู้ช่วยสนทนา Google Gemini AI พร้อมกลไกสลับโมเดลสำรองอัตโนมัติ (Multi-Model Fallback)",
         bold_prefix=True,
     )
     add_numbered_item(
@@ -145,7 +169,7 @@ def append_chapter3(doc, scratch_dir):
 
     add_body_paragraph(
         doc,
-        "จากการวิเคราะห์ความต้องการของระบบ สามารถจำแนกผู้ใช้งานภายนอก (Actors) ออกเป็น 2 กลุ่มหลัก ได้แก่ (1) เจ้าของฟาร์มหรือผู้ดูแลระบบ (Admin/Farmer) ซึ่งรับผิดชอบการบันทึกข้อมูลการเพาะปลูกตามมาตรฐาน GAP การจัดการคลังสินค้า การจัดการคำสั่งซื้อ และการดูรายงานวิเคราะห์ AI และ (2) ลูกค้าหรือผู้บริโภค (Customer/LINE User) ซึ่งใช้งานผ่านแอปพลิเคชัน LINE เพื่อเลือกซื้อสินค้าผ่านหน้าร้าน LIFF สนทนาสั่งซื้อกับ AI Chatbot ติดตามสถานะการจัดส่ง และสแกน QR Code เพื่อตรวจสอบย้อนกลับ โดยมีรายละเอียดกรณีใช้งานทั้ง 13 กรณี ดังแสดงในตารางที่ 3.1 และภาพที่ 3.1",
+        "จากการวิเคราะห์ความต้องการของระบบ สามารถจำแนกผู้ใช้งานภายนอก (Actors) ออกเป็น 2 กลุ่มหลัก ได้แก่ (1) เจ้าของฟาร์มหรือผู้ดูแลระบบ (Admin/Farmer) ซึ่งรับผิดชอบการบันทึกข้อมูลการเพาะปลูกตามมาตรฐาน GAP การจัดการคลังสินค้า การจัดการคำสั่งซื้อ (ทั้งผ่านหน้าจอ Web Dashboard และผ่านปุ่มคำสั่งลัด Postback Action บน LINE Official Account) และการดูรายงานวิเคราะห์ AI และ (2) ลูกค้าหรือผู้บริโภค (Customer/LINE User) ซึ่งใช้งานผ่านแอปพลิเคชัน LINE เพื่อเลือกซื้อสินค้าผ่านหน้าร้าน LIFF สนทนาสั่งซื้อกับ AI Chatbot ติดตามสถานะการจัดส่ง และสแกน QR Code เพื่อตรวจสอบย้อนกลับ โดยมีรายละเอียดกรณีใช้งานทั้ง 13 กรณี ดังแสดงในตารางที่ 3.1 และภาพที่ 3.1",
     )
 
     add_table_caption(doc, "ตารางที่ 3.1  รายการกรณีใช้งาน (Use Cases) ทั้ง 13 กรณีของระบบ FarmGAP")
@@ -160,8 +184,8 @@ def append_chapter3(doc, scratch_dir):
         ["UC06", "บันทึกการสำรวจและป้องกันกำจัดศัตรูพืช", "เจ้าของฟาร์ม", "บันทึกชนิดศัตรูพืช ระดับความรุนแรง และวิธีการป้องกันกำจัดในแต่ละรอบการปลูก"],
         ["UC07", "บันทึกการเก็บเกี่ยวผลผลิตเข้าคลังสินค้า", "เจ้าของฟาร์ม", "ตรวจสอบเงื่อนไข PHI บันทึกน้ำหนักเก็บเกี่ยว ปิดรอบการปลูก และเพิ่มสต็อกพร้อมรหัส Lot"],
         ["UC08", "จัดการบัญชีฟาร์ม และพิมพ์รายงาน GAP A4", "เจ้าของฟาร์ม", "บันทึกรายรับ-รายจ่าย และออกรายงานมาตรฐาน GAP รูปแบบ A4 แยกรายรอบการปลูก"],
-        ["UC09", "วิเคราะห์กลุ่มลูกค้า K-Means และสินค้าซื้อคู่กัน", "เจ้าของฟาร์ม", "ประมวลผลจัดกลุ่มลูกค้า 4 มิติด้วย K-Means และคำนวณคู่สินค้าด้วย Co-occurrence Matrix"],
-        ["UC10", "จัดการคำสั่งซื้อ ใบเสร็จ และแจ้งสถานะจัดส่ง", "เจ้าของฟาร์ม, ลูกค้า", "ตรวจสอบคำสั่งซื้อ พิมพ์ใบเสร็จ และส่งการ์ดแจ้งเตือนสถานะจัดส่งผ่าน LINE Flex Message"],
+        ["UC09", "วิเคราะห์กลุ่มลูกค้า K-Means และยิงแจ้งเตือน LINE", "เจ้าของฟาร์ม", "ประมวลผลจัดกลุ่มลูกค้า 3 กลุ่มด้วย K-Means สำหรับยิงแจ้งเตือน LINE เฉพาะกลุ่ม และคำนวณคู่สินค้าด้วย Co-occurrence Matrix"],
+        ["UC10", "จัดการคำสั่งซื้อผ่านเว็บและ LINE ของเจ้าของฟาร์ม", "เจ้าของฟาร์ม, ลูกค้า", "แจ้งเตือนออเดอร์ใหม่พร้อมสลิปเข้า LINE เจ้าของฟาร์ม ให้กดยืนยันจัดส่ง ตัดสต็อก GAP และพิมพ์ใบเสร็จผ่าน LINE ได้ทันที"],
         ["UC11", "เลือกซื้อผักสดออนไลน์ผ่านหน้าร้าน LINE LIFF", "ลูกค้า", "เปิดหน้าร้านผ่าน LINE LIFF ดูผักแนะนำ เลือกผักลงตะกร้า และยืนยันคำสั่งซื้อ"],
         ["UC12", "สนทนาถามสต็อกและสั่งซื้อผ่านแชทบอท Gemini AI", "ลูกค้า", "พิมพ์สอบถามสต็อกหรือสั่งซื้อด้วยภาษาไทยธรรมชาติผ่าน Google Gemini AI อ้างอิงสต็อกจริง"],
         ["UC13", "สแกน QR Code ตรวจสอบย้อนกลับรายรอบปลูก", "เจ้าของฟาร์ม, ลูกค้า", "สแกน QR Code ผูกรหัส planting_id เพื่อดูประวัติการเพาะปลูกและค่าความปลอดภัย PHI"],
@@ -175,9 +199,10 @@ def append_chapter3(doc, scratch_dir):
         font_size_pt=14,
     )
 
+    images_dir = r"c:\forwork\Web\farmgap\farmgap\images"
     add_figure_with_caption(
         doc,
-        os.path.join(scratch_dir, "fig3_4_use_case.png"),
+        os.path.join(images_dir, "use_case_diagram_farmgap.drawio.png"),
         "ภาพที่ 3.1  แผนภาพกรณีใช้งานของระบบ (Use Case Diagram)",
         width_in=5.65,
     )
@@ -201,7 +226,7 @@ def append_chapter3(doc, scratch_dir):
 
     add_body_paragraph(
         doc,
-        "จากภาพที่ 3.2 โครงสร้างการทำงานของระบบแบ่งออกเป็น 5 ส่วนหลัก ได้แก่ (1) ชั้นส่วนติดต่อผู้ใช้งาน (Presentation Layer) ประกอบด้วยเว็บแอปพลิเคชัน React.js สำหรับเจ้าของฟาร์ม หน้าร้านค้าออนไลน์ LINE LIFF สำหรับลูกค้า และหน้าเว็บตรวจสอบย้อนกลับสาธารณะ (2) ชั้นประมวลผลตรรกะทางธุรกิจ (Business Logic Layer) พัฒนาด้วย Node.js และ Express.js ทำหน้าที่ควบคุมกฎการเพาะปลูกตามมาตรฐาน GAP การคำนวณอายุพืชสะสม การล็อกการเก็บเกี่ยวตามค่า PHI การตัดสต็อกสินค้า และการจัดการ Webhook ของ LINE Messaging API (3) ชั้นประมวลผลปัญญาประดิษฐ์ (AI & Analytics Layer) ประกอบด้วยโมดูล Google Gemini LLM, โมดูลจัดกลุ่มลูกค้า K-Means 4 มิติ และโมดูลแนะนำสินค้า Co-occurrence Matrix (4) ชั้นฐานข้อมูลเชิงสัมพันธ์ MySQL จำนวน 18 ตาราง และ (5) บริการคลาวด์ภายนอก ได้แก่ LINE Platform และ Google Generative Language API",
+        "จากภาพที่ 3.2 โครงสร้างการทำงานของระบบแบ่งออกเป็น 5 ส่วนหลัก ได้แก่ (1) ชั้นส่วนติดต่อผู้ใช้งาน (Presentation Layer) ประกอบด้วยเว็บแอปพลิเคชันที่พัฒนาด้วย React (Meta Open Source, 2024) ร่วมกับ Tailwind CSS (Tailwind Labs, 2024) สำหรับเจ้าของฟาร์ม หน้าร้านค้าออนไลน์ LINE LIFF (LINE Corporation, 2024) สำหรับลูกค้า และหน้าเว็บตรวจสอบย้อนกลับสาธารณะ (2) ชั้นประมวลผลตรรกะทางธุรกิจ (Business Logic Layer) พัฒนาด้วย Node.js (OpenJS Foundation, 2024b) และ Express.js (OpenJS Foundation, 2024a) ทำหน้าที่ควบคุมกฎการเพาะปลูกตามมาตรฐาน GAP การคำนวณอายุพืชสะสม การล็อกการเก็บเกี่ยวตามค่า PHI การตัดสต็อกสินค้า และการจัดการ Webhook ของ LINE Messaging API โดยมีระบบความปลอดภัยด้วย JWT (Jones et al., 2015) และการแฮชรหัสผ่านด้วย Bcrypt (Provos & Mazières, 1999) (3) ชั้นประมวลผลปัญญาประดิษฐ์ (AI & Analytics Layer) ประกอบด้วยโมดูล Google Gemini LLM (Google DeepMind, 2024) เชื่อมต่อผ่าน Google Gemini REST API บนแพลตฟอร์ม Google AI Studio (Google LLC, 2024), โมดูลจัดกลุ่มลูกค้า K-Means 3 กลุ่มเพื่อยิงแจ้งเตือน LINE เฉพาะกลุ่ม (MacQueen, 1967) และโมดูลแนะนำสินค้า Co-occurrence Matrix (Agrawal et al., 1993) (4) ชั้นฐานข้อมูลเชิงสัมพันธ์ MySQL 8.0 (Oracle Corporation, 2024) จำนวน 18 ตาราง และ (5) บริการคลาวด์ภายนอก ได้แก่ LINE Platform และ Google Generative Language API",
     )
 
     # =========================================================================
@@ -216,14 +241,14 @@ def append_chapter3(doc, scratch_dir):
 
     add_figure_with_caption(
         doc,
-        os.path.join(scratch_dir, "fig3_2_dfd_lv0.png"),
+        os.path.join(images_dir, "dfd-lv0.drawio.png"),
         "ภาพที่ 3.3  แผนภาพบริบทของระบบ (Context Diagram / DFD ระดับ 0)",
         width_in=5.70,
     )
 
     add_figure_with_caption(
         doc,
-        os.path.join(scratch_dir, "fig3_3_dfd_lv1.png"),
+        os.path.join(images_dir, "dfd-lv1.drawio.png"),
         "ภาพที่ 3.4  แผนภาพกระแสข้อมูลระดับที่ 1 (Data Flow Diagram Level 1)",
         width_in=5.75,
     )
@@ -249,7 +274,7 @@ def append_chapter3(doc, scratch_dir):
         ],
         [
             "4.0 ประมวลผลปัญญาประดิษฐ์ (AI Modules)",
-            "4.1 สนทนาตอบคำถามและรับออเดอร์ด้วย Gemini AI; 4.2 จัดกลุ่มลูกค้า 4 มิติด้วย K-Means; 4.3 วิเคราะห์สินค้าซื้อคู่กันด้วย Co-occurrence Matrix",
+            "4.1 สนทนาตอบคำถามและรับออเดอร์ด้วย Gemini AI; 4.2 จัดกลุ่มลูกค้า 3 กลุ่มด้วย K-Means สำหรับยิงแจ้งเตือน LINE; 4.3 วิเคราะห์สินค้าซื้อคู่กันด้วย Co-occurrence Matrix",
             "ดึงสต็อกจริงจาก D3 แทรกใน Prompt ส่งให้ Gemini API ดึงประวัติการซื้อจาก D5 มาจัดกลุ่มลูกค้าและบันทึกผลลงใน D6",
         ],
         [
@@ -286,17 +311,17 @@ def append_chapter3(doc, scratch_dir):
         ["3", "plots", "PK: id, FK: user_id", "เก็บข้อมูลแปลงปลูกและแคร่ปลูก สูตรดิน วันเตรียมดิน วันเพาะเมล็ด วันปลูก และสถานะความปลอดภัย"],
         ["4", "planting_batches", "PK: id, FK: user_id, plot_id, crop_id", "เก็บข้อมูลรอบการปลูก (batch_code) วันเริ่มปลูก วันคาดการณ์เก็บเกี่ยว และจำนวนต้นที่เก็บเกี่ยว"],
         ["5", "crop_activities", "PK: id, FK: user_id, plot_id, batch_id", "เก็บประวัติกิจกรรมและพัฒนาการในแปลงแยกตามรอบปลูก (เตรียมดิน เพาะกล้า ย้ายปลูก ดูแลรักษา)"],
-        ["6", "chemical_logs", "PK: id, FK: user_id, plot_id", "เก็บประวัติการใช้ปุ๋ยและสารเคมี การสวมใส่อุปกรณ์ PPE และระยะเวลาปลอดภัยก่อนเก็บเกี่ยว (phi_days)"],
+        ["6", "chemical_logs", "PK: id, FK: user_id, plot_id, batch_id", "เก็บประวัติการใช้ปุ๋ยและสารเคมี การสวมใส่อุปกรณ์ PPE และระยะเวลาปลอดภัยก่อนเก็บเกี่ยว (phi_days)"],
         ["7", "pest_logs", "PK: id, FK: user_id, plot_id, batch_id", "เก็บประวัติการสำรวจพบโรคและแมลงศัตรูพืช ระดับความรุนแรง จำนวนต้นที่เสียหาย และวิธีบำบัดรักษา"],
         ["8", "harvest_logs", "PK: id, FK: user_id, plot_id, batch_id, product_id", "เก็บข้อมูลการตัดเก็บเกี่ยว รหัสล็อต (lot_code) จำนวนที่นำเข้าสต็อก เกรดคุณภาพ และสุขอนามัย GAP"],
         ["9", "products", "PK: id, FK: plot_id", "เก็บข้อมูลสินค้าผักสดและจำนวนคงเหลือในสต็อกพร้อมขาย (stock_quantity) บนหน้าร้าน LINE"],
         ["10", "customers", "PK: id, UK: line_user_id, FK: cluster_id", "เก็บข้อมูลลูกค้าสมาชิก LINE OA ชื่อโปรไฟล์ เบอร์โทรศัพท์ ที่อยู่จัดส่ง และกลุ่มลูกค้า AI"],
         ["11", "customer_clusters", "PK: id", "เก็บข้อมูลกลุ่มลูกค้าจากการวิเคราะห์ด้วยอัลกอริทึม K-Means Clustering และรายการผักที่กลุ่มนิยมซื้อ"],
-        ["12", "orders", "PK: id, UK: order_code, FK: customer_id", "เก็บข้อมูลคำสั่งซื้อสินค้า ยอดรวม รูปแบบจัดส่ง วิธีชำระเงิน ลิงก์ภาพสลิปโอนเงิน และเลขพัสดุ"],
+        ["12", "orders", "PK: id, UK: order_code, FK: customer_id", "เก็บข้อมูลคำสั่งซื้อสินค้า ยอดรวม รูปแบบจัดส่ง วิธีชำระเงิน ลิงก์ภาพสลิปโอนเงิน และข้อมูลผู้รับ"],
         ["13", "order_items", "PK: id, FK: order_id, product_id", "เก็บรายการสินค้าแต่ละชิ้นในคำสั่งซื้อ จำนวนที่สั่ง ราคาต่อหน่วย และราคารวมย่อย"],
         ["14", "product_recommendations", "PK: id, FK: product_id, recommended_product_id", "เก็บคู่สินค้าแนะนำให้ซื้อคู่กันจากค่าความสัมพันธ์ Co-occurrence Matrix ในการวิเคราะห์ตะกร้าสินค้า"],
         ["15", "line_chat_sessions", "PK: id, UK: line_user_id, FK: order_id", "เก็บสถานะบทสนทนา (State Machine) และข้อมูลตะกร้าชั่วคราว (draft_data) ของแชทบอท LINE OA"],
-        ["16", "storage_logs", "PK: id, FK: user_id, harvest_id", "เก็บประวัติสถานที่จัดเก็บผลผลิต การขนส่ง ความสะอาดของยานพาหนะ และสภาพสินค้าขณะส่งมอบ"],
+        ["16", "storage_logs", "PK: id, FK: user_id, order_id", "เก็บประวัติสถานที่จัดเก็บผลผลิต การขนส่ง ความสะอาดของยานพาหนะ และสภาพสินค้าขณะส่งมอบ"],
         ["17", "cost_logs", "PK: id, FK: user_id, plot_id", "เก็บข้อมูลบัญชีต้นทุนและค่าใช้จ่ายทางการเกษตรแยกตามหมวดหมู่และแปลงปลูกเพื่อคำนวณกำไรสุทธิ"],
         ["18", "audit_logs", "PK: id", "เก็บประวัติการเพิ่ม แก้ไข หรือลบข้อมูลสำคัญในฐานข้อมูล (old_values / new_values) เพื่อการตรวจสอบ"],
     ]
@@ -311,10 +336,28 @@ def append_chapter3(doc, scratch_dir):
 
     add_figure_with_caption(
         doc,
-        os.path.join(scratch_dir, "fig3_5_er_diagram.png"),
+        os.path.join(images_dir, "erdiagram.drawio.png"),
         "ภาพที่ 3.5  แผนภาพความสัมพันธ์ของข้อมูล (Entity-Relationship Diagram: ER Diagram ทั้ง 18 ตาราง)",
         width_in=5.75,
     )
+
+    add_body_paragraph(
+        doc,
+        "จากการออกแบบสถาปัตยกรรมฐานข้อมูลเชิงสัมพันธ์ MySQL ข้างต้น ผู้วิจัยได้จัดทำพจนานุกรมข้อมูล (Data Dictionary) เพื่ออธิบายรายละเอียดโครงสร้างของแต่ละแอตทริบิวต์ในทั้ง 18 ตารางอย่างสมบูรณ์ ประกอบด้วย คีย์หลัก คีย์นอก ชื่อฟิลด์ ชนิดข้อมูล ขนาด และคำอธิบายหน้าที่การจัดเก็บข้อมูล ตรงตามโครงสร้างฐานข้อมูลจริงในระบบ ดังแสดงในตารางที่ 3.4 ถึง ตารางที่ 3.21 ดังต่อไปนี้",
+    )
+
+    for idx, tbl_def in enumerate(DATA_DICTIONARY_TABLES):
+        table_num = idx + 4
+        add_table_caption(doc, f"ตารางที่ 3.{table_num}  {tbl_def['caption']}")
+        build_styled_table(
+            doc,
+            headers=["คีย์", "ชื่อฟิลด์", "ชนิดข้อมูล", "ขนาด", "คำอธิบาย"],
+            rows_data=tbl_def["fields"],
+            col_widths=[0.55, 1.35, 1.05, 0.55, 2.27],
+            center_cols={0, 3},
+            font_size_pt=13.5,
+            header_center=True,
+        )
 
     # =========================================================================
     # 3.6 การออกแบบอัลกอริทึมสำคัญและกลไกปัญญาประดิษฐ์ในระบบ
@@ -333,19 +376,23 @@ def append_chapter3(doc, scratch_dir):
         "เพื่อป้องกันไม่ให้มีการเก็บเกี่ยวผลผลิตที่มีสารเคมีตกค้างเกินมาตรฐาน GAP ระบบได้กำหนดขั้นตอนการตรวจสอบสองชั้น ได้แก่ (1) ในหน้าบันทึกปุ๋ยและสารเคมี ระบบจะอนุญาตให้เลือกเฉพาะแคร่ปลูกที่มีสถานะกำลังเพาะปลูกอยู่เท่านั้น (ล็อกแคร่ปลูกว่าง) และ (2) เมื่อมีการบันทึกสารเคมีที่มีค่า phi_days > 0 ระบบจะคำนวณวันปลอดภัย (safe_harvest_date = log_date + phi_days) และตรวจสอบทุกครั้งก่อนการเก็บเกี่ยว หากวันที่ปัจจุบันยังไม่ถึงวันปลอดภัยสูงสุดของรอบการปลูกนั้น ระบบจะระงับการบันทึกเก็บเกี่ยวทั้งในระดับส่วนติดต่อผู้ใช้ (Frontend) และระดับเซิร์ฟเวอร์ (Backend API)",
     )
 
-    add_subsection_heading(doc, "3.6.3 อัลกอริทึมการจัดกลุ่มลูกค้า K-Means 4 มิติ และการแนะนำสินค้า")
+    add_subsection_heading(doc, "3.6.3 อัลกอริทึมการจัดกลุ่มลูกค้า K-Means 3 กลุ่มสำหรับการยิงแจ้งเตือน LINE และการแนะนำสินค้า")
     add_body_paragraph(
         doc,
-        "โมดูลวิเคราะห์พฤติกรรมลูกค้าดึงข้อมูลประวัติการสั่งซื้อจากตาราง orders มาสกัดคุณลักษณะ 4 มิติของลูกค้าแต่ละราย ได้แก่ ยอดซื้อสะสมรวม (Total Spent), จำนวนครั้งที่สั่งซื้อ (Frequency), ยอดซื้อเฉลี่ยต่อบิล (Average Order Value) และจำนวนวันที่ห่างจากการสั่งซื้อครั้งล่าสุด (Recency) จากนั้นทำการปรับสเกลข้อมูลด้วยวิธี Min-Max Normalization และประมวลผลจัดกลุ่มด้วยอัลกอริทึม K-Means (K = 4) พร้อมกำหนดป้ายชื่อกลุ่มตามค่าจุดศูนย์กลาง (Centroids) ออกเป็น 4 กลุ่ม ได้แก่ ลูกค้าประจำ (VIP), ลูกค้าทั่วไป, ลูกค้าใหม่ และลูกค้าห่างหาย ควบคู่กับการสร้างเมทริกซ์การเกิดร่วม (Co-occurrence Matrix) จากตาราง order_items เพื่อค้นหาคู่ชนิดผักที่มีความถี่ในการถูกสั่งซื้อพร้อมกันสูงสุดสำหรับใช้แสดงผลแนะนำสินค้า",
+        "โมดูลวิเคราะห์พฤติกรรมลูกค้าดึงข้อมูลประวัติการสั่งซื้อที่สำเร็จจากตาราง orders และ order_items มาสกัดคุณลักษณะเชิงปริมาณ 4 มิติของลูกค้าแต่ละราย ได้แก่ (1) จำนวนครั้งที่สั่งซื้อสำเร็จ (order_count) (2) ยอดซื้อสะสมรวมทั้งหมด (total_spend) (3) มูลค่าเฉลี่ยต่อคำสั่งซื้อ (avg_order_value) และ (4) ปริมาณสินค้าที่สั่งซื้อรวม (total_items) จากนั้นทำการปรับสเกลข้อมูลให้อยู่ในช่วง 0 ถึง 1 ด้วยวิธี Min-Max Normalization และประมวลผลจัดกลุ่มด้วยอัลกอริทึม K-Means กำหนดจำนวนกลุ่ม K = 3 ตามลักษณะพฤติกรรมการบริโภคผักจริงของฟาร์ม ได้แก่ (1) กลุ่มสลัดเลิฟเวอร์ (Salad Lovers) ชื่นชอบผักสลัดกลุ่มกรีนโอ๊ค เรดโอ๊ค คอส และบัตเตอร์เฮด (2) กลุ่มลูกค้าประจำเพื่อสุขภาพ (Health Regulars) ชื่นชอบผักเพื่อสุขภาพ เช่น เคล กวางตุ้ง ผักบุ้ง และซื้อน้ำสลัดควบคู่ และ (3) กลุ่มร้านอาหารและค้าส่ง (Bulk & B2B) ที่สั่งซื้อผักสดในปริมาณมากและมีมูลค่าบิลสูง",
+    )
+    add_body_paragraph(
+        doc,
+        "ผลลัพธ์การจัดกลุ่มจะถูกบันทึกเชื่อมโยงกับรหัสลูกค้า (customers.cluster_id) เพื่อนำไปใช้งานใน 2 รูปแบบสำคัญ ได้แก่ (1) การยิงแจ้งเตือนผ่านแผงควบคุม AI บนแดชบอร์ด โดยมีปุ่ม 'ยิงแจ้งเตือน LINE' เปิดหน้าต่างเลือกกลุ่มลูกค้าเป้าหมาย ชนิดผัก และข้อความ เพื่อส่งการ์ดแจ้งเตือน LINE Flex Message ไปยัง LINE OA ของลูกค้าเฉพาะกลุ่มเป้าหมายโดยตรง และ (2) การแจ้งเตือนอัตโนมัติเมื่อเก็บเกี่ยวผลผลิตเข้าสต็อก ควบคู่กับการสร้างเมทริกซ์การเกิดร่วม (Co-occurrence Matrix) จากตาราง order_items เพื่อค้นหาคู่ชนิดผักที่มีความถี่ในการถูกสั่งซื้อร่วมกันสูงสุดสำหรับนำไปแสดงผลแนะนำสินค้าในหน้าร้าน LINE LIFF และเป็นบริบทให้แชทบอท Gemini AI แนะนำสินค้าเพิ่มเติม",
     )
 
     add_subsection_heading(doc, "3.6.4 กลไกผู้ช่วยสนทนา Google Gemini AI แบบ Dynamic Context Injection และ Multi-Model Fallback")
     add_body_paragraph(
         doc,
-        "เมื่อลูกค้าส่งข้อความเข้ามาทาง LINE Official Account เซิร์ฟเวอร์จะตรวจสอบข้อความผ่านตัวกรองคำสั่งด่วนและส่งต่อไปยังบริการ Google Gemini AI โดยระบบจะดึงข้อมูลสต็อกผักคงเหลือจริงจากตาราง stock ณ ขณะนั้นมาประกอบเป็น System Prompt (Dynamic Context Injection) เพื่อบังคับให้โมเดลตอบเฉพาะข้อมูลที่มีอยู่จริงและสกัดคำสั่งซื้อออกมาในโครงสร้าง JSON ที่พร้อมตัดสต็อกอัตโนมัติ ทั้งนี้ เพื่อป้องกันปัญหาการหยุดทำงานเมื่อโมเดลหลักติดข้อจำกัดโควตา (HTTP 429 Resource Exhausted) ระบบจึงจัดเรียงลำดับโมเดลสำรอง (Candidate Models) จำนวน 5 รุ่นในไฟล์บริการ gemini.js ดังแสดงในตารางที่ 3.4",
+        "เมื่อลูกค้าส่งข้อความเข้ามาทาง LINE Official Account เซิร์ฟเวอร์จะตรวจสอบข้อความผ่านตัวกรองคำสั่งด่วนและส่งต่อไปยังบริการ Google Gemini AI โดยระบบจะดึงข้อมูลสต็อกผักคงเหลือจริงจากตาราง stock ณ ขณะนั้นมาประกอบเป็น System Prompt (Dynamic Context Injection) เพื่อบังคับให้โมเดลตอบเฉพาะข้อมูลที่มีอยู่จริงและสกัดคำสั่งซื้อออกมาในโครงสร้าง JSON ที่พร้อมตัดสต็อกอัตโนมัติ ทั้งนี้ เพื่อป้องกันปัญหาการหยุดทำงานเมื่อโมเดลหลักติดข้อจำกัดโควตา (HTTP 429 Resource Exhausted) ระบบจึงจัดเรียงลำดับโมเดลสำรอง (Candidate Models) จำนวน 5 รุ่นในไฟล์บริการ gemini.js ดังแสดงในตารางที่ 3.22",
     )
 
-    add_table_caption(doc, "ตารางที่ 3.4  ลำดับโมเดลภาษา Google Gemini ในกลไกสลับโมเดลสำรองอัตโนมัติ (Multi-Model Fallback)")
+    add_table_caption(doc, "ตารางที่ 3.22  ลำดับโมเดลภาษา Google Gemini ในกลไกสลับโมเดลสำรองอัตโนมัติ (Multi-Model Fallback)")
 
     gem_headers = ["ลำดับ", "ชื่อรหัสโมเดล (Model ID)", "บทบาทในระบบ", "คุณลักษณะและเงื่อนไขการสลับใช้งาน"]
     gem_rows = [
@@ -401,10 +448,10 @@ def append_chapter3(doc, scratch_dir):
 
     add_body_paragraph(
         doc,
-        "สำหรับเกณฑ์การแปลผลระดับคุณภาพและความพึงพอใจจากคะแนนรวมเฉลี่ย (คะแนนเต็ม 100 คะแนน) และคะแนนเฉลี่ยรายด้าน (คะแนนเต็ม 25 คะแนน) แสดงดังตารางที่ 3.5",
+        "สำหรับเกณฑ์การแปลผลระดับคุณภาพและความพึงพอใจจากคะแนนรวมเฉลี่ย (คะแนนเต็ม 100 คะแนน) และคะแนนเฉลี่ยรายด้าน (คะแนนเต็ม 25 คะแนน) แสดงดังตารางที่ 3.23",
     )
 
-    add_table_caption(doc, "ตารางที่ 3.5  เกณฑ์การให้คะแนนและการแปลผลระดับคุณภาพของระบบ")
+    add_table_caption(doc, "ตารางที่ 3.23  เกณฑ์การให้คะแนนและการแปลผลระดับคุณภาพของระบบ")
 
     crit_headers = ["ระดับคะแนนดิบรายข้อ", "คะแนนแปลงรายข้อ (×1.25)", "ช่วงคะแนนเฉลี่ยรายด้าน (เต็ม 25)", "ช่วงคะแนนเฉลี่ยรวม (เต็ม 100)", "การแปลผลระดับคุณภาพ"]
     crit_rows = [

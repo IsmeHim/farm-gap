@@ -4,10 +4,18 @@ USE farmgap;
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
   email VARCHAR(255) UNIQUE NOT NULL,
+  username VARCHAR(100) UNIQUE NULL,
   password_hash VARCHAR(255) NOT NULL,
   display_name VARCHAR(255),
   farm_name VARCHAR(255),
-  role ENUM('owner','worker') DEFAULT 'owner',
+  phone VARCHAR(50),
+  role ENUM('owner','worker','user') DEFAULT 'owner',
+  bank_name VARCHAR(100),
+  bank_account_no VARCHAR(50),
+  bank_account_name VARCHAR(150),
+  promptpay_number VARCHAR(50),
+  line_user_id VARCHAR(255),
+  frontend_url VARCHAR(255),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -24,26 +32,24 @@ CREATE TABLE IF NOT EXISTS crops (
   default_price DECIMAL(10,2) DEFAULT 20.00,
   icon VARCHAR(50) DEFAULT 'leaf',
   notes TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS plots (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
   plot_number INT DEFAULT 1,
+  user_id INT NOT NULL,
   name VARCHAR(255) NOT NULL,
   dimension VARCHAR(100) DEFAULT 'แคร่ 2 x 6 เมตร',
   soil_recipe TEXT,
   soil_prep_date DATE NULL,
   seed_prep_date DATE NULL,
-  seed_notes TEXT NULL,
   seed_crop_id INT NULL,
   crop_name VARCHAR(255) NULL,
   area_sqm DECIMAL(10,2),
   planting_date DATE NULL,
-  expected_harvest_date DATE,
-  soil_test_date DATE,
-  soil_test_result VARCHAR(255),
+  expected_harvest_date DATE NULL,
   field_safety_status VARCHAR(50) DEFAULT 'ปลอดภัย',
   status VARCHAR(50) DEFAULT 'empty',
   current_batch_id INT NULL,
@@ -78,10 +84,28 @@ CREATE TABLE IF NOT EXISTS planting_batches (
   FOREIGN KEY (crop_id) REFERENCES crops(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS crop_activities (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  plot_id INT NOT NULL,
+  batch_id INT NULL,
+  activity_date DATE NOT NULL,
+  stage VARCHAR(50) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  materials_used TEXT NULL,
+  details TEXT NULL,
+  operator_name VARCHAR(255) DEFAULT 'เจ้าของฟาร์ม',
+  source_type VARCHAR(32) NULL,
+  source_id INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (plot_id) REFERENCES plots(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS chemical_logs (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,
   plot_id INT NOT NULL,
+  batch_id INT NULL,
   log_date DATE NOT NULL,
   chem_type VARCHAR(100) NOT NULL,
   product_name VARCHAR(255) NOT NULL,
@@ -155,55 +179,6 @@ CREATE TABLE IF NOT EXISTS harvest_logs (
   FOREIGN KEY (plot_id) REFERENCES plots(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS storage_logs (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
-  harvest_id INT,
-  log_date DATE NOT NULL,
-  storage_location VARCHAR(255),
-  shipped_to VARCHAR(255),
-  buyer VARCHAR(255),
-  vehicle VARCHAR(255),
-  vehicle_clean_status BOOLEAN DEFAULT FALSE,
-  storage_conditions TEXT,
-  transport_time TIME,
-  delivery_condition VARCHAR(50),
-  worker_name VARCHAR(255),
-  notes TEXT,
-  created_by VARCHAR(255),
-  updated_by VARCHAR(255),
-  updated_at TIMESTAMP NULL DEFAULT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS cost_logs (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
-  plot_id INT,
-  log_date DATE NOT NULL,
-  category VARCHAR(100) NOT NULL,
-  description TEXT,
-  amount DECIMAL(12,2) NOT NULL,
-  created_by VARCHAR(255),
-  updated_by VARCHAR(255),
-  updated_at TIMESTAMP NULL DEFAULT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
-
-CREATE TABLE IF NOT EXISTS audit_logs (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  table_name VARCHAR(255) NOT NULL,
-  record_id INT,
-  action VARCHAR(50) NOT NULL,
-  user_email VARCHAR(255),
-  old_values JSON,
-  new_values JSON,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE IF NOT EXISTS customer_clusters (
   id INT AUTO_INCREMENT PRIMARY KEY,
   cluster_name VARCHAR(100) NOT NULL,
@@ -230,7 +205,7 @@ CREATE TABLE IF NOT EXISTS products (
   name VARCHAR(255) NOT NULL,
   category VARCHAR(100) DEFAULT 'ผักสลัด',
   price DECIMAL(10,2) NOT NULL,
-  unit VARCHAR(50) DEFAULT 'กก.',
+  unit VARCHAR(50) DEFAULT 'ถุง',
   stock_quantity DECIMAL(10,2) DEFAULT 0,
   image_url TEXT,
   status VARCHAR(50) DEFAULT 'available',
@@ -247,10 +222,11 @@ CREATE TABLE IF NOT EXISTS orders (
   status VARCHAR(50) DEFAULT 'pending',
   delivery_type VARCHAR(50) DEFAULT 'delivery',
   payment_method VARCHAR(50) DEFAULT 'transfer',
-  delivery_date DATE,
   slip_image_url LONGTEXT,
-  tracking_number VARCHAR(100) NULL,
   notes TEXT,
+  recipient_name VARCHAR(255) NULL,
+  recipient_phone VARCHAR(50) NULL,
+  recipient_address TEXT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
@@ -263,6 +239,8 @@ CREATE TABLE IF NOT EXISTS order_items (
   quantity DECIMAL(10,2) NOT NULL,
   unit_price DECIMAL(10,2) NOT NULL,
   subtotal DECIMAL(10,2) NOT NULL,
+  harvest_date DATE NULL,
+  lot_code VARCHAR(100) NULL,
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
 );
@@ -287,22 +265,51 @@ CREATE TABLE IF NOT EXISTS line_chat_sessions (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS crop_activities (
+CREATE TABLE IF NOT EXISTS storage_logs (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,
-  plot_id INT NOT NULL,
-  batch_id INT NULL,
-  activity_date DATE NOT NULL,
-  stage VARCHAR(50) NOT NULL,
-  title VARCHAR(255) NOT NULL,
-  materials_used TEXT NULL,
-  details TEXT NULL,
-  operator_name VARCHAR(255) DEFAULT 'เจ้าของฟาร์ม',
-  image_url TEXT NULL,
-  notes TEXT NULL,
-  source_type VARCHAR(32) NULL,
-  source_id INT NULL,
+  order_id INT NULL,
+  log_date DATE NOT NULL,
+  storage_location VARCHAR(255),
+  shipped_to VARCHAR(255),
+  buyer VARCHAR(255),
+  vehicle VARCHAR(255),
+  vehicle_clean_status BOOLEAN DEFAULT FALSE,
+  storage_conditions TEXT,
+  transport_time TIME,
+  delivery_condition VARCHAR(50),
+  worker_name VARCHAR(255),
+  notes TEXT,
+  created_by VARCHAR(255),
+  updated_by VARCHAR(255),
+  updated_at TIMESTAMP NULL DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (plot_id) REFERENCES plots(id) ON DELETE CASCADE
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS cost_logs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  plot_id INT NULL,
+  log_date DATE NOT NULL,
+  category VARCHAR(100) NOT NULL,
+  description TEXT,
+  amount DECIMAL(12,2) NOT NULL,
+  created_by VARCHAR(255),
+  updated_by VARCHAR(255),
+  updated_at TIMESTAMP NULL DEFAULT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  table_name VARCHAR(255) NOT NULL,
+  record_id INT,
+  action VARCHAR(50) NOT NULL,
+  user_email VARCHAR(255),
+  old_values JSON,
+  new_values JSON,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

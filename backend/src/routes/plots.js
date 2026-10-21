@@ -6,11 +6,10 @@ import { authRequired } from '../middleware/auth.js';
 export const plotsRouter = Router();
 plotsRouter.use(authRequired);
 
-// Ensure soil_prep_date, seed_prep_date, seed_notes, seed_crop_id columns exist on plots, and batch_id on crop_activities
+// Ensure soil_prep_date, seed_prep_date, seed_crop_id columns exist on plots, and batch_id on crop_activities
 pool.query('ALTER TABLE plots ADD COLUMN soil_prep_date DATE NULL AFTER soil_recipe').catch(() => {});
 pool.query('ALTER TABLE plots ADD COLUMN seed_prep_date DATE NULL AFTER soil_prep_date').catch(() => {});
-pool.query('ALTER TABLE plots ADD COLUMN seed_notes TEXT NULL AFTER seed_prep_date').catch(() => {});
-pool.query('ALTER TABLE plots ADD COLUMN seed_crop_id INT NULL AFTER seed_notes').catch(() => {});
+pool.query('ALTER TABLE plots ADD COLUMN seed_crop_id INT NULL AFTER seed_prep_date').catch(() => {});
 pool.query('ALTER TABLE crop_activities ADD COLUMN batch_id INT NULL AFTER plot_id').catch(() => {});
 pool.query('ALTER TABLE planting_batches ADD COLUMN updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP').catch(() => {});
 
@@ -235,7 +234,6 @@ plotsRouter.post('/:id/reset', async (req, res) => {
            expected_harvest_date = NULL,
            current_batch_id = NULL,
            seed_prep_date = NULL,
-           seed_notes = NULL,
            seed_crop_id = NULL,
            soil_prep_date = NULL,
            soil_recipe = NULL,
@@ -413,7 +411,6 @@ plotsRouter.delete('/activities/:activityId', async (req, res) => {
           `UPDATE plots 
            SET seed_crop_id = NULL, 
                seed_prep_date = NULL, 
-               seed_notes = NULL,
                updated_at = NOW() 
            WHERE id = ? AND user_id = ?`,
           [plot_id, req.user.id]
@@ -655,18 +652,13 @@ plotsRouter.use('/', crudRouter('plots', [
   'area_sqm',
   'planting_date',
   'expected_harvest_date',
-  'soil_test_date',
-  'soil_test_result',
   'field_safety_status',
   'soil_recipe',
   'soil_prep_date',
   'seed_prep_date',
-  'seed_notes',
   'seed_crop_id',
   'dimension',
   'plot_number',
   'status',
   'notes',
-  'default_worker_name',
-  'cycle_number',
 ]));

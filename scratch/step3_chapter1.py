@@ -53,13 +53,23 @@ def configure_chapter_section_page_numbering(section, start_page=None):
     run._r.append(fldChar2)
     run._r.append(fldChar3)
 
+    sectPr = section._sectPr
+    pgNumType = sectPr.find(qn("w:pgNumType"))
     if start_page is not None:
-        sectPr = section._sectPr
-        pgNumType = sectPr.find(qn("w:pgNumType"))
         if pgNumType is None:
             pgNumType = OxmlElement("w:pgNumType")
             sectPr.append(pgNumType)
+        pgNumType.set(qn("w:fmt"), "decimal")
         pgNumType.set(qn("w:start"), str(start_page))
+    else:
+        if pgNumType is not None:
+            if qn("w:start") in pgNumType.attrib:
+                del pgNumType.attrib[qn("w:start")]
+            pgNumType.set(qn("w:fmt"), "decimal")
+        else:
+            pgNumType = OxmlElement("w:pgNumType")
+            pgNumType.set(qn("w:fmt"), "decimal")
+            sectPr.append(pgNumType)
 
 
 def add_chapter_heading(doc, chapter_num_str, chapter_title_str):
@@ -99,9 +109,10 @@ def add_numbered_item(doc, number_prefix, item_text, bold_prefix=False, space_af
     """
     สร้างรายการย่อยแบบ Hanging Indent (เช่น 1.3.1 ..., 1.7.1 ...)
     ให้บรรทัดที่ 2 ตรงกับข้อความหลังหมายเลขเหมือนเล่มตัวอย่าง AEGis
+    พร้อมจัดข้อความแบบ Thai Justify ให้ชิดขอบขวาเสมอกัน
     """
     p = doc.add_paragraph()
-    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    p.alignment = WD_ALIGN_PARAGRAPH.THAI_JUSTIFY
     p.paragraph_format.left_indent = Inches(0.55)
     p.paragraph_format.first_line_indent = Inches(-0.55)
     p.paragraph_format.space_before = Pt(0)
@@ -121,7 +132,7 @@ def add_numbered_item(doc, number_prefix, item_text, bold_prefix=False, space_af
 
 def add_term_definition(doc, number_prefix, term_name, definition_text, space_after_pt=4):
     p = doc.add_paragraph()
-    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    p.alignment = WD_ALIGN_PARAGRAPH.THAI_JUSTIFY
     p.paragraph_format.left_indent = Inches(0.55)
     p.paragraph_format.first_line_indent = Inches(-0.55)
     p.paragraph_format.space_before = Pt(0)
@@ -145,7 +156,7 @@ def add_term_definition(doc, number_prefix, term_name, definition_text, space_af
 def append_chapter1(doc):
     sec_ch1 = doc.add_section(WD_SECTION.NEW_PAGE)
     set_section_margins(sec_ch1)
-    configure_chapter_section_page_numbering(sec_ch1, start_page=1)
+    configure_chapter_section_page_numbering(sec_ch1, start_page=None)
 
     # หัวบทที่ 1 (20 pt ตัวหนา จัดกึ่งกลาง)
     add_chapter_heading(doc, "บทที่ 1", "บทนำ")
@@ -219,7 +230,7 @@ def append_chapter1(doc):
     add_numbered_item(
         doc,
         "1.3.3",
-        "เพื่อประยุกต์ใช้เทคโนโลยีปัญญาประดิษฐ์ในการวิเคราะห์และจัดกลุ่มพฤติกรรมลูกค้าด้วยอัลกอริทึม K-Means Clustering การแนะนำสินค้าที่มักซื้อคู่กันด้วย Co-occurrence Matrix และการพัฒนาผู้ช่วยสนทนาอัจฉริยะด้วยโมเดลภาษา Google Gemini สำหรับตอบคำถามและรับคำสั่งซื้ออัตโนมัติโดยอ้างอิงข้อมูลสต็อกจริง",
+        "เพื่อประยุกต์ใช้เทคโนโลยีปัญญาประดิษฐ์ในการวิเคราะห์และจัดกลุ่มพฤติกรรมลูกค้าด้วยอัลกอริทึม K-Means Clustering (3 กลุ่มเป้าหมาย) เพื่อการยิงแจ้งเตือนสินค้าผักสดและโปรโมชันผ่าน LINE OA, การแนะนำสินค้าที่มักซื้อคู่กันด้วย Co-occurrence Matrix และการพัฒนาผู้ช่วยสนทนาอัจฉริยะด้วยโมเดลภาษา Google Gemini สำหรับตอบคำถามและรับคำสั่งซื้ออัตโนมัติโดยอ้างอิงข้อมูลสต็อกจริง",
     )
     add_numbered_item(
         doc,
@@ -250,7 +261,7 @@ def append_chapter1(doc):
     add_numbered_item(
         doc,
         "1.4.3",
-        "RQ3 (การวิเคราะห์ข้อมูลและผู้ช่วยสนทนาปัญญาประดิษฐ์): โมดูลปัญญาประดิษฐ์ที่ประกอบด้วย K-Means Clustering แบบ 4 มิติ, Co-occurrence Matrix และ Google Gemini AI พร้อมกลไก Multi-Model Fallback สามารถจัดกลุ่มลูกค้า แนะนำสินค้าคู่กัน และตอบแชทรับคำสั่งซื้อจากสต็อกจริงได้อย่างถูกต้องเพียงใด",
+        "RQ3 (การวิเคราะห์ข้อมูลและผู้ช่วยสนทนาปัญญาประดิษฐ์): โมดูลปัญญาประดิษฐ์ที่ประกอบด้วย K-Means Clustering แบบ 4 มิติ (แบ่ง 3 กลุ่มเป้าหมาย), Co-occurrence Matrix และ Google Gemini AI พร้อมกลไก Multi-Model Fallback สามารถจัดกลุ่มลูกค้าเพื่อยิงแจ้งเตือนผักสด แนะนำสินค้าคู่กัน และตอบแชทรับคำสั่งซื้อจากสต็อกจริงได้อย่างถูกต้องเพียงใด",
     )
     add_numbered_item(
         doc,
@@ -281,7 +292,7 @@ def append_chapter1(doc):
     add_numbered_item(
         doc,
         "1.5.3",
-        "ด้านการวิเคราะห์ข้อมูลลูกค้าและการตลาด ช่วยให้ฟาร์มสามารถจำแนกกลุ่มลูกค้าตามพฤติกรรมการซื้อด้วยอัลกอริทึม K-Means Clustering นำเสนอรายการผักที่มักซื้อคู่กันเพื่อเพิ่มยอดขายต่อคำสั่งซื้อ และลดภาระการตอบคำถามซ้ำซ้อนด้วยผู้ช่วยสนทนา Google Gemini AI ที่ทำงานได้ตลอด 24 ชั่วโมง",
+        "ด้านการวิเคราะห์ข้อมูลลูกค้าและการตลาด ช่วยให้ฟาร์มสามารถจำแนกกลุ่มลูกค้าตามพฤติกรรมการซื้อด้วยอัลกอริทึม K-Means Clustering ออกเป็น 3 กลุ่มเป้าหมายทางการตลาด (สลัดเลิฟเวอร์, ลูกค้าประจำเพื่อสุขภาพ, กลุ่มร้านอาหารและค้าส่ง) และสามารถยิงแจ้งเตือนสินค้าผักสดที่เพิ่งเก็บเกี่ยวไปยัง LINE ของลูกค้าเฉพาะกลุ่มได้อย่างแม่นยำ พร้อมทั้งนำเสนอรายการผักที่มักซื้อคู่กันเพื่อเพิ่มยอดขายต่อคำสั่งซื้อ และลดภาระการตอบคำถามซ้ำซ้อนด้วยผู้ช่วยสนทนา Google Gemini AI ที่ทำงานได้ตลอด 24 ชั่วโมง",
     )
     add_numbered_item(
         doc,
@@ -317,7 +328,7 @@ def append_chapter1(doc):
     add_numbered_item(
         doc,
         "1.6.4",
-        "ขอบเขตด้านโมดูลปัญญาประดิษฐ์ (AI Modules) ครอบคลุม 3 ส่วน ได้แก่ (1) การจัดกลุ่มลูกค้าด้วยอัลกอริทึม K-Means Clustering จากตัวแปร 4 มิติ (ยอดซื้อรวม, จำนวนครั้งที่สั่งซื้อ, มูลค่าเฉลี่ยต่อออเดอร์ และจำนวนวันที่ห่างจากการสั่งซื้อครั้งล่าสุด) แบ่งออกเป็น 4 กลุ่ม คือ ลูกค้าประจำ (VIP), ลูกค้าทั่วไป, ลูกค้าใหม่ และลูกค้าห่างหาย (2) การวิเคราะห์สินค้าที่มักซื้อคู่กันด้วย Co-occurrence Matrix เพื่อแนะนำสินค้าในหน้า LIFF และแชทบอท และ (3) ระบบสนทนาอัจฉริยะด้วยโมเดลภาษา Google Gemini (ใช้โมเดล gemini-3.5-flash-lite เป็นโมเดลหลัก พร้อมกลไกสลับโมเดลสำรองอัตโนมัติ Multi-Model Fallback) สำหรับตอบคำถามเกี่ยวกับสินค้าในสต็อก แนะนำเมนูอาหาร และสกัดรายการสั่งซื้อพร้อมที่อยู่จัดส่งจากข้อความภาษาไทย",
+        "ขอบเขตด้านโมดูลปัญญาประดิษฐ์ (AI Modules) ครอบคลุม 3 ส่วน ได้แก่ (1) การจัดกลุ่มลูกค้าด้วยอัลกอริทึม K-Means Clustering จากคุณลักษณะพฤติกรรม 4 มิติ (จำนวนครั้งที่สั่งซื้อ, ยอดซื้อรวม, มูลค่าเฉลี่ยต่อออเดอร์ และจำนวนชิ้นผักสะสม) เพื่อจำแนกออกเป็น 3 กลุ่มเป้าหมายทางการตลาด ได้แก่ สลัดเลิฟเวอร์ (Salad Lovers), ลูกค้าประจำเพื่อสุขภาพ (Health Regulars) และกลุ่มร้านอาหารและค้าส่ง (Bulk & B2B) สำหรับนำไปใช้ในการยิงแจ้งเตือนสินค้าผักสด (Targeted LINE Push Notification) ทั้งจากหน้าแดชบอร์ดและหน้าบันทึกการเก็บเกี่ยว (2) การวิเคราะห์สินค้าที่มักซื้อคู่กันด้วย Co-occurrence Matrix เพื่อแนะนำสินค้าในหน้า LIFF และ (3) ระบบสนทนาอัจฉริยะด้วยโมเดลภาษา Google Gemini (ใช้โมเดล gemini-3.5-flash-lite เป็นโมเดลหลัก พร้อมกลไกสลับโมเดลสำรองอัตโนมัติ Multi-Model Fallback) สำหรับตอบคำถามเกี่ยวกับสินค้าในสต็อก แนะนำเมนูอาหาร และสกัดรายการสั่งซื้อพร้อมที่อยู่จัดส่งจากข้อความภาษาไทย",
     )
     add_numbered_item(
         doc,
@@ -384,7 +395,7 @@ def append_chapter1(doc):
         (
             "1.7.10",
             "อัลกอริทึม K-Means Clustering",
-            "หมายถึง อัลกอริทึมการเรียนรู้ของเครื่องแบบไม่มีผู้สอน (Unsupervised Learning) ที่นำมาใช้แบ่งกลุ่มลูกค้าของฟาร์มออกเป็น 4 กลุ่ม (ลูกค้าประจำ/VIP, ลูกค้าทั่วไป, ลูกค้าใหม่ และลูกค้าห่างหาย) จากคุณลักษณะพฤติกรรมการซื้อ 4 มิติ",
+            "หมายถึง อัลกอริทึมการเรียนรู้ของเครื่องแบบไม่มีผู้สอน (Unsupervised Learning) ที่นำมาใช้จัดกลุ่มลูกค้าของฟาร์มออกเป็น 3 กลุ่มพฤติกรรมเป้าหมาย (สลัดเลิฟเวอร์, ลูกค้าประจำเพื่อสุขภาพ, กลุ่มร้านอาหารและค้าส่ง) จากคุณลักษณะพฤติกรรมการซื้อ 4 มิติ เพื่อใช้ในการทำการตลาดเจาะจงกลุ่มเป้าหมายและยิงแจ้งเตือนสินค้าผักสดผ่าน LINE Flex Message",
         ),
         (
             "1.7.11",
