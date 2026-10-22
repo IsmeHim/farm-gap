@@ -60,6 +60,11 @@ plotsRouter.get('/', async (req, res) => {
       [req.user.id]
     );
 
+    const [chemLogs] = await pool.query(
+      `SELECT cl.* FROM chemical_logs cl WHERE cl.user_id = ? AND cl.phi_days > 0 ORDER BY cl.log_date DESC, cl.id DESC`,
+      [req.user.id]
+    );
+
     rows.forEach(p => {
       const plotBatches = allBatches.filter(b => b.plot_id === p.id);
       const activeBatch = plotBatches.find(b => b.status === 'growing' || b.status === 'harvest_ready');
@@ -98,6 +103,36 @@ plotsRouter.get('/', async (req, res) => {
           actual_harvest_date: b.actual_harvest_date,
           activities: activities.filter(a => a.batch_id === b.id),
         }));
+      // ตรวจสอบสถานะระยะปลอดภัยสารเคมี (PHI) ล่าสุดของแปลง (GAP ข้อ 3)
+      const plotChem = chemLogs.find(c => c.plot_id === p.id);
+      if (plotChem && (p.status === 'growing' || p.status === 'harvest_ready')) {
+        const chemDate = new Date(plotChem.log_date);
+        const safeDate = new Date(chemDate);
+        safeDate.setDate(safeDate.getDate() + Number(plotChem.phi_days));
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        safeDate.setHours(0, 0, 0, 0);
+        if (today < safeDate) {
+          const diffMs = safeDate - today;
+          const daysLeft = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+          p.phi_status = {
+            is_locked: true,
+            days_left: daysLeft,
+            product_name: plotChem.product_name || 'สารชีวภัณฑ์/เคมี',
+            log_date: plotChem.log_date ? new Date(plotChem.log_date).toISOString().split('T')[0] : '',
+            phi_days: plotChem.phi_days,
+            safe_date: safeDate.toISOString().split('T')[0],
+          };
+        } else {
+          p.phi_status = {
+            is_locked: false,
+            days_left: 0,
+            safe_date: safeDate.toISOString().split('T')[0],
+          };
+        }
+      } else {
+        p.phi_status = { is_locked: false, days_left: 0 };
+      }
     });
 
     res.json(rows);

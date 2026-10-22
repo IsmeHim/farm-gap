@@ -223,10 +223,11 @@ export async function notifyCustomerOrderStatus(orderId, newStatus, dispatchDeta
           type: 'button',
           action: {
             type: 'message',
-            label: '🛒 สั่งซื้อผักสด',
+          label: '🛒 กดสั่งซื้อผักใหม่',
             text: 'เมนูผัก',
           },
-          style: 'secondary',
+          style: 'primary',
+          color: '#15803d',
           height: 'sm',
         },
       ];

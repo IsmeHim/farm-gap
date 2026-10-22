@@ -21,7 +21,7 @@ import { replyInvoiceAndPayment, replySlipConfirmed } from './flex/invoiceCard.j
 import { replyCodOrderConfirmation } from './flex/codCard.js';
 import { replyPaymentMethodSelection } from './flex/paymentSelectionCard.js';
 import { replyOrderStatus, replyOrderHistory } from './flex/orderStatusCard.js';
-import { replyRefundInstructions, replyOwnerContact } from './flex/refundCard.js';
+import { replyRefundInstructions, replyOwnerContact, replyOrderCancelledCard } from './flex/refundCard.js';
 import { replyMissingContactInfo } from './flex/missingContactCard.js';
 import { replyCartSummary, replyCartClearedCard } from './flex/cartSummaryCard.js';
 import { replyProductQuantityCard } from './flex/productQtyCard.js';
@@ -662,41 +662,24 @@ export async function handleEvent(event) {
     if (shouldCancel) {
       if (session.state === 'AWAITING_PAYMENT' && session.order_id) {
         const cancelledCode = await cancelChatOrder(session.order_id);
-        const owner = await getOwnerContactInfo();
         await clearChatSession(userId);
-        return client.replyMessage({
-          replyToken: replyToken,
-          messages: [
-            {
-              type: 'text',
-              text: `ยกเลิกออเดอร์ ${cancelledCode} และคืนสต็อกผักสดเรียบร้อยแล้วครับ 🌱\n\n💸 หากคุณลูกค้าได้ทำการโอนเงินเข้ามาก่อนหน้านี้ สามารถส่งรูปสลิปพร้อมเลขบัญชีสำหรับรับเงินคืนในแชทนี้ หรือโทรแจ้งเจ้าของฟาร์มได้ที่เบอร์ ${owner.phone} (คุณ${owner.displayName}) ได้เลยครับ`,
-            },
-          ],
-        });
+        return replyOrderCancelledCard(replyToken, cancelledCode);
       }
 
       if (session.state === 'AWAITING_ADDRESS' || session.state === 'AWAITING_PAYMENT_METHOD') {
         await clearChatSession(userId);
-        return client.replyMessage({
-          replyToken: replyToken,
-          messages: [
-            {
-              type: 'text',
-              text: 'ยกเลิกรายการสั่งซื้อเรียบร้อยแล้วครับ หากต้องการสั่งซื้อใหม่อีกครั้ง แจ้งได้ตลอดเวลาครับ 🌱',
-            },
-          ],
-        });
+        return replyOrderCancelledCard(
+          replyToken,
+          null,
+          'ยกเลิกรายการที่อยู่ระหว่างการสั่งซื้อเรียบร้อยแล้วครับ หากต้องการสั่งซื้อใหม่ สามารถกดปุ่มสั่งซื้อผักด้านล่างนี้ได้เลยครับ 🌱'
+        );
       }
 
-      return client.replyMessage({
-        replyToken: replyToken,
-        messages: [
-          {
-            type: 'text',
-            text: 'ขณะนี้ไม่มีรายการที่อยู่ระหว่างการสั่งซื้อครับ หากต้องการสั่งผักสด พิมพ์แจ้งรายการได้เลยครับ เช่น "สั่งกรีนโอ๊ค 2 แพ็ค" 🌱',
-          },
-        ],
-      });
+      return replyOrderCancelledCard(
+        replyToken,
+        null,
+        'ขณะนี้ไม่มีรายการคำสั่งซื้อที่ค้างอยู่ครับ คุณลูกค้าสามารถกดปุ่มสั่งซื้อผักสดใหม่ด้านล่างนี้ได้ตลอดเวลาครับ 🌱'
+      );
     }
 
     // STATE: AWAITING_ADDRESS (Customer is providing shipping address & phone)
@@ -1227,15 +1210,11 @@ export async function handleEvent(event) {
               return replyRefundInstructions(replyToken);
             } else if (pm === 'cod') {
               await pool.query('UPDATE orders SET status = "cancelled" WHERE id = ?', [lastOrder.id]);
-              return client.replyMessage({
-                replyToken: replyToken,
-                messages: [
-                  {
-                    type: 'text',
-                    text: `ยกเลิกออเดอร์เก็บเงินปลายทาง (${lastOrder.order_code}) เรียบร้อยแล้วครับ หากต้องการสั่งซื้อใหม่สามารถพิมพ์บอกผักที่ต้องการได้เลยครับ 🌱`,
-                  },
-                ],
-              });
+              return replyOrderCancelledCard(
+                replyToken,
+                lastOrder.order_code,
+                `ยกเลิกออเดอร์เก็บเงินปลายทาง (#${lastOrder.order_code}) และคืนสต็อกเรียบร้อยแล้วครับ หากต้องการสั่งซื้อใหม่สามารถกดปุ่มด้านล่างนี้ได้เลยครับ 🌱`
+              );
             }
           }
         }

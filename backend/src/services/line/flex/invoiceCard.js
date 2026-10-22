@@ -14,7 +14,7 @@ export async function replyInvoiceAndPayment(replyToken, orderCode, totalAmount,
 
   try {
     const [owners] = await pool.query(
-      "SELECT farm_name, display_name, bank_name, bank_account_no, bank_account_name, promptpay_number, promptpay_qr_url FROM users WHERE role = 'owner' LIMIT 1"
+      "SELECT farm_name, display_name, bank_name, bank_account_no, bank_account_name, promptpay_number FROM users WHERE role = 'owner' LIMIT 1"
     );
     if (owners && owners[0]) {
       const o = owners[0];
@@ -34,8 +34,6 @@ export async function replyInvoiceAndPayment(replyToken, orderCode, totalAmount,
         finalQrUrl = `https://promptpay.io/${cleanPromptPay}/${totalAmount}.png`;
       } else if (cleanPromptPay) {
         finalQrUrl = `https://promptpay.io/${cleanPromptPay}.png`;
-      } else if (o.promptpay_qr_url && o.promptpay_qr_url.startsWith('https://')) {
-        finalQrUrl = o.promptpay_qr_url;
       }
 
       if (finalQrUrl) {
@@ -212,20 +210,8 @@ export async function replyInvoiceAndPayment(replyToken, orderCode, totalAmount,
                   margin: 'xs',
                 },
                 {
-                  type: 'button',
-                  action: {
-                    type: 'uri',
-                    label: `📥 บันทึกรูป QR Code (฿${totalAmount.toLocaleString()})`,
-                    uri: finalQrUrl,
-                  },
-                  style: 'primary',
-                  color: '#1b5e20',
-                  height: 'sm',
-                  margin: 'sm',
-                },
-                {
                   type: 'text',
-                  text: '💡 แตะปุ่มด้านบนเพื่อบันทึกรูป แล้วเปิดสแกนจากแอปธนาคาร',
+                  text: '💡 แตะรูป QR หรือกดปุ่มด้านล่างเพื่อบันทึกรูป แล้วเปิดสแกนจากแอปธนาคาร',
                   size: 'xxs',
                   color: '#888888',
                   wrap: true,

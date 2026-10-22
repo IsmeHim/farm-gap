@@ -869,20 +869,27 @@ export default function SmartHarvestModal({
               </button>
               <button
                 type="submit"
-                disabled={submitting}
-                className={`px-5 py-2.5 active:scale-95 text-white rounded-xl text-xs font-black shadow-md transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5 ${
-                  form.destination === 'cold_storage'
-                    ? 'bg-blue-600 hover:bg-blue-700'
-                    : 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700'
+                disabled={submitting || Boolean(selectedPlot?.phi_status?.is_locked)}
+                className={`px-5 py-2.5 text-white rounded-xl text-xs font-black shadow-md transition flex items-center gap-1.5 ${
+                  selectedPlot?.phi_status?.is_locked
+                    ? "bg-rose-500/90 cursor-not-allowed opacity-90 shadow-none"
+                    : form.destination === "cold_storage"
+                    ? "bg-blue-600 hover:bg-blue-700 active:scale-95 cursor-pointer"
+                    : "bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 active:scale-95 cursor-pointer"
                 }`}
               >
-                {form.destination === 'cold_storage' ? (
+                {selectedPlot?.phi_status?.is_locked ? (
+                  <>
+                    <AlertTriangle className="w-4 h-4 text-white shrink-0" />
+                    <span>⛔ ติดระยะปลอดภัย PHI (ไม่อนุญาตให้เก็บเกี่ยวตาม GAP)</span>
+                  </>
+                ) : form.destination === "cold_storage" ? (
                   <>
                     <span className="text-sm">❄️</span>
                     <span>
                       {submitting
-                        ? 'กำลังบันทึกนำเข้าห้องเย็น...'
-                        : '✓ บันทึกเก็บผลผลิต (นำเข้าห้องเย็น)'}
+                        ? "กำลังบันทึกนำเข้าห้องเย็น..."
+                        : "✓ บันทึกเก็บผลผลิต (นำเข้าห้องเย็น)"}
                     </span>
                   </>
                 ) : (
@@ -890,7 +897,7 @@ export default function SmartHarvestModal({
                     <PackageCheck className="w-4 h-4" />
                     <span>
                       {submitting
-                        ? 'กำลังบันทึกและวางขาย...'
+                        ? "กำลังบันทึกและวางขาย..."
                         : `✓ บันทึกและวางขายหน้าร้าน (+${Math.max(
                             1,
                             Math.floor(

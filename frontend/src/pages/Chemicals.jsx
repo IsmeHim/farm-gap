@@ -11,8 +11,11 @@ import {
   ChevronUp,
   FileText,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle,
+  Sprout
 } from 'lucide-react';
+import { getPlotProgressInfo, getDaysPlanted } from '../utils/plotUtils.js';
 
 const CHEMICAL_PRESETS = [
   {
@@ -165,17 +168,81 @@ function ChemicalCustomModal({ open, setOpen, editingId, form, setForm, save, pl
   const [saving, setSaving] = useState(false);
   const [isCustomUnit, setIsCustomUnit] = useState(false);
 
+  // คำนวณสถานะความพร้อมและประเภทของแปลงอย่างละเอียด
+  const getPlotStatusDetail = (p) => {
+    if (!p) return null;
+    const hasCrop = (p.status === 'growing' || p.status === 'harvest_ready') && p.crop_name && p.crop_name !== '-';
+    const isNursery = !hasCrop && Boolean(p.seed_prep_date || p.seed_crop_id || p.seed_crop_name);
+
+    if (isNursery) {
+      const nurseryCrop = p.seed_crop_name || p.crop_name || 'ต้นกล้า';
+      const days = p.seed_prep_date ? getDaysPlanted(p.seed_prep_date) : 0;
+      return {
+        type: 'nursery',
+        cropName: nurseryCrop,
+        label: `${p.name} — ${nurseryCrop} (🌱 กำลังเพาะกล้า • อายุกล้า ${days} วัน)`,
+        badgeText: 'กำลังเพาะกล้า',
+        days,
+        isSelectable: true,
+      };
+    }
+
+    if (hasCrop) {
+      const prog = getPlotProgressInfo(p, null);
+      const isHarvestReady = p.status === 'harvest_ready' || prog?.isReady || (prog && (prog.percent >= 100 || prog.daysLeft === 0));
+
+      if (isHarvestReady) {
+        return {
+          type: 'harvest_ready',
+          cropName: p.crop_name,
+          label: `${p.name} — ${p.crop_name} (✨ พร้อมเก็บเกี่ยวแล้ว 100% • อายุ ${prog?.plantAge || 0}/${prog?.growthDays || 0} วัน)`,
+          badgeText: 'พร้อมเก็บเกี่ยวแล้ว 100%',
+          plantAge: prog?.plantAge,
+          growthDays: prog?.growthDays,
+          isSelectable: true,
+        };
+      }
+
+      return {
+        type: 'growing',
+        cropName: p.crop_name,
+        label: `${p.name} — ${p.crop_name} (🌱 กำลังปลูก • โต ${prog?.percent || 0}% เหลือ ~${prog?.daysLeft || 0} วัน)`,
+        badgeText: 'กำลังปลูก',
+        plantAge: prog?.plantAge,
+        growthDays: prog?.growthDays,
+        daysLeft: prog?.daysLeft,
+        isSelectable: true,
+      };
+    }
+
+    return {
+      type: 'vacant',
+      cropName: '-',
+      label: `${p.name} (แปลงว่าง — ไม่มีผักปลูก)`,
+      badgeText: 'แปลงว่าง',
+      isSelectable: false,
+    };
+  };
+
+  const plotDetails = plots.map(p => ({ plot: p, detail: getPlotStatusDetail(p) }));
+  const growingPlots = plotDetails.filter(pd => pd.detail.type === 'growing');
+  const nurseryPlots = plotDetails.filter(pd => pd.detail.type === 'nursery');
+  const readyPlots = plotDetails.filter(pd => pd.detail.type === 'harvest_ready');
+  const emptyPlots = plotDetails.filter(pd => pd.detail.type === 'vacant');
+
+  const selectedPlotObj = plots.find(p => p.id === Number(form.plot_id));
+  const selectedDetail = getPlotStatusDetail(selectedPlotObj);
+
   const applyPreset = (preset) => {
     setSelectedPresetName(preset.name);
     setIsCustomUnit(false);
-    const firstActivePlot = plots.find(p => p.crop_name && p.crop_name !== '-' && p.status !== 'empty' && p.status !== 'vacant');
+    const firstActive = plotDetails.find(pd => pd.detail.isSelectable)?.plot;
     setForm(prev => {
-      const prevPlot = plots.find(p => p.id === Number(prev.plot_id));
-      const prevPlotVacant = !prevPlot || !prevPlot.crop_name || prevPlot.crop_name === '-' || prevPlot.status === 'empty' || prevPlot.status === 'vacant';
+      const curDetail = getPlotStatusDetail(plots.find(p => p.id === Number(prev.plot_id)));
       return {
         ...prev,
         ...preset.data,
-        plot_id: (!prevPlotVacant && prev.plot_id) ? prev.plot_id : (firstActivePlot?.id || ''),
+        plot_id: (curDetail && curDetail.isSelectable && prev.plot_id) ? prev.plot_id : (firstActive?.id || ''),
         log_date: prev.log_date || new Date().toISOString().split('T')[0],
         worker_name: prev.worker_name || 'เจ้าของฟาร์ม'
       };
@@ -185,10 +252,8 @@ function ChemicalCustomModal({ open, setOpen, editingId, form, setForm, save, pl
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const selectedPlot = plots.find(p => p.id === Number(form.plot_id));
-    const isSelectedVacant = selectedPlot && (!selectedPlot.crop_name || selectedPlot.crop_name === '-' || selectedPlot.status === 'empty' || selectedPlot.status === 'vacant');
-    if (!form.plot_id || (isSelectedVacant && !editingId)) {
-      toast.error('กรุณาเลือกแปลงที่กำลังปลูก (ไม่สามารถเลือกแปลงว่างได้)');
+    if (!form.plot_id || (!selectedDetail?.isSelectable && !editingId)) {
+      toast.error('กรุณาเลือกแปลงที่กำลังปลูกหรือกำลังเพาะกล้า (ไม่สามารถเลือกแปลงว่างได้)');
       return;
     }
     if (!form.product_name || !String(form.product_name).trim()) {
@@ -316,22 +381,108 @@ function ChemicalCustomModal({ open, setOpen, editingId, form, setForm, save, pl
                   onChange={e => setForm({ ...form, plot_id: Number(e.target.value) })}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm cursor-pointer shadow-2xs"
                 >
-                  <option value="">-- เลือกแปลง --</option>
-                  {plots.map(p => {
-                    const isVacant = !p.crop_name || p.crop_name === '-' || p.status === 'empty' || p.status === 'vacant';
-                    const isDisabled = isVacant && (!editingId || form.plot_id !== p.id);
-                    return (
-                      <option
-                        key={p.id}
-                        value={p.id}
-                        disabled={isDisabled}
-                        className={isDisabled ? 'text-slate-400 bg-slate-100' : ''}
-                      >
-                        {p.name} {isVacant ? '(แปลงว่าง — ไม่สามารถเลือกได้)' : `(🌱 ${p.crop_name})`}
-                      </option>
-                    );
-                  })}
+                  <option value="">-- เลือกแปลงที่ต้องการใส่ปุ๋ย/พ่นสาร --</option>
+
+                  {/* 1. แปลงที่กำลังปลูก */}
+                  {growingPlots.length > 0 && (
+                    <optgroup label="🌱 แปลงที่กำลังปลูก (เหมาะสำหรับการใส่ปุ๋ย/พ่นสาร)">
+                      {growingPlots.map(({ plot: p, detail }) => (
+                        <option key={p.id} value={p.id}>
+                          🌱 {detail.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+
+                  {/* 2. แปลงที่กำลังเพาะกล้า (เช่น แปลงที่ 2 ที่มีเมล็ด/ถาดกล้า) */}
+                  {nurseryPlots.length > 0 && (
+                    <optgroup label="🌱 แปลงที่กำลังเพาะกล้า (ให้ปุ๋ย/ชีวภัณฑ์ป้องกันเชื้อราในถาดหลุม)">
+                      {nurseryPlots.map(({ plot: p, detail }) => (
+                        <option key={p.id} value={p.id} className="text-teal-900 font-bold bg-teal-50">
+                          🌱 {detail.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+
+                  {/* 3. แปลงที่พร้อมเก็บเกี่ยวแล้ว (เช่น แปลงที่ 3 และ 6) */}
+                  {readyPlots.length > 0 && (
+                    <optgroup label="✨ แปลงที่พร้อมเก็บเกี่ยวแล้ว (คำเตือน: พร้อมเก็บเกี่ยวแล้ว 100%)">
+                      {readyPlots.map(({ plot: p, detail }) => (
+                        <option key={p.id} value={p.id} className="text-amber-800 font-bold bg-amber-50">
+                          ⚠️ {detail.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+
+                  {/* 4. แปลงว่าง (ไม่สามารถเลือกได้) */}
+                  {emptyPlots.length > 0 && (
+                    <optgroup label="⚪ แปลงว่าง (ไม่สามารถเลือกได้)">
+                      {emptyPlots.map(({ plot: p, detail }) => {
+                        const isDisabled = !editingId || form.plot_id !== p.id;
+                        return (
+                          <option
+                            key={p.id}
+                            value={p.id}
+                            disabled={isDisabled}
+                            className={isDisabled ? "text-slate-400 bg-slate-100" : ""}
+                          >
+                            ⚪ {detail.label}
+                          </option>
+                        );
+                      })}
+                    </optgroup>
+                  )}
                 </select>
+
+                {/* แสดงสถานะแปลง: กรณีพร้อมเก็บเกี่ยว (แจ้งเตือนป้องกันเจ้าของกดผิด) */}
+                {selectedDetail?.type === "harvest_ready" && (
+                  <div className="mt-2.5 p-3 bg-amber-50 border-2 border-amber-300 rounded-xl flex items-start gap-2.5 text-amber-900 animate-in fade-in">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="text-xs space-y-0.5">
+                      <strong className="text-amber-950 font-black block">
+                        ⚠️ คำเตือน: แปลงนี้อยู่ในสถานะ "พร้อมเก็บเกี่ยวแล้ว (100%)"
+                      </strong>
+                      <span className="text-[11.5px] text-amber-900 leading-relaxed block">
+                        ผัก <strong>"{selectedDetail.cropName}"</strong> ในแปลงนี้เติบโตครบกำหนดแล้ว (อายุ {selectedDetail.plantAge}/{selectedDetail.growthDays} วัน) พร้อมตัดจำหน่าย <br />
+                        หากให้ปุ๋ยหรือสารเคมีในระยะนี้ อาจส่งผลกระทบต่อรสชาติ หรือติดระยะปลอดภัย (PHI) ทำให้ต้องเลื่อนการเก็บเกี่ยวออกไปตามมาตรฐาน GAP
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* แสดงสถานะแปลง: กำลังเพาะกล้า (เช่น แปลงที่ 2) */}
+                {selectedDetail?.type === "nursery" && (
+                  <div className="mt-2.5 p-2.5 bg-teal-50 border border-teal-200 rounded-xl flex items-center gap-2 text-teal-900 animate-in fade-in">
+                    <Sprout className="w-4 h-4 text-teal-600 shrink-0" />
+                    <div className="text-[11.5px] leading-snug">
+                      <strong className="text-teal-950 block">🌱 สถานะ: กำลังเพาะกล้า ({selectedDetail.cropName})</strong>
+                      <span className="text-teal-800">
+                        อยู่ในถาดเพาะ รอย้ายลงแปลงปลูก (อายุกล้า {selectedDetail.days} วัน — สามารถพ่นน้ำหมักชีวภาพ หรือเชื้อราไตรโคเดอร์มาได้)
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* แสดงสถานะแปลง: กรณีมีประวัติติดระยะปลอดภัย PHI เดิม */}
+                {selectedPlotObj?.phi_status?.is_locked && (
+                  <div className="mt-2.5 p-2.5 bg-rose-50 border border-rose-300 rounded-xl flex items-start gap-2 text-rose-900 animate-in fade-in">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div className="text-[11.5px] leading-snug">
+                      <strong className="text-rose-950 block">⛔ แปลงนี้ยังติดระยะปลอดภัยเดิม (เหลืออีก {selectedPlotObj.phi_status.days_left} วัน)</strong>
+                      <span>สาร: {selectedPlotObj.phi_status.product_name} (ปลดล็อกวันที่ {selectedPlotObj.phi_status.safe_date})</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* แสดงสถานะแปลง: กำลังปลูกปกติ */}
+                {selectedDetail?.type === "growing" && (
+                  <div className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-800 font-bold bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>สถานะ: กำลังปลูก ({selectedDetail.cropName}) • อยู่ในระยะดูแลบำรุงรักษา</span>
+                  </div>
+                )}
               </div>
 
               <div>

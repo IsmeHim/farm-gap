@@ -96,7 +96,23 @@ harvestRouter.post('/smart-record', async (req, res) => {
       if (targetHarvestDate < safeDate) {
         const diffMs = safeDate - targetHarvestDate;
         const daysLeft = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
-        phiWarning = `⚠️ แปลงนี้มีประวัติใช้ "${chem.product_name || 'สารชีวภัณฑ์/เคมี'}" เมื่อ ${new Date(chem.log_date).toISOString().split('T')[0]} (ระยะปลอดภัย ${chem.phi_days} วัน) ยังเหลืออีก ${daysLeft} วันจึงจะพ้นระยะปลอดภัยตามมาตรฐาน GAP`;
+        const safeDateStr = safeDate.toISOString().split('T')[0];
+        const chemDateStr = new Date(chem.log_date).toISOString().split('T')[0];
+        const errorMsg = `⛔ ไม่อนุญาตให้เก็บเกี่ยวเนื่องจากติดระยะปลอดภัยสารเคมี (PHI): แปลงนี้มีการใช้ "${chem.product_name || 'สารชีวภัณฑ์/เคมี'}" เมื่อ ${chemDateStr} (ระยะปลอดภัย ${chem.phi_days} วัน) ยังคงเหลืออีก ${daysLeft} วัน (ปลอดภัยเก็บเกี่ยวได้ตั้งแต่วันที่ ${safeDateStr}) ตามมาตรฐาน GAP มกษ. 9001`;
+
+        if (!req.body.force_phi_override) {
+          return res.status(400).json({
+            success: false,
+            error: errorMsg,
+            is_phi_blocked: true,
+            days_left: daysLeft,
+            safe_date: safeDateStr,
+            chem_name: chem.product_name || 'สารชีวภัณฑ์/เคมี',
+            chem_date: chemDateStr,
+            phi_days: chem.phi_days,
+          });
+        }
+        phiWarning = errorMsg;
       }
     }
 
