@@ -21,7 +21,12 @@ aiRouter.get('/recommendations/:productId', async (req, res) => {
        ORDER BY r.score DESC LIMIT 3`,
       [req.params.productId]
     );
-    res.json(rows);
+    if (rows.length > 0) return res.json(rows);
+    const [liveRows] = await pool.query(
+      `SELECT oi1.product_id AS product_id, oi2.product_id AS recommended_product_id, p.id, p.name, p.price, p.unit, p.image_url, p.stock_quantity, COUNT(*) AS score, 'มักถูกซื้อร่วมกันบ่อยๆ' AS reason FROM order_items oi1 JOIN order_items oi2 ON oi1.order_id = oi2.order_id AND oi1.product_id != oi2.product_id JOIN products p ON oi2.product_id = p.id WHERE oi1.product_id = ? AND p.status = 'available' AND p.stock_quantity > 0 GROUP BY oi1.product_id, oi2.product_id, p.id, p.name, p.price, p.unit, p.image_url, p.stock_quantity ORDER BY score DESC LIMIT 3`,
+      [req.params.productId]
+    );
+    res.json(liveRows);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

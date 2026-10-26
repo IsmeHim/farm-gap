@@ -1,6 +1,48 @@
 import { pool } from '../../../db.js';
 import { client } from '../config.js';
 
+function f(id, value) {
+  const valStr = String(value);
+  const lenStr = ('00' + valStr.length).slice(-2);
+  return `${id}${lenStr}${valStr}`;
+}
+
+function crc16(data) {
+  let crc = 0xffff;
+  for (let i = 0; i < data.length; i++) {
+    crc ^= data.charCodeAt(i) << 8;
+    for (let j = 0; j < 8; j++) {
+      if ((crc & 0x8000) !== 0) {
+        crc = ((crc << 1) ^ 0x1021) & 0xffff;
+      } else {
+        crc = (crc << 1) & 0xffff;
+      }
+    }
+  }
+  return ('0000' + crc.toString(16).toUpperCase()).slice(-4);
+}
+
+export function generatePromptPayPayload(target, amount) {
+  const cleanTarget = String(target || '').replace(/[^0-9]/g, '');
+  if (!cleanTarget) return null;
+  const formattedTarget = cleanTarget.length >= 13
+    ? cleanTarget
+    : ('0000000000000' + cleanTarget.replace(/^0/, '66')).slice(-13);
+  const targetType = cleanTarget.length >= 15 ? '03' : cleanTarget.length >= 13 ? '02' : '01';
+  const numAmount = Number(amount);
+  const hasAmount = !isNaN(numAmount) && numAmount > 0;
+  const data = [
+    f('00', '01'),
+    f('01', hasAmount ? '12' : '11'),
+    f('29', f('00', 'A000000677010111') + f(targetType, formattedTarget)),
+    f('58', 'TH'),
+    f('53', '764'),
+    hasAmount ? f('54', numAmount.toFixed(2)) : '',
+  ].join('');
+  const dataToCrc = `${data}6304`;
+  return `${dataToCrc}${crc16(dataToCrc)}`;
+}
+
 // 5. Flex Message: ใบแจ้งหนี้และช่องทางโอนเงิน (Invoice & Payment)
 export async function replyInvoiceAndPayment(replyToken, orderCode, totalAmount, items, addressText) {
   let bankInfoLines = [
@@ -31,9 +73,11 @@ export async function replyInvoiceAndPayment(replyToken, orderCode, totalAmount,
       // Generate dynamic PromptPay QR code with locked amount
       const cleanPromptPay = (o.promptpay_number || '').replace(/[^0-9]/g, '');
       if (cleanPromptPay && totalAmount > 0) {
-        finalQrUrl = `https://promptpay.io/${cleanPromptPay}/${totalAmount}.png`;
+        const emvPayload = generatePromptPayPayload(cleanPromptPay, totalAmount);
+        finalQrUrl = emvPayload ? `https://api.qrserver.com/v1/create-qr-code/?size=500x500&margin=16&data=${encodeURIComponent(emvPayload)}` : null;
       } else if (cleanPromptPay) {
-        finalQrUrl = `https://promptpay.io/${cleanPromptPay}.png`;
+        const emvPayload = generatePromptPayPayload(cleanPromptPay, 0);
+        finalQrUrl = emvPayload ? `https://api.qrserver.com/v1/create-qr-code/?size=500x500&margin=16&data=${encodeURIComponent(emvPayload)}` : null;
       }
 
       if (finalQrUrl) {

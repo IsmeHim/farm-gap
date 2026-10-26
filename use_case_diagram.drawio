@@ -1,11 +1,11 @@
-<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36" version="29.6.3">
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36">
   <diagram id="farmgap-latest-usecase" name="FarmGAP Use Case Diagram (Latest)">
-    <mxGraphModel dx="1200" dy="650" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1550" pageHeight="1150" math="0" shadow="0">
+    <mxGraphModel dx="4120" dy="2248" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
         <mxCell id="sys_boundary" parent="1" style="swimlane;whiteSpace=wrap;html=1;startSize=36;fillColor=#f8fafc;strokeColor=#0f766e;strokeWidth=2;fontStyle=1;fontSize=14;align=left;spacingLeft=15;fontColor=#134e4a;rounded=1;arcSize=2;" value="&lt;b&gt;🌱 ระบบบริหารจัดการฟาร์มผักมาตรฐาน GAP (FarmGAP System - ฉบับปรับปรุงล่าสุด)&lt;/b&gt;" vertex="1">
-          <mxGeometry height="1020" width="940" x="250" y="40" as="geometry" />
+          <mxGeometry height="1020" width="940" x="440" y="40" as="geometry" />
         </mxCell>
         <mxCell id="zone1" parent="sys_boundary" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;dashPattern=6 6;fillColor=#f0fdf4;strokeColor=#16a34a;strokeWidth=1.5;verticalAlign=top;align=left;spacingTop=6;spacingLeft=12;fontStyle=1;fontSize=11;fontColor=#15803d;" value="1. การจัดการแปลง รอบการปลูก &amp; บันทึกเตรียมดิน (Plots, Batches &amp; Soil Prep)" vertex="1">
           <mxGeometry height="140" width="880" x="30" y="55" as="geometry" />
@@ -47,10 +47,10 @@
           <mxGeometry height="65" width="260" x="600" y="580" as="geometry" />
         </mxCell>
         <mxCell id="uc08" parent="sys_boundary" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#2563eb;strokeWidth=1.5;fontSize=11;fontStyle=1;fontColor=#0f172a;" value="UC08: ติดตามสถานะจัดส่งและประวัติใน LINE&lt;br&gt;&lt;font style=&quot;font-size: 10px; color: #64748b;&quot;&gt;(Track Order &amp; Delivery inside LINE Chat)&lt;/font&gt;" vertex="1">
-          <mxGeometry height="65" width="270" x="480" y="660" as="geometry" />
+          <mxGeometry height="65" width="270" x="590" y="663" as="geometry" />
         </mxCell>
         <mxCell id="uc09" parent="sys_boundary" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#2563eb;strokeWidth=1.5;fontSize=11;fontStyle=1;fontColor=#0f172a;" value="UC09: จัดการออเดอร์ &amp; พิมพ์ใบปะหน้า&lt;br&gt;&lt;font style=&quot;font-size: 10px; color: #64748b;&quot;&gt;(Manage Orders &amp; Shipping Label)&lt;/font&gt;" vertex="1">
-          <mxGeometry height="65" width="230" x="150" y="660" as="geometry" />
+          <mxGeometry height="65" width="230" x="220" y="610" as="geometry" />
         </mxCell>
         <mxCell id="uc10" parent="sys_boundary" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#2563eb;strokeWidth=1.5;fontSize=11;fontStyle=1;fontColor=#0f172a;" value="UC10: สแกนตรวจสอบย้อนกลับผลผลิต&lt;br&gt;&lt;font style=&quot;font-size: 10px; color: #64748b;&quot;&gt;(Trace Produce Origin via QR Code)&lt;/font&gt;" vertex="1">
           <mxGeometry height="65" width="260" x="600" y="745" as="geometry" />
@@ -74,13 +74,13 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="act_owner" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#dcfce7;strokeColor=#16a34a;strokeWidth=2.5;fontStyle=0;fontSize=13;fontColor=#0f172a;" value="🧑‍🌾&lt;br&gt;&lt;b&gt;เจ้าของฟาร์ม / เกษตรกร&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 10px; color: #475569;&quot;&gt;(Farm Owner / Farmer)&lt;/font&gt;" vertex="1">
-          <mxGeometry height="120" width="80" x="60" y="460" as="geometry" />
+          <mxGeometry height="120" width="80" x="250" y="460" as="geometry" />
         </mxCell>
         <mxCell id="act_customer" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#dbeafe;strokeColor=#2563eb;strokeWidth=2;fontStyle=0;fontSize=12;fontColor=#0f172a;" value="🛒&lt;br&gt;&lt;b&gt;ลูกค้า / ผู้บริโภค&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 10px; color: #475569;&quot;&gt;(Customer / Consumer)&lt;/font&gt;" vertex="1">
-          <mxGeometry height="110" width="70" x="1310" y="680" as="geometry" />
+          <mxGeometry height="110" width="70" x="1500" y="680" as="geometry" />
         </mxCell>
         <mxCell id="act_ext" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e8ff;strokeColor=#9333ea;strokeWidth=1.5;fontColor=#581c87;fontSize=11;align=center;" value="&lt;b&gt;🤖 ระบบภายนอก&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;• LINE Platform (LIFF/Messaging API)&lt;br&gt;• AI Engine (Gemini LLM / K-Means)&lt;/font&gt;" vertex="1">
-          <mxGeometry height="90" width="180" x="1255" y="320" as="geometry" />
+          <mxGeometry height="90" width="180" x="1445" y="320" as="geometry" />
         </mxCell>
         <mxCell id="line_o_1" edge="1" parent="1" source="act_owner" style="endArrow=none;html=1;strokeColor=#15803d;strokeWidth=1.5;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="uc01">
           <mxGeometry relative="1" as="geometry" />

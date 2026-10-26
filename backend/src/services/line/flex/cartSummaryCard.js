@@ -1,10 +1,56 @@
+import { pool } from '../../../db.js';
 import { client } from '../config.js';
 
-// Flex Message: สรุปตะกร้าสินค้าในห้องแชท (In-Chat Cart)
+// Helper: ดึงรายการผักแนะนำที่มักซื้อคู่กันกับสินค้าในตะกร้า (AI Market Basket / Co-occurrence)
+async function getCartRecommendations(cart) {
+  try {
+    const cartProductIds = cart.map(it => Number(it.product_id)).filter(Boolean);
+    if (cartProductIds.length === 0) return [];
+
+    // 1. ค้นหาจากตาราง product_recommendations ที่คำนวณไว้
+    const [recRows] = await pool.query(
+      `SELECT p.id, p.name, p.price, p.unit, p.stock_quantity, MAX(r.score) AS score
+       FROM product_recommendations r
+       JOIN products p ON r.recommended_product_id = p.id
+       WHERE r.product_id IN (?)
+         AND r.recommended_product_id NOT IN (?)
+         AND p.status = 'available'
+         AND p.stock_quantity > 0
+       GROUP BY p.id, p.name, p.price, p.unit, p.stock_quantity
+       ORDER BY score DESC
+       LIMIT 2`,
+      [cartProductIds, cartProductIds]
+    );
+    if (recRows.length > 0) return recRows;
+
+    // 2. Fallback: คำนวณสดจากประวัติการสั่งซื้อร่วมกันใน order_items (Real-time Co-occurrence)
+    const [liveRows] = await pool.query(
+      `SELECT p.id, p.name, p.price, p.unit, p.stock_quantity, COUNT(*) AS pair_count
+       FROM order_items oi1
+       JOIN order_items oi2 ON oi1.order_id = oi2.order_id AND oi1.product_id != oi2.product_id
+       JOIN products p ON oi2.product_id = p.id
+       WHERE oi1.product_id IN (?)
+         AND oi2.product_id NOT IN (?)
+         AND p.status = 'available'
+         AND p.stock_quantity > 0
+       GROUP BY p.id, p.name, p.price, p.unit, p.stock_quantity
+       ORDER BY pair_count DESC
+       LIMIT 2`,
+      [cartProductIds, cartProductIds]
+    );
+    return liveRows;
+  } catch (err) {
+    console.warn('Failed to fetch cart recommendations in LINE:', err.message);
+    return [];
+  }
+}
+
+// Flex Message: สรุปตะกร้าสินค้าในห้องแชท (In-Chat Cart) พร้อม AI แนะนำผักซื้อคู่กัน
 export async function replyCartSummary(replyToken, cart, newlyAddedItem = null) {
   const totalAmount = cart.reduce((sum, it) => sum + Number(it.subtotal || (it.quantity * it.price)), 0);
   const totalPacks = cart.reduce((sum, it) => sum + Number(it.quantity), 0);
   const totalKinds = cart.length;
+  const recommendations = await getCartRecommendations(cart);
 
   const itemRows = [];
   cart.forEach((it, idx) => {
@@ -63,6 +109,115 @@ export async function replyCartSummary(replyToken, cart, newlyAddedItem = null) 
   const headerNotice = newlyAddedItem
     ? `เพิ่ม "${newlyAddedItem.name}" (+${newlyAddedItem.addedQty} ถุง) ลงตะกร้าแล้ว!`
     : 'รายการสินค้าในตะกร้าปัจจุบันของคุณ';
+
+  // สร้างกล่อง AI แนะนำผักซื้อคู่กัน (ถ้ามีข้อมูลความสัมพันธ์)
+  const recommendationBox = recommendations.length > 0 ? [
+    {
+      type: 'box',
+      layout: 'vertical',
+      backgroundColor: '#f0fdf4',
+      borderColor: '#86efac',
+      borderWidth: '1px',
+      cornerRadius: 'lg',
+      paddingAll: 'md',
+      margin: 'md',
+      spacing: 'sm',
+      contents: [
+        {
+          type: 'text',
+          text: '🤖 AI แนะนำ: ผักยอดฮิตซื้อคู่กัน',
+          weight: 'bold',
+          size: 'xs',
+          color: '#15803d',
+        },
+        ...recommendations.map(rec => ({
+          type: 'box',
+          layout: 'horizontal',
+          alignItems: 'center',
+          backgroundColor: '#ffffff',
+          cornerRadius: 'md',
+          paddingAll: 'sm',
+          borderColor: '#dcfce7',
+          borderWidth: '1px',
+          contents: [
+            {
+              type: 'box',
+              layout: 'vertical',
+              flex: 7,
+              contents: [
+                {
+                  type: 'text',
+                  text: `🥗 ${rec.name}`,
+                  weight: 'bold',
+                  size: 'xs',
+                  color: '#1e293b',
+                  wrap: true,
+                },
+                {
+                  type: 'text',
+                  text: `฿${Number(rec.price).toLocaleString()}/${rec.unit || 'ถุง'} (พร้อมส่ง)`,
+                  size: 'xxs',
+                  color: '#16a34a',
+                },
+              ],
+            },
+            {
+              type: 'button',
+              action: {
+                type: 'postback',
+                label: '+ เลือก',
+                data: `action=select_product&product_id=${rec.id}`,
+                displayText: `เลือก ${rec.name}`,
+              },
+              style: 'primary',
+              color: '#16a34a',
+              height: 'sm',
+              flex: 3,
+            },
+          ],
+        })),
+      ],
+    },
+  ] : [];
+
+  const quickReplyItems = [
+    {
+      type: 'action',
+      action: {
+        type: 'postback',
+        label: `✅ สั่งเลย (฿${totalAmount.toLocaleString()})`,
+        data: 'action=checkout_cart',
+        displayText: 'ยืนยันสั่งซื้อผักในตะกร้า',
+      },
+    },
+    ...recommendations.slice(0, 2).map(rec => ({
+      type: 'action',
+      action: {
+        type: 'postback',
+        label: `🤖 +${String(rec.name).slice(0, 12)}`,
+        data: `action=select_product&product_id=${rec.id}`,
+        displayText: `เลือก ${rec.name}`,
+      },
+    })),
+    {
+      type: 'action',
+      action: {
+        type: 'postback',
+        label: '➕ เลือกผักเพิ่ม',
+        data: 'action=show_menu',
+        displayText: 'ดูเมนูผัก',
+      },
+    },
+    {
+      type: 'action',
+      action: {
+        type: 'postback',
+        label: '🗑️ ล้างตะกร้า',
+        data: 'action=clear_cart',
+        displayText: 'ล้างตะกร้าสินค้า',
+      },
+    },
+  ];
 
   const flexCard = {
     type: 'flex',
@@ -158,6 +313,8 @@ export async function replyCartSummary(replyToken, cart, newlyAddedItem = null) 
               },
             ],
           },
+          // AI Recommendations (แสดงเมื่อมีสินค้าที่มักซื้อคู่กันและยังไม่ถูกเลือกในตะกร้า)
+          ...recommendationBox,
           // Tip
           {
             type: 'box',
@@ -224,35 +381,7 @@ export async function replyCartSummary(replyToken, cart, newlyAddedItem = null) 
       },
     },
     quickReply: {
-      items: [
-        {
-          type: 'action',
-          action: {
-            type: 'postback',
-            label: `✅ สั่งเลย (฿${totalAmount.toLocaleString()})`,
-            data: 'action=checkout_cart',
-            displayText: 'ยืนยันสั่งซื้อผักในตะกร้า',
-          },
-        },
-        {
-          type: 'action',
-          action: {
-            type: 'postback',
-            label: '➕ เลือกผักเพิ่ม',
-            data: 'action=show_menu',
-            displayText: 'ดูเมนูผัก',
-          },
-        },
-        {
-          type: 'action',
-          action: {
-            type: 'postback',
-            label: '🗑️ ล้างตะกร้า',
-            data: 'action=clear_cart',
-            displayText: 'ล้างตะกร้าสินค้า',
-          },
-        },
-      ],
+      items: quickReplyItems,
     },
   };
 

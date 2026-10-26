@@ -62,7 +62,10 @@ def append_chapter4(doc, scratch_dir):
         "หน้าจอแดชบอร์ดทำหน้าที่รวบรวมตัวชี้วัดสำคัญของฟาร์มแบบเรียลไทม์ ได้แก่ รายได้รวมประจำเดือน จำนวนรอบการปลูกที่กำลังดำเนินการ จำนวนแคร่ปลูกที่พร้อมเก็บเกี่ยว จำนวนรอบการปลูกที่ติดสถานะล็อกระยะปลอดภัยของสารเคมี (PHI) และจำนวนคำสั่งซื้อผ่าน LINE Official Account ประจำวัน พร้อมตารางแสดงสถานะความคืบหน้าของรอบการปลูกและการแจ้งเตือนสต็อกสินค้าคงเหลือ ดังแสดงในภาพที่ 4.1",
     )
 
-    fig4_1 = os.path.join(scratch_dir, "fig4_1_dashboard.png")
+    images_dir = r"c:\forwork\Web\farmgap\farmgap\images"
+    fig4_1 = os.path.join(images_dir, "4.1.png")
+    if not os.path.exists(fig4_1):
+        fig4_1 = os.path.join(scratch_dir, "fig4_1_dashboard.png")
     if os.path.exists(fig4_1):
         add_figure_with_caption(
             doc,
@@ -77,7 +80,9 @@ def append_chapter4(doc, scratch_dir):
         "ในการเริ่มต้นรอบการผลิตของฟาร์ม ผู้ดูแลระบบจะเริ่มต้นจากการกำหนดค่าข้อมูลหลักในส่วนคลังชนิดพืชผัก (Crops Master Data) เพื่อบันทึกสายพันธุ์ ระยะเวลาเพาะกล้ามาตรฐาน (Nursery Days) ระยะเวลาเก็บเกี่ยวเป้าหมาย (Growth Days) ราคา และขนาดบรรจุภัณฑ์มาตรฐาน ซึ่งใช้เป็นค่าพารามิเตอร์อ้างอิงในการคำนวณอายุพืชสะสมและประเมินวันเก็บเกี่ยวโดยอัตโนมัติ จากนั้นระบบจึงรองรับการจัดสรรโครงสร้างพื้นที่ฟาร์มออกเป็นแปลงปลูกหลัก (Plots) และแคร่ปลูกย่อยหรือร่องแปลง (Planting Beds) เพื่อให้สอดคล้องกับการปฏิบัติงานจริงของฟาร์มผักปลอดสารพิษ โดยเกษตรกรสามารถบันทึกประวัติการเตรียมดินรายแคร่ เช่น การไถพรวนตากดินฆ่าเชื้อ การผสมปุ๋ยหมักชีวภาพ การปรับสภาพความเป็นกรด-ด่าง (pH) ของดินด้วยปูนขาว และการเติมเชื้อราไตรโคเดอร์มาป้องกันโรคพืช ก่อนเริ่มต้นรอบการปลูกใหม่ ดังแสดงในภาพที่ 4.2",
     )
 
-    fig4_2 = os.path.join(scratch_dir, "fig4_2_plots_soil.png")
+    fig4_2 = os.path.join(images_dir, "4.2.png")
+    if not os.path.exists(fig4_2):
+        fig4_2 = os.path.join(scratch_dir, "fig4_2_plots_soil.png")
     if os.path.exists(fig4_2):
         add_figure_with_caption(
             doc,
@@ -92,7 +97,9 @@ def append_chapter4(doc, scratch_dir):
         "จุดเด่นสำคัญของระบบ FarmGAP คือการเชื่อมโยงข้อมูลการเพาะเมล็ดในถาดหลุม (Nursery Log) เข้ากับการย้ายกล้าลงแคร่ปลูกจริง (Planting Cycle) โดยระบบคำนวณอายุพืชสะสมรวม (Total Crop Age) จากผลรวมของจำนวนวันเพาะกล้าและจำนวนวันหลังย้ายลงแปลง พร้อมเปรียบเทียบกับอายุเก็บเกี่ยวมาตรฐานของพืชผักแต่ละชนิดเพื่อคาดการณ์วันเก็บเกี่ยวล่วงหน้าได้อย่างแม่นยำ ดังแสดงในภาพที่ 4.3",
     )
 
-    fig4_3 = os.path.join(scratch_dir, "fig4_3_nursery_planting.png")
+    fig4_3 = os.path.join(images_dir, "4.3.png")
+    if not os.path.exists(fig4_3):
+        fig4_3 = os.path.join(scratch_dir, "fig4_3_nursery_planting.png")
     if os.path.exists(fig4_3):
         add_figure_with_caption(
             doc,
@@ -107,7 +114,9 @@ def append_chapter4(doc, scratch_dir):
         "เพื่อป้องกันความผิดพลาดในการเก็บเกี่ยวผลผลิตที่ยังมีสารตกค้างเกินเกณฑ์มาตรฐาน GAP (มกษ. 9001) เมื่อเกษตรกรบันทึกการฉีดพ่นปุ๋ยหรือสารป้องกันกำจัดศัตรูพืชที่มีค่าจำนวนวันต้องห้ามเก็บเกี่ยว (Pre-Harvest Interval: PHI) ระบบจะคำนวณวันที่ปลอดภัยในการเก็บเกี่ยว (Safe Harvest Date) อัตโนมัติ และทำการล็อกปุ่มบันทึกการเก็บเกี่ยวของรอบการปลูกนั้นทันทีหากวันที่ปัจจุบันยังไม่พ้นระยะปลอดภัย ดังแสดงในภาพที่ 4.4",
     )
 
-    fig4_4 = os.path.join(scratch_dir, "fig4_4_chemical_phi.png")
+    fig4_4 = os.path.join(images_dir, "4.4.png")
+    if not os.path.exists(fig4_4):
+        fig4_4 = os.path.join(scratch_dir, "fig4_4_chemical_phi.png")
     if os.path.exists(fig4_4):
         add_figure_with_caption(
             doc,
@@ -122,7 +131,9 @@ def append_chapter4(doc, scratch_dir):
         "เมื่อรอบการปลูกมีอายุสะสมครบกำหนดและพ้นระยะปลอดภัย PHI แล้ว ระบบจะปลดล็อกให้เกษตรกรสามารถบันทึกปริมาณผลผลิตที่เก็บเกี่ยวได้จริง โดยระบบจะสร้างรหัสล็อตผลผลิต (Harvest Lot ID) อัตโนมัติ เพิ่มจำนวนสต็อกสินค้าพร้อมขายในคลังสินค้าทันที และสร้างคิวอาร์โค้ด (QR Code) ประจำล็อตสำหรับติดบนบรรจุภัณฑ์ผักสด ดังแสดงในภาพที่ 4.5",
     )
 
-    fig4_5 = os.path.join(scratch_dir, "fig4_5_harvest_lot.png")
+    fig4_5 = os.path.join(images_dir, "4.5.png")
+    if not os.path.exists(fig4_5):
+        fig4_5 = os.path.join(scratch_dir, "fig4_5_harvest_lot.png")
     if os.path.exists(fig4_5):
         add_figure_with_caption(
             doc,
@@ -137,7 +148,9 @@ def append_chapter4(doc, scratch_dir):
         "ระบบสามารถรวบรวมข้อมูลประวัติการปฏิบัติงานตั้งแต่การเตรียมดิน การเพาะกล้า การให้น้ำ การใช้ปุ๋ยและสารชีวภัณฑ์ ค่า PHI ไปจนถึงข้อมูลการเก็บเกี่ยวของแต่ละรอบการปลูก เพื่อจัดพิมพ์เป็นรายงานมาตรฐาน GAP (มกษ. 9001) ในรูปแบบหน้ากระดาษ A4 ที่พร้อมใช้ยื่นตรวจประเมินรับรองมาตรฐานจากกรมวิชาการเกษตรได้ทันที ดังแสดงในภาพที่ 4.6",
     )
 
-    fig4_6 = os.path.join(scratch_dir, "fig4_6_gap_report.png")
+    fig4_6 = os.path.join(images_dir, "4.6.png")
+    if not os.path.exists(fig4_6):
+        fig4_6 = os.path.join(scratch_dir, "fig4_6_gap_report.png")
     if os.path.exists(fig4_6):
         add_figure_with_caption(
             doc,
@@ -162,7 +175,9 @@ def append_chapter4(doc, scratch_dir):
         "เมื่อลูกค้ากดเมนูสั่งซื้อผักสดบน Rich Menu ในห้องแชท LINE OA ระบบจะเปิดหน้าเว็บแอปพลิเคชัน LINE LIFF ที่ดึงข้อมูลโปรไฟล์ LINE ของลูกค้าอัตโนมัติ แสดงรายการผักสดที่มีสต็อกพร้อมจำหน่ายจากล็อตที่ผ่านเกณฑ์ GAP พร้อมระบบแนะนำสินค้าที่มักซื้อคู่กันในหน้าตะกร้าสินค้า และรองรับการอัปโหลดภาพสลิปโอนเงินเพื่อยืนยันคำสั่งซื้อ ดังแสดงในภาพที่ 4.7",
     )
 
-    fig4_7 = os.path.join(scratch_dir, "fig4_7_liff_shop.png")
+    fig4_7 = os.path.join(images_dir, "4.7.jpg")
+    if not os.path.exists(fig4_7):
+        fig4_7 = os.path.join(scratch_dir, "fig4_7_liff_shop.png")
     if os.path.exists(fig4_7):
         add_figure_with_caption(
             doc,
@@ -177,7 +192,9 @@ def append_chapter4(doc, scratch_dir):
         "ระบบ FarmGAP ได้ออกแบบระบบการแจ้งเตือนและการบริหารจัดการคำสั่งซื้อผ่านแพลตฟอร์ม LINE Official Account ในรูปแบบสองทิศทาง (Two-Way Communication) ครอบคลุมทั้งฝั่งผู้บริโภคและฝั่งเจ้าของฟาร์ม ดังนี้ (1) ฝั่งลูกค้า: ทุกครั้งที่มีการสั่งซื้อสำเร็จ ตรวจสอบยอดชำระเงิน หรือจัดส่งผลผลิต ระบบจะส่งการ์ดข้อความ LINE Flex Message แจ้งสถานะคำสั่งซื้อแบบเรียลไทม์ พร้อมปุ่มกดดูใบเสร็จรับเงินอิเล็กทรอนิกส์และเลขติดตามพัสดุ และ (2) ฝั่งเจ้าของฟาร์ม (Admin Order Notification & Management): เมื่อมีคำสั่งซื้อใหม่เข้าระบบผ่าน LINE LIFF หรือแชทบอท ระบบหลังบ้านจะส่งการ์ด Flex Message แจ้งเตือนตรงเข้าสู่ LINE ของเจ้าของฟาร์มทันที โดยแสดงรหัสคำสั่งซื้อ รายการผัก ยอดเงินรวม ที่อยู่จัดส่ง และภาพหลักฐานสลิปโอนเงิน พร้อมติดตั้งปุ่มสั่งการแบบโต้ตอบ (Interactive Postback Actions) ให้เจ้าของฟาร์มสามารถกดยืนยันการจัดส่งเพื่อตัดสต็อกผักตามเกณฑ์ GAP ข้อ 6, กดเปิดพิมพ์ใบเสร็จและใบปะหน้าพัสดุ หรือกดยกเลิกคำสั่งซื้อได้โดยตรงจากห้องแชท LINE บนสมาร์ตโฟน ช่วยอำนวยความสะดวกให้เกษตรกรสามารถบริหารจัดการออเดอร์ได้อย่างรวดเร็วแม้กำลังปฏิบัติงานอยู่ในแปลงปลูก ดังแสดงในภาพที่ 4.8",
     )
 
-    fig4_8 = os.path.join(scratch_dir, "fig4_8_flex_status.png")
+    fig4_8 = os.path.join(images_dir, "4.8.png")
+    if not os.path.exists(fig4_8):
+        fig4_8 = os.path.join(scratch_dir, "fig4_8_flex_status.png")
     if os.path.exists(fig4_8):
         add_figure_with_caption(
             doc,
@@ -192,7 +209,9 @@ def append_chapter4(doc, scratch_dir):
         "ผู้บริโภคที่ได้รับสินค้าสามารถใช้กล้องโทรศัพท์มือถือหรือแอปพลิเคชัน LINE สแกน QR Code ที่ติดอยู่บนถุงผักเพื่อเปิดดูหน้าเว็บเพจตรวจสอบย้อนกลับ (GAP Traceability) ซึ่งแสดงไทม์ไลน์ประวัติการเพาะปลูกของผักล็อตนั้นอย่างโปร่งใส ตั้งแต่วันเตรียมดิน วันเพาะกล้า วันย้ายลงแคร่ปลูก ประวัติการให้ปุ๋ยและสารชีวภัณฑ์ วันครบกำหนดระยะปลอดภัย PHI และวันที่เก็บเกี่ยวจริง ดังแสดงในภาพที่ 4.9",
     )
 
-    fig4_9 = os.path.join(scratch_dir, "fig4_9_qr_traceability.png")
+    fig4_9 = os.path.join(images_dir, "4.9.png")
+    if not os.path.exists(fig4_9):
+        fig4_9 = os.path.join(scratch_dir, "fig4_9_qr_traceability.png")
     if os.path.exists(fig4_9):
         add_figure_with_caption(
             doc,
@@ -237,7 +256,9 @@ def append_chapter4(doc, scratch_dir):
         "โมดูลผู้ช่วยสนทนาอัจฉริยะเชื่อมต่อกับ Google Gemini API โดยใช้เทคนิคการแทรกบริบทข้อมูลแบบไดนามิก (Dynamic Context Injection) ที่ดึงข้อมูลรายการผักสด ราคา ปริมาณสต็อกคงเหลือจริง และสถานะความปลอดภัย PHI ล่าสุดจากฐานข้อมูล MySQL แนบเข้าไปในคำสั่งควบคุมระบบ (System Prompt) ทุกครั้งก่อนประมวลผลคำตอบ ทำให้บอทสามารถตอบคำถามและสกัดรายการสั่งซื้อจากข้อความภาษาธรรมชาติของลูกค้าได้อย่างถูกต้อง พร้อมกลไกสลับโมเดลสำรองอัตโนมัติ (Multi-Model Fallback) ดังแสดงในภาพที่ 4.11",
     )
 
-    fig4_11 = os.path.join(scratch_dir, "fig4_11_gemini_chat.png")
+    fig4_11 = os.path.join(images_dir, "4.11.png")
+    if not os.path.exists(fig4_11):
+        fig4_11 = os.path.join(scratch_dir, "fig4_11_gemini_chat.png")
     if os.path.exists(fig4_11):
         add_figure_with_caption(
             doc,
