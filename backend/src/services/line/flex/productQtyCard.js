@@ -248,17 +248,34 @@ export async function replyProductQuantityCard(replyToken, userId, product) {
               },
             ],
           },
-          // แถวที่ 4: พิมพ์ระบุจำนวนเองในแชท
+          // แถวที่ 4: กล่องคำแนะนำให้พิมพ์ระบุจำนวนเองได้เลยโดยไม่ต้องกดปุ่ม
           {
-            type: 'button',
-            action: {
-              type: 'message',
-              label: '✏️ พิมพ์ระบุจำนวนเองในแชท',
-              text: 'ระบุจำนวนเอง',
-            },
-            style: 'secondary',
-            height: 'sm',
-            margin: 'xs',
+            type: 'box',
+            layout: 'vertical',
+            backgroundColor: '#f8fafc',
+            cornerRadius: 'md',
+            paddingAll: 'sm',
+            margin: 'sm',
+            borderColor: '#e2e8f0',
+            borderWidth: '1px',
+            spacing: 'xs',
+            contents: [
+              {
+                type: 'text',
+                text: '✏️ ต้องการจำนวนอื่น พิมพ์ในแชทได้เลยครับ',
+                size: 'xs',
+                weight: 'bold',
+                color: '#1e293b',
+                wrap: true,
+              },
+              {
+                type: 'text',
+                text: '💡 ตัวอย่าง: พิมพ์ "8 ถุง", "6 กิโล" หรือพิมพ์ตัวเลข เช่น "8" หรือ "10" ได้เลยครับ 🌱',
+                size: 'xxs',
+                color: '#475569',
+                wrap: true,
+              },
+            ],
           },
         ],
       },
@@ -346,9 +363,10 @@ export async function replyProductQuantityCard(replyToken, userId, product) {
     {
       type: 'action',
       action: {
-        type: 'message',
-        label: '✏️ พิมพ์จำนวนเอง',
-        text: 'ระบุจำนวนเอง',
+        type: 'postback',
+        label: '+2 กิโล',
+        data: `action=add_to_cart&product_id=${product.id}&qty_kg=2`,
+        displayText: `เพิ่ม ${shortName} 2 กิโล ลงตะกร้า`,
       },
     },
   ];

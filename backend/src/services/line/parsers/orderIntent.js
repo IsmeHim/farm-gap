@@ -1,6 +1,6 @@
 import { pool } from '../../../db.js';
 import { extractOrderWithGemini } from '../ai/gemini.js';
-import { getUpcomingHarvestForProduct } from '../ai/farmContext.js';
+import { getUpcomingHarvestForProduct, detectCropInquiry } from '../ai/farmContext.js';
 
 // Helper: แปลงคำบอกจำนวนและเลขไทยเป็นตัวเลขอารบิก
 export function normalizeThaiQuantity(str) {
@@ -288,6 +288,7 @@ export async function extractOrderIntent(text) {
           quantity: qty,
           has_explicit_qty: hasExplicit,
           stock_quantity: Number(product.stock_quantity),
+          status: product.status,
           subtotal: Number(product.price) * qty,
           conversion_note: note,
         });
@@ -324,6 +325,7 @@ export async function extractOrderIntent(text) {
           quantity: qty,
           has_explicit_qty: hasExplicit,
           stock_quantity: Number(product.stock_quantity),
+          status: product.status,
           subtotal: Number(product.price) * qty,
           conversion_note: note,
         });
@@ -346,7 +348,19 @@ export async function extractOrderIntent(text) {
     }
   }
 
-  // 5. หาก Local Matching ของระบบยังสกัดไม่เจอ แต่ผู้ใช้มีเจตนาซื้อผัก จึงค่อยส่งต่อให้ Gemini AI ช่วยเป็น Fallback
+  // 5. หากยังไม่เจอในตาราง products แต่ผู้ใช้ตั้งใจสั่งซื้อ ให้ตรวจสอบว่าเป็นผักที่กำลังปลูกอยู่ในแปลง (planting_batches/crops) หรือไม่
+  if (matchedItems.length === 0 && (hasBuyKeyword || lowerText.match(/\d+/))) {
+    const cropInquiry = await detectCropInquiry(text);
+    if (cropInquiry && cropInquiry.status !== 'available') {
+      return {
+        isOrder: true,
+        showMenuCard: true,
+        error: cropInquiry.replyText,
+      };
+    }
+  }
+
+  // 6. หาก Local Matching ของระบบยังสกัดไม่เจอ แต่ผู้ใช้มีเจตนาซื้อผัก จึงค่อยส่งต่อให้ Gemini AI ช่วยเป็น Fallback
   if (matchedItems.length === 0 && hasBuyKeyword) {
     const geminiResult = await extractOrderWithGemini(text, products);
     if (geminiResult && geminiResult.isOrder && Array.isArray(geminiResult.items) && geminiResult.items.length > 0) {
@@ -362,6 +376,7 @@ export async function extractOrderIntent(text) {
             quantity: qty,
             has_explicit_qty: true,
             stock_quantity: Number(prod.stock_quantity),
+            status: prod.status,
             subtotal: Number(prod.price) * qty,
           });
         }
@@ -383,14 +398,22 @@ export async function extractOrderIntent(text) {
     if (isOutOfStock) {
       const harvest = await getUpcomingHarvestForProduct(item.name);
       if (harvest.hasUpcoming) {
+        const harvestTimingText = harvest.daysRemaining > 0
+          ? `${harvest.harvestDateThai} (อีกประมาณ ${harvest.daysRemaining} วัน)`
+          : `${harvest.harvestDateThai} (ครบกำหนดพร้อมเก็บเกี่ยวเร็วๆ นี้ครับ)`;
+        const ageLine = typeof harvest.plantAge === 'number' && harvest.growthDays
+          ? `\n• อายุพืชปัจจุบัน: ${harvest.plantAge}/${harvest.growthDays} วัน`
+          : '';
         return {
           isOrder: true,
-          error: `ขออภัยครับ ขณะนี้ผัก "${item.name}" ในสต็อกหมดชั่วคราวครับ 🌱\n\n🚜 ทางฟาร์มกำลังเพาะปลูกอยู่ที่ "${harvest.plotName}" คาดว่าจะพร้อมเก็บเกี่ยวรอบถัดไปประมาณวันที่ ${harvest.harvestDateThai} (อีกประมาณ ${harvest.daysRemaining} วัน) ครับ\n\nคุณลูกค้าสามารถพิมพ์ "เมนูผัก" เพื่อเลือกชมผักสดชนิดอื่นๆ ที่มีพร้อมส่งวันนี้ได้เลยครับ! 😊`,
+          showMenuCard: true,
+          error: `🌱 ขออภัยครับ ขณะนี้ผัก "${item.name}" ในสต็อกหมดชั่วคราวครับ แต่ทางฟาร์มกำลังเพาะปลูกรอเก็บเกี่ยวรอบถัดไปอยู่ครับ\n\n🚜 สถานะการเพาะปลูกปัจจุบัน:\n• แปลงเพาะปลูก: ${harvest.plotName}${ageLine}\n• กำหนดเก็บเกี่ยว: ${harvestTimingText}\n\n👇 ระหว่างรอเก็บเกี่ยว คุณลูกค้าสามารถเลือกชมและสั่งซื้อผักสดปลอดสาร GAP ชนิดอื่นๆ ที่มีพร้อมส่งวันนี้ได้จากการ์ดเมนูด้านล่างนี้เลยครับ 😊`,
         };
       } else {
         return {
           isOrder: true,
-          error: `ขออภัยครับ ขณะนี้ผัก "${item.name}" ในสต็อกหมดชั่วคราวครับ 🌱 ทางฟาร์มกำลังเตรียมแปลงสำหรับรอบปลูกถัดไปครับ\n\nคุณลูกค้าสามารถพิมพ์ "เมนูผัก" เพื่อเลือกดูผักสดชนิดอื่นๆ ที่มีพร้อมส่งวันนี้ได้เลยครับ! 😊`,
+          showMenuCard: true,
+          error: `🌱 ขออภัยครับ ขณะนี้ผัก "${item.name}" ในสต็อกหมดชั่วคราวครับ ทางฟาร์มกำลังเตรียมแปลงสำหรับรอบเพาะปลูกถัดไปครับ\n\n👇 คุณลูกค้าสามารถเลือกชมและสั่งซื้อผักสดปลอดสาร GAP ชนิดอื่นๆ ที่มีพร้อมส่งวันนี้ได้จากการ์ดเมนูด้านล่างนี้เลยครับ 😊`,
         };
       }
     }

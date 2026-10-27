@@ -55,21 +55,19 @@ def configure_chapter_section_page_numbering(section, start_page=None):
 
     sectPr = section._sectPr
     pgNumType = sectPr.find(qn("w:pgNumType"))
-    if start_page is not None:
-        if pgNumType is None:
-            pgNumType = OxmlElement("w:pgNumType")
+    if pgNumType is None:
+        pgNumType = OxmlElement("w:pgNumType")
+        cols = sectPr.find(qn("w:cols"))
+        if cols is not None:
+            sectPr.insert(list(sectPr).index(cols), pgNumType)
+        else:
             sectPr.append(pgNumType)
-        pgNumType.set(qn("w:fmt"), "decimal")
+    pgNumType.set(qn("w:fmt"), "decimal")
+    if start_page is not None:
         pgNumType.set(qn("w:start"), str(start_page))
     else:
-        if pgNumType is not None:
-            if qn("w:start") in pgNumType.attrib:
-                del pgNumType.attrib[qn("w:start")]
-            pgNumType.set(qn("w:fmt"), "decimal")
-        else:
-            pgNumType = OxmlElement("w:pgNumType")
-            pgNumType.set(qn("w:fmt"), "decimal")
-            sectPr.append(pgNumType)
+        if qn("w:start") in pgNumType.attrib:
+            del pgNumType.attrib[qn("w:start")]
 
 
 def add_chapter_heading(doc, chapter_num_str, chapter_title_str):
@@ -156,7 +154,7 @@ def add_term_definition(doc, number_prefix, term_name, definition_text, space_af
 def append_chapter1(doc):
     sec_ch1 = doc.add_section(WD_SECTION.NEW_PAGE)
     set_section_margins(sec_ch1)
-    configure_chapter_section_page_numbering(sec_ch1, start_page=None)
+    configure_chapter_section_page_numbering(sec_ch1, start_page=1)
 
     # หัวบทที่ 1 (20 pt ตัวหนา จัดกึ่งกลาง)
     add_chapter_heading(doc, "บทที่ 1", "บทนำ")

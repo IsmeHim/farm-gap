@@ -1,0 +1,902 @@
+[
+  {
+    "tocIdx": 0,
+    "tocParagraphIdx": 83,
+    "leftText": "บทคัดย่อ",
+    "oldPage": "3",
+    "targetParagraphIdx": 46,
+    "targetText": "บทคัดย่อ",
+    "bmName": "_TocTarget_0"
+  },
+  {
+    "tocIdx": 1,
+    "tocParagraphIdx": 84,
+    "leftText": "ABSTRACT",
+    "oldPage": "5",
+    "targetParagraphIdx": 68,
+    "targetText": "ABSTRACT",
+    "bmName": "_TocTarget_1"
+  },
+  {
+    "tocIdx": 2,
+    "tocParagraphIdx": 85,
+    "leftText": "กิตติกรรมประกาศ",
+    "oldPage": "7",
+    "targetParagraphIdx": 74,
+    "targetText": "กิตติกรรมประกาศ",
+    "bmName": "_TocTarget_2"
+  },
+  {
+    "tocIdx": 3,
+    "tocParagraphIdx": 86,
+    "leftText": "สารบัญ",
+    "oldPage": "8",
+    "targetParagraphIdx": 81,
+    "targetText": "สารบัญ",
+    "bmName": "_TocTarget_3"
+  },
+  {
+    "tocIdx": 4,
+    "tocParagraphIdx": 87,
+    "leftText": "สารบัญตาราง",
+    "oldPage": "11",
+    "targetParagraphIdx": 138,
+    "targetText": "สารบัญตาราง",
+    "bmName": "_TocTarget_4"
+  },
+  {
+    "tocIdx": 5,
+    "tocParagraphIdx": 88,
+    "leftText": "สารบัญภาพ",
+    "oldPage": "13",
+    "targetParagraphIdx": 171,
+    "targetText": "สารบัญภาพ",
+    "bmName": "_TocTarget_5"
+  },
+  {
+    "tocIdx": 6,
+    "tocParagraphIdx": 89,
+    "leftText": "บทที่ 1 บทนำ",
+    "oldPage": "14",
+    "targetParagraphIdx": 190,
+    "targetText": "บทที่ 1",
+    "bmName": "_TocTarget_6"
+  },
+  {
+    "tocIdx": 7,
+    "tocParagraphIdx": 90,
+    "leftText": "1.1 ความเป็นมาและความสำคัญของปัญหา",
+    "oldPage": "14",
+    "targetParagraphIdx": 193,
+    "targetText": "1.1 ความเป็นมาและความสำคัญของปัญหา",
+    "bmName": "_TocTarget_7"
+  },
+  {
+    "tocIdx": 8,
+    "tocParagraphIdx": 91,
+    "leftText": "1.2 ปัญหาการวิจัย",
+    "oldPage": "16",
+    "targetParagraphIdx": 198,
+    "targetText": "1.2 ปัญหาการวิจัย",
+    "bmName": "_TocTarget_8"
+  },
+  {
+    "tocIdx": 9,
+    "tocParagraphIdx": 92,
+    "leftText": "1.3 วัตถุประสงค์ของการวิจัย",
+    "oldPage": "16",
+    "targetParagraphIdx": 202,
+    "targetText": "1.3 วัตถุประสงค์ของการวิจัย",
+    "bmName": "_TocTarget_9"
+  },
+  {
+    "tocIdx": 10,
+    "tocParagraphIdx": 93,
+    "leftText": "1.4 คำถามการวิจัย",
+    "oldPage": "17",
+    "targetParagraphIdx": 208,
+    "targetText": "1.4 คำถามการวิจัย",
+    "bmName": "_TocTarget_10"
+  },
+  {
+    "tocIdx": 11,
+    "tocParagraphIdx": 94,
+    "leftText": "1.5 ประโยชน์ที่คาดว่าจะได้รับ",
+    "oldPage": "18",
+    "targetParagraphIdx": 214,
+    "targetText": "1.5 ประโยชน์ที่คาดว่าจะได้รับ",
+    "bmName": "_TocTarget_11"
+  },
+  {
+    "tocIdx": 12,
+    "tocParagraphIdx": 95,
+    "leftText": "1.6 ขอบเขตและข้อจำกัดของการวิจัย",
+    "oldPage": "19",
+    "targetParagraphIdx": 220,
+    "targetText": "1.6 ขอบเขตและข้อจำกัดของการวิจัย",
+    "bmName": "_TocTarget_12"
+  },
+  {
+    "tocIdx": 13,
+    "tocParagraphIdx": 96,
+    "leftText": "1.7 นิยามศัพท์เฉพาะ",
+    "oldPage": "20",
+    "targetParagraphIdx": 227,
+    "targetText": "1.7 นิยามศัพท์เฉพาะ",
+    "bmName": "_TocTarget_13"
+  },
+  {
+    "tocIdx": 14,
+    "tocParagraphIdx": 97,
+    "leftText": "1.8 โครงสร้างรายงานวิจัย",
+    "oldPage": "22",
+    "targetParagraphIdx": 241,
+    "targetText": "1.8 โครงสร้างรายงานวิจัย",
+    "bmName": "_TocTarget_14"
+  },
+  {
+    "tocIdx": 15,
+    "tocParagraphIdx": 98,
+    "leftText": "บทที่ 2 เอกสารและงานวิจัยที่เกี่ยวข้อง",
+    "oldPage": "23",
+    "targetParagraphIdx": 249,
+    "targetText": "บทที่ 2",
+    "bmName": "_TocTarget_15"
+  },
+  {
+    "tocIdx": 16,
+    "tocParagraphIdx": 99,
+    "leftText": "2.1 มาตรฐานการปฏิบัติทางการเกษตรที่ดีสำหรับพืชอาหาร (GAP มกษ. 9001)",
+    "oldPage": "24",
+    "targetParagraphIdx": 252,
+    "targetText": "2.1 มาตรฐานการปฏิบัติทางการเกษตรที่ดีสำหรับพืชอาหาร (GAP มกษ. 9001)",
+    "bmName": "_TocTarget_16"
+  },
+  {
+    "tocIdx": 17,
+    "tocParagraphIdx": 100,
+    "leftText": "2.2 การคำนวณระยะปลอดภัยก่อนการเก็บเกี่ยว (Pre-Harvest Interval: PHI)",
+    "oldPage": "25",
+    "targetParagraphIdx": 256,
+    "targetText": "2.2 การคำนวณระยะปลอดภัยก่อนการเก็บเกี่ยว (Pre-Harvest Interval: PHI)",
+    "bmName": "_TocTarget_17"
+  },
+  {
+    "tocIdx": 18,
+    "tocParagraphIdx": 101,
+    "leftText": "2.3 ระบบตรวจสอบย้อนกลับสินค้าเกษตรด้วยคิวอาร์โค้ด (QR Code Traceability)",
+    "oldPage": "26",
+    "targetParagraphIdx": 262,
+    "targetText": "2.3 ระบบตรวจสอบย้อนกลับสินค้าเกษตรด้วยคิวอาร์โค้ด (QR Code Traceability)",
+    "bmName": "_TocTarget_18"
+  },
+  {
+    "tocIdx": 19,
+    "tocParagraphIdx": 102,
+    "leftText": "2.4 แพลตฟอร์ม LINE Official Account, Messaging API และ LINE LIFF",
+    "oldPage": "26",
+    "targetParagraphIdx": 265,
+    "targetText": "2.4 แพลตฟอร์ม LINE Official Account, Messaging API และ LINE LIFF",
+    "bmName": "_TocTarget_19"
+  },
+  {
+    "tocIdx": 20,
+    "tocParagraphIdx": 103,
+    "leftText": "2.5 การจัดกลุ่มลูกค้าด้วย K-Means Clustering และการวิเคราะห์ตะกร้าสินค้า",
+    "oldPage": "28",
+    "targetParagraphIdx": 271,
+    "targetText": "2.5 การจัดกลุ่มลูกค้าด้วย K-Means Clustering และการวิเคราะห์ตะกร้าสินค้า",
+    "bmName": "_TocTarget_20"
+  },
+  {
+    "tocIdx": 21,
+    "tocParagraphIdx": 104,
+    "leftText": "2.6 โมเดลภาษาขนาดใหญ่ Google Gemini และการแทรกบริบทแบบไดนามิก",
+    "oldPage": "29",
+    "targetParagraphIdx": 276,
+    "targetText": "2.6 โมเดลภาษาขนาดใหญ่ Google Gemini และการแทรกบริบทแบบไดนามิก",
+    "bmName": "_TocTarget_21"
+  },
+  {
+    "tocIdx": 22,
+    "tocParagraphIdx": 105,
+    "leftText": "2.7 ทฤษฎีการวิเคราะห์และออกแบบระบบ (DFD, Use Case และ ER Diagram)",
+    "oldPage": "29",
+    "targetParagraphIdx": 280,
+    "targetText": "2.7 ทฤษฎีการวิเคราะห์และออกแบบระบบ (DFD, Use Case และ ER Diagram)",
+    "bmName": "_TocTarget_22"
+  },
+  {
+    "tocIdx": 23,
+    "tocParagraphIdx": 106,
+    "leftText": "2.8 งานวิจัยที่เกี่ยวข้อง",
+    "oldPage": "30",
+    "targetParagraphIdx": 282,
+    "targetText": "2.8 งานวิจัยที่เกี่ยวข้อง",
+    "bmName": "_TocTarget_23"
+  },
+  {
+    "tocIdx": 24,
+    "tocParagraphIdx": 107,
+    "leftText": "บทที่ 3 วิธีดำเนินการวิจัย การออกแบบ และการพัฒนาระบบ",
+    "oldPage": "23",
+    "targetParagraphIdx": 334,
+    "targetText": "บทที่ 3",
+    "bmName": "_TocTarget_24"
+  },
+  {
+    "tocIdx": 25,
+    "tocParagraphIdx": 108,
+    "leftText": "3.1 แนวทางการดำเนินการวิจัยและพัฒนา",
+    "oldPage": "33",
+    "targetParagraphIdx": 337,
+    "targetText": "3.1 แนวทางการดำเนินการวิจัยและพัฒนา",
+    "bmName": "_TocTarget_25"
+  },
+  {
+    "tocIdx": 26,
+    "tocParagraphIdx": 109,
+    "leftText": "3.2 การวิเคราะห์ความต้องการของระบบและกรณีใช้งาน (Use Cases)",
+    "oldPage": "34",
+    "targetParagraphIdx": 344,
+    "targetText": "3.2 การวิเคราะห์ความต้องการของระบบและกรณีใช้งาน (Use Cases)",
+    "bmName": "_TocTarget_26"
+  },
+  {
+    "tocIdx": 27,
+    "tocParagraphIdx": 110,
+    "leftText": "3.3 สถาปัตยกรรมของระบบ (System Architecture)",
+    "oldPage": "36",
+    "targetParagraphIdx": 405,
+    "targetText": "3.3 สถาปัตยกรรมของระบบ (System Architecture)",
+    "bmName": "_TocTarget_27"
+  },
+  {
+    "tocIdx": 28,
+    "tocParagraphIdx": 111,
+    "leftText": "3.4 แผนภาพกระแสข้อมูล (Data Flow Diagram: DFD ระดับ 0 และระดับ 1)",
+    "oldPage": "38",
+    "targetParagraphIdx": 410,
+    "targetText": "3.4 แผนภาพกระแสข้อมูล (Data Flow Diagram: DFD ระดับ 0 และระดับ 1)",
+    "bmName": "_TocTarget_28"
+  },
+  {
+    "tocIdx": 29,
+    "tocParagraphIdx": 112,
+    "leftText": "3.5 การออกแบบฐานข้อมูลและแผนภาพความสัมพันธ์ข้อมูล (ER Diagram)",
+    "oldPage": "40",
+    "targetParagraphIdx": 435,
+    "targetText": "3.5 การออกแบบฐานข้อมูลและแผนภาพความสัมพันธ์ข้อมูล (ER Diagram)",
+    "bmName": "_TocTarget_29"
+  },
+  {
+    "tocIdx": 30,
+    "tocParagraphIdx": 113,
+    "leftText": "3.6 การออกแบบอัลกอริทึมสำคัญและกลไกปัญญาประดิษฐ์ในระบบ",
+    "oldPage": "57",
+    "targetParagraphIdx": 1810,
+    "targetText": "3.6 การออกแบบอัลกอริทึมสำคัญและกลไกปัญญาประดิษฐ์ในระบบ",
+    "bmName": "_TocTarget_30"
+  },
+  {
+    "tocIdx": 31,
+    "tocParagraphIdx": 114,
+    "leftText": "3.7 การสร้างเครื่องมือและการเก็บรวบรวมข้อมูลประเมินผล",
+    "oldPage": "59",
+    "targetParagraphIdx": 1845,
+    "targetText": "3.7 การสร้างเครื่องมือและการเก็บรวบรวมข้อมูลประเมินผล",
+    "bmName": "_TocTarget_31"
+  },
+  {
+    "tocIdx": 32,
+    "tocParagraphIdx": 115,
+    "leftText": "3.8 สถิติที่ใช้ในการวิเคราะห์ข้อมูลและเกณฑ์การแปลผล",
+    "oldPage": "60",
+    "targetParagraphIdx": 1849,
+    "targetText": "3.8 สถิติที่ใช้ในการวิเคราะห์ข้อมูลและเกณฑ์การแปลผล",
+    "bmName": "_TocTarget_32"
+  },
+  {
+    "tocIdx": 33,
+    "tocParagraphIdx": 116,
+    "leftText": "บทที่ 4 ผลการทดลอง การประเมิน และการตรวจสอบ",
+    "oldPage": "23",
+    "targetParagraphIdx": 1885,
+    "targetText": "บทที่ 4",
+    "bmName": "_TocTarget_33"
+  },
+  {
+    "tocIdx": 34,
+    "tocParagraphIdx": 117,
+    "leftText": "4.1 ผลการพัฒนาระบบบริหารจัดการฟาร์มผักตามมาตรฐาน GAP (ฝั่งเจ้าของฟาร์ม)",
+    "oldPage": "61",
+    "targetParagraphIdx": 1888,
+    "targetText": "4.1 ผลการพัฒนาระบบบริหารจัดการฟาร์มผักตามมาตรฐาน GAP (ฝั่งเจ้าของฟาร์ม)",
+    "bmName": "_TocTarget_34"
+  },
+  {
+    "tocIdx": 35,
+    "tocParagraphIdx": 118,
+    "leftText": "4.2 ผลการพัฒนาระบบสั่งซื้อออนไลน์และตรวจสอบย้อนกลับบน LINE OA",
+    "oldPage": "66",
+    "targetParagraphIdx": 1914,
+    "targetText": "4.2 ผลการพัฒนาระบบสั่งซื้อออนไลน์และตรวจสอบย้อนกลับบน LINE OA",
+    "bmName": "_TocTarget_35"
+  },
+  {
+    "tocIdx": 36,
+    "tocParagraphIdx": 119,
+    "leftText": "4.3 ผลการดำเนินงานของโมดูลปัญญาประดิษฐ์ (K-Means และ Google Gemini AI)",
+    "oldPage": "68",
+    "targetParagraphIdx": 1928,
+    "targetText": "4.3 ผลการดำเนินงานของโมดูลปัญญาประดิษฐ์ (K-Means และ Google Gemini AI)",
+    "bmName": "_TocTarget_36"
+  },
+  {
+    "tocIdx": 37,
+    "tocParagraphIdx": 120,
+    "leftText": "4.4 ผลการทดสอบการทำงานของระบบตามกรณีศึกษา (Functional Test Results)",
+    "oldPage": "70",
+    "targetParagraphIdx": 1939,
+    "targetText": "4.4 ผลการทดสอบการทำงานของระบบตามกรณีศึกษา (Functional Test Results)",
+    "bmName": "_TocTarget_37"
+  },
+  {
+    "tocIdx": 38,
+    "tocParagraphIdx": 121,
+    "leftText": "4.5 ผลการประเมินโครงงานโดยผู้เชี่ยวชาญ (แบบประเมิน วค-4)",
+    "oldPage": "72",
+    "targetParagraphIdx": 1999,
+    "targetText": "4.5 ผลการประเมินโครงงานโดยผู้เชี่ยวชาญ (แบบประเมิน วค-4)",
+    "bmName": "_TocTarget_38"
+  },
+  {
+    "tocIdx": 39,
+    "tocParagraphIdx": 122,
+    "leftText": "4.6 ผลการประเมินโครงงานโดยผู้ใช้งาน (แบบประเมิน วค-5)",
+    "oldPage": "72",
+    "targetParagraphIdx": 2051,
+    "targetText": "4.6 ผลการประเมินโครงงานโดยผู้ใช้งาน (แบบประเมิน วค-5)",
+    "bmName": "_TocTarget_39"
+  },
+  {
+    "tocIdx": 40,
+    "tocParagraphIdx": 123,
+    "leftText": "บทที่ 5 อภิปรายผล สรุปผล และข้อเสนอแนะ",
+    "oldPage": "23",
+    "targetParagraphIdx": 2104,
+    "targetText": "บทที่ 5",
+    "bmName": "_TocTarget_40"
+  },
+  {
+    "tocIdx": 41,
+    "tocParagraphIdx": 124,
+    "leftText": "5.1 สรุปผลการวิจัยตามวัตถุประสงค์",
+    "oldPage": "74",
+    "targetParagraphIdx": 2107,
+    "targetText": "5.1 สรุปผลการวิจัยตามวัตถุประสงค์",
+    "bmName": "_TocTarget_41"
+  },
+  {
+    "tocIdx": 42,
+    "tocParagraphIdx": 125,
+    "leftText": "5.2 การอภิปรายผลการวิจัย",
+    "oldPage": "76",
+    "targetParagraphIdx": 2113,
+    "targetText": "5.2 การอภิปรายผลการวิจัย",
+    "bmName": "_TocTarget_42"
+  },
+  {
+    "tocIdx": 43,
+    "tocParagraphIdx": 126,
+    "leftText": "5.3 ข้อจำกัดของระบบที่พัฒนา",
+    "oldPage": "77",
+    "targetParagraphIdx": 2118,
+    "targetText": "5.3 ข้อจำกัดของระบบที่พัฒนา",
+    "bmName": "_TocTarget_43"
+  },
+  {
+    "tocIdx": 44,
+    "tocParagraphIdx": 127,
+    "leftText": "5.4 ข้อเสนอแนะในการนำระบบไปใช้งานและการพัฒนาต่อยอด",
+    "oldPage": "77",
+    "targetParagraphIdx": 2122,
+    "targetText": "5.4 ข้อเสนอแนะในการนำระบบไปใช้งานและการพัฒนาต่อยอด",
+    "bmName": "_TocTarget_44"
+  },
+  {
+    "tocIdx": 45,
+    "tocParagraphIdx": 128,
+    "leftText": "บรรณานุกรม",
+    "oldPage": "79",
+    "targetParagraphIdx": 2128,
+    "targetText": "บรรณานุกรม",
+    "bmName": "_TocTarget_45"
+  },
+  {
+    "tocIdx": 46,
+    "tocParagraphIdx": 129,
+    "leftText": "ภาคผนวก ก รายการข้อกำหนด แผนภาพระบบ และพจนานุกรมข้อมูล",
+    "oldPage": "82",
+    "targetParagraphIdx": 2151,
+    "targetText": "ภาคผนวก ก",
+    "bmName": "_TocTarget_46"
+  },
+  {
+    "tocIdx": 47,
+    "tocParagraphIdx": 130,
+    "leftText": "ภาคผนวก ข คู่มือการใช้งานระบบและตัวอย่างรายงานมาตรฐาน GAP",
+    "oldPage": "87",
+    "targetParagraphIdx": 2294,
+    "targetText": "ภาคผนวก ข",
+    "bmName": "_TocTarget_47"
+  },
+  {
+    "tocIdx": 48,
+    "tocParagraphIdx": 131,
+    "leftText": "ภาคผนวก ค แบบฟอร์มเสนอโครงงาน (แบบ วค-1)",
+    "oldPage": "89",
+    "targetParagraphIdx": 2310,
+    "targetText": "ภาคผนวก ค",
+    "bmName": "_TocTarget_48"
+  },
+  {
+    "tocIdx": 49,
+    "tocParagraphIdx": 132,
+    "leftText": "ภาคผนวก ง แบบฟอร์มขอสอบโครงงาน (แบบ วค-2)",
+    "oldPage": "90",
+    "targetParagraphIdx": 2332,
+    "targetText": "ภาคผนวก ง",
+    "bmName": "_TocTarget_49"
+  },
+  {
+    "tocIdx": 50,
+    "tocParagraphIdx": 133,
+    "leftText": "ภาคผนวก จ แบบรายงานความก้าวหน้า (แบบ วค-3)",
+    "oldPage": "91",
+    "targetParagraphIdx": 2348,
+    "targetText": "ภาคผนวก จ",
+    "bmName": "_TocTarget_50"
+  },
+  {
+    "tocIdx": 51,
+    "tocParagraphIdx": 134,
+    "leftText": "ภาคผนวก ฉ แบบประเมินโครงงานโดยผู้เชี่ยวชาญ (แบบ วค-4)",
+    "oldPage": "92",
+    "targetParagraphIdx": 2373,
+    "targetText": "ภาคผนวก ฉ",
+    "bmName": "_TocTarget_51"
+  },
+  {
+    "tocIdx": 52,
+    "tocParagraphIdx": 135,
+    "leftText": "ภาคผนวก ช แบบประเมินโครงงานโดยผู้ใช้งาน (แบบ วค-5)",
+    "oldPage": "93",
+    "targetParagraphIdx": 2395,
+    "targetText": "ภาคผนวก ช",
+    "bmName": "_TocTarget_52"
+  },
+  {
+    "tocIdx": 53,
+    "tocParagraphIdx": 136,
+    "leftText": "ภาคผนวก ซ ประวัติผู้จัดทำโครงงาน",
+    "oldPage": "94",
+    "targetParagraphIdx": 2417,
+    "targetText": "ภาคผนวก ซ",
+    "bmName": "_TocTarget_53"
+  },
+  {
+    "tocIdx": 54,
+    "tocParagraphIdx": 140,
+    "leftText": "ตารางที่ 2.1 สรุปเปรียบเทียบงานวิจัยที่เกี่ยวข้องกับระบบ FarmGAP",
+    "oldPage": "32",
+    "targetParagraphIdx": 290,
+    "targetText": "ตารางที่ 2.1 สรุปเปรียบเทียบความสามารถของงานวิจัยที่เกี่ยวข้องกับระบบ FarmGAP",
+    "bmName": "_TocTarget_54"
+  },
+  {
+    "tocIdx": 55,
+    "tocParagraphIdx": 141,
+    "leftText": "ตารางที่ 3.1 รายการกรณีใช้งาน (Use Cases) ทั้ง 13 กรณีของระบบ FarmGAP",
+    "oldPage": "35",
+    "targetParagraphIdx": 346,
+    "targetText": "ตารางที่ 3.1 รายการกรณีใช้งาน (Use Cases) ทั้ง 13 กรณีของระบบ FarmGAP",
+    "bmName": "_TocTarget_55"
+  },
+  {
+    "tocIdx": 56,
+    "tocParagraphIdx": 142,
+    "leftText": "ตารางที่ 3.2 รายละเอียดการแตกกระบวนการย่อยของ DFD ระดับที่ 1",
+    "oldPage": "39",
+    "targetParagraphIdx": 416,
+    "targetText": "ตารางที่ 3.2 รายละเอียดการแตกกระบวนการย่อย (Process Decomposition) ของ DFD ระดับที่ 1",
+    "bmName": "_TocTarget_56"
+  },
+  {
+    "tocIdx": 57,
+    "tocParagraphIdx": 143,
+    "leftText": "ตารางที่ 3.3 รายชื่อตารางข้อมูลทั้ง 18 ตารางในฐานข้อมูลระบบ FarmGAP",
+    "oldPage": "41",
+    "targetParagraphIdx": 437,
+    "targetText": "ตารางที่ 3.3 รายชื่อตารางข้อมูลทั้ง 18 ตารางในฐานข้อมูลระบบ FarmGAP",
+    "bmName": "_TocTarget_57"
+  },
+  {
+    "tocIdx": 58,
+    "tocParagraphIdx": 144,
+    "leftText": "ตารางที่ 3.4 โครงสร้างตารางผู้ใช้งานระบบและตั้งค่าฟาร์ม (users)",
+    "oldPage": "43",
+    "targetParagraphIdx": 517,
+    "targetText": "ตารางที่ 3.4 โครงสร้างตารางผู้ใช้งานระบบและตั้งค่าฟาร์ม (users)",
+    "bmName": "_TocTarget_58"
+  },
+  {
+    "tocIdx": 59,
+    "tocParagraphIdx": 145,
+    "leftText": "ตารางที่ 3.5 โครงสร้างตารางคลังข้อมูลชนิดผัก (crops)",
+    "oldPage": "44",
+    "targetParagraphIdx": 598,
+    "targetText": "ตารางที่ 3.5 โครงสร้างตารางคลังข้อมูลชนิดผัก (crops)",
+    "bmName": "_TocTarget_59"
+  },
+  {
+    "tocIdx": 60,
+    "tocParagraphIdx": 146,
+    "leftText": "ตารางที่ 3.6 โครงสร้างตารางแปลงปลูกและแคร่ปลูก (plots)",
+    "oldPage": "45",
+    "targetParagraphIdx": 669,
+    "targetText": "ตารางที่ 3.6 โครงสร้างตารางแปลงปลูกและแคร่ปลูก (plots)",
+    "bmName": "_TocTarget_60"
+  },
+  {
+    "tocIdx": 61,
+    "tocParagraphIdx": 147,
+    "leftText": "ตารางที่ 3.7 โครงสร้างตารางรอบการปลูกพืช (planting_batches)",
+    "oldPage": "46",
+    "targetParagraphIdx": 780,
+    "targetText": "ตารางที่ 3.7 โครงสร้างตารางรอบการปลูกพืช (planting_batches)",
+    "bmName": "_TocTarget_61"
+  },
+  {
+    "tocIdx": 62,
+    "tocParagraphIdx": 148,
+    "leftText": "ตารางที่ 3.8 โครงสร้างตารางไทม์ไลน์กิจกรรมในแปลงปลูก (crop_activities)",
+    "oldPage": "47",
+    "targetParagraphIdx": 871,
+    "targetText": "ตารางที่ 3.8 โครงสร้างตารางไทม์ไลน์กิจกรรมในแปลงปลูก (crop_activities)",
+    "bmName": "_TocTarget_62"
+  },
+  {
+    "tocIdx": 63,
+    "tocParagraphIdx": 149,
+    "leftText": "ตารางที่ 3.9 โครงสร้างตารางบันทึกปุ๋ยและสารชีวภัณฑ์ (chemical_logs)",
+    "oldPage": "48",
+    "targetParagraphIdx": 942,
+    "targetText": "ตารางที่ 3.9 โครงสร้างตารางบันทึกปุ๋ยและสารชีวภัณฑ์ (chemical_logs)",
+    "bmName": "_TocTarget_63"
+  },
+  {
+    "tocIdx": 64,
+    "tocParagraphIdx": 150,
+    "leftText": "ตารางที่ 3.10 โครงสร้างตารางบันทึกการสำรวจโรคและแมลงศัตรูพืช (pest_logs)",
+    "oldPage": "49",
+    "targetParagraphIdx": 1053,
+    "targetText": "ตารางที่ 3.10 โครงสร้างตารางบันทึกการสำรวจโรคและแมลงศัตรูพืช (pest_logs)",
+    "bmName": "_TocTarget_64"
+  },
+  {
+    "tocIdx": 65,
+    "tocParagraphIdx": 151,
+    "leftText": "ตารางที่ 3.11 โครงสร้างตารางบันทึกการเก็บเกี่ยวผลผลิต (harvest_logs)",
+    "oldPage": "50",
+    "targetParagraphIdx": 1144,
+    "targetText": "ตารางที่ 3.11 โครงสร้างตารางบันทึกการเก็บเกี่ยวผลผลิต (harvest_logs)",
+    "bmName": "_TocTarget_65"
+  },
+  {
+    "tocIdx": 66,
+    "tocParagraphIdx": 152,
+    "leftText": "ตารางที่ 3.12 โครงสร้างตารางสินค้าและสต็อกพร้อมขาย (products)",
+    "oldPage": "51",
+    "targetParagraphIdx": 1275,
+    "targetText": "ตารางที่ 3.12 โครงสร้างตารางสินค้าและสต็อกพร้อมขาย (products)",
+    "bmName": "_TocTarget_66"
+  },
+  {
+    "tocIdx": 67,
+    "tocParagraphIdx": 153,
+    "leftText": "ตารางที่ 3.13 โครงสร้างตารางข้อมูลลูกค้าสมาชิก LINE OA (customers)",
+    "oldPage": "52",
+    "targetParagraphIdx": 1336,
+    "targetText": "ตารางที่ 3.13 โครงสร้างตารางข้อมูลลูกค้าสมาชิก LINE OA (customers)",
+    "bmName": "_TocTarget_67"
+  },
+  {
+    "tocIdx": 68,
+    "tocParagraphIdx": 154,
+    "leftText": "ตารางที่ 3.14 โครงสร้างตารางกลุ่มลูกค้า K-Means (customer_clusters)",
+    "oldPage": "52",
+    "targetParagraphIdx": 1382,
+    "targetText": "ตารางที่ 3.14 โครงสร้างตารางกลุ่มลูกค้า K-Means (customer_clusters)",
+    "bmName": "_TocTarget_68"
+  },
+  {
+    "tocIdx": 69,
+    "tocParagraphIdx": 155,
+    "leftText": "ตารางที่ 3.15 โครงสร้างตารางคำสั่งซื้อสินค้า (orders)",
+    "oldPage": "52",
+    "targetParagraphIdx": 1413,
+    "targetText": "ตารางที่ 3.15 โครงสร้างตารางคำสั่งซื้อสินค้า (orders)",
+    "bmName": "_TocTarget_69"
+  },
+  {
+    "tocIdx": 70,
+    "tocParagraphIdx": 156,
+    "leftText": "ตารางที่ 3.16 โครงสร้างตารางรายการสินค้าย่อยในคำสั่งซื้อ (order_items)",
+    "oldPage": "53",
+    "targetParagraphIdx": 1489,
+    "targetText": "ตารางที่ 3.16 โครงสร้างตารางรายการสินค้าย่อยในคำสั่งซื้อ (order_items)",
+    "bmName": "_TocTarget_70"
+  },
+  {
+    "tocIdx": 71,
+    "tocParagraphIdx": 157,
+    "leftText": "ตารางที่ 3.17 โครงสร้างตารางจับคู่สินค้าแนะนำซื้อคู่กัน (product_recommendations)",
+    "oldPage": "54",
+    "targetParagraphIdx": 1535,
+    "targetText": "ตารางที่ 3.17 โครงสร้างตารางจับคู่สินค้าแนะนำซื้อคู่กัน (product_recommendations)",
+    "bmName": "_TocTarget_71"
+  },
+  {
+    "tocIdx": 72,
+    "tocParagraphIdx": 158,
+    "leftText": "ตารางที่ 3.18 โครงสร้างตารางจัดการสถานะการสนทนา LINE Chatbot (line_chat_sessions)",
+    "oldPage": "54",
+    "targetParagraphIdx": 1566,
+    "targetText": "ตารางที่ 3.18 โครงสร้างตารางจัดการสถานะการสนทนา LINE Chatbot (line_chat_sessions)",
+    "bmName": "_TocTarget_72"
+  },
+  {
+    "tocIdx": 73,
+    "tocParagraphIdx": 159,
+    "leftText": "ตารางที่ 3.19 โครงสร้างตารางบันทึกการเก็บรักษาและการขนส่ง (storage_logs)",
+    "oldPage": "54",
+    "targetParagraphIdx": 1607,
+    "targetText": "ตารางที่ 3.19 โครงสร้างตารางบันทึกการเก็บรักษาและการขนส่ง (storage_logs)",
+    "bmName": "_TocTarget_73"
+  },
+  {
+    "tocIdx": 74,
+    "tocParagraphIdx": 160,
+    "leftText": "ตารางที่ 3.20 โครงสร้างตารางบันทึกต้นทุนและค่าใช้จ่าย (cost_logs)",
+    "oldPage": "55",
+    "targetParagraphIdx": 1703,
+    "targetText": "ตารางที่ 3.20 โครงสร้างตารางบันทึกต้นทุนและค่าใช้จ่าย (cost_logs)",
+    "bmName": "_TocTarget_74"
+  },
+  {
+    "tocIdx": 75,
+    "tocParagraphIdx": 161,
+    "leftText": "ตารางที่ 3.21 โครงสร้างตารางบันทึกประวัติการเปลี่ยนแปลงข้อมูล (audit_logs)",
+    "oldPage": "56",
+    "targetParagraphIdx": 1764,
+    "targetText": "ตารางที่ 3.21 โครงสร้างตารางบันทึกประวัติการเปลี่ยนแปลงข้อมูล (audit_logs)",
+    "bmName": "_TocTarget_75"
+  },
+  {
+    "tocIdx": 76,
+    "tocParagraphIdx": 162,
+    "leftText": "ตารางที่ 3.22 ลำดับโมเดลภาษา Google Gemini ในกลไก Multi-Model Fallback",
+    "oldPage": "58",
+    "targetParagraphIdx": 1820,
+    "targetText": "ตารางที่ 3.22 ลำดับโมเดลภาษา Google Gemini ในกลไกสลับโมเดลสำรองอัตโนมัติ (Multi-Model Fallback)",
+    "bmName": "_TocTarget_76"
+  },
+  {
+    "tocIdx": 77,
+    "tocParagraphIdx": 163,
+    "leftText": "ตารางที่ 3.23 เกณฑ์การให้คะแนนและการแปลผลระดับคุณภาพของระบบ",
+    "oldPage": "60",
+    "targetParagraphIdx": 1853,
+    "targetText": "ตารางที่ 3.23 เกณฑ์การให้คะแนนและการแปลผลระดับคุณภาพของระบบ",
+    "bmName": "_TocTarget_77"
+  },
+  {
+    "tocIdx": 78,
+    "tocParagraphIdx": 164,
+    "leftText": "ตารางที่ 4.1 ผลการทดสอบการทำงานของระบบตามกรณีใช้งาน (Functional Testing)",
+    "oldPage": "70",
+    "targetParagraphIdx": 1941,
+    "targetText": "ตารางที่ 4.1 ผลการทดสอบการทำงานของระบบตามกรณีใช้งาน (Functional Testing)",
+    "bmName": "_TocTarget_78"
+  },
+  {
+    "tocIdx": 79,
+    "tocParagraphIdx": 165,
+    "leftText": "ตารางที่ 4.2 สรุปผลการประเมินโครงงานโดยผู้เชี่ยวชาญ 3 ท่าน (แบบประเมิน วค-4)",
+    "oldPage": "72",
+    "targetParagraphIdx": 2001,
+    "targetText": "ตารางที่ 4.2 สรุปผลการประเมินโครงงานโดยผู้เชี่ยวชาญ 3 ท่าน (แบบประเมิน วค-4)",
+    "bmName": "_TocTarget_79"
+  },
+  {
+    "tocIdx": 80,
+    "tocParagraphIdx": 166,
+    "leftText": "ตารางที่ 4.3 สรุปผลการประเมินโครงงานโดยผู้ใช้งาน 3 ท่าน (แบบประเมิน วค-5)",
+    "oldPage": "73",
+    "targetParagraphIdx": 2053,
+    "targetText": "ตารางที่ 4.3 สรุปผลการประเมินโครงงานโดยผู้ใช้งาน 3 ท่าน (แบบประเมิน วค-5)",
+    "bmName": "_TocTarget_80"
+  },
+  {
+    "tocIdx": 81,
+    "tocParagraphIdx": 167,
+    "leftText": "ตาราง Functional Requirements ของระบบ FarmGAP",
+    "oldPage": "82",
+    "targetParagraphIdx": 2154,
+    "targetText": "ตาราง Functional Requirements ของระบบ FarmGAP",
+    "bmName": "_TocTarget_81"
+  },
+  {
+    "tocIdx": 82,
+    "tocParagraphIdx": 168,
+    "leftText": "ตาราง Non-Functional Requirements ของระบบ FarmGAP",
+    "oldPage": "83",
+    "targetParagraphIdx": 2195,
+    "targetText": "ตาราง Non-Functional Requirements ของระบบ FarmGAP",
+    "bmName": "_TocTarget_82"
+  },
+  {
+    "tocIdx": 83,
+    "tocParagraphIdx": 169,
+    "leftText": "ตารางพจนานุกรมข้อมูล (Data Dictionary) ทั้ง 18 ตารางของระบบ FarmGAP",
+    "oldPage": "83",
+    "targetParagraphIdx": 2216,
+    "targetText": "ตารางพจนานุกรมข้อมูล (Data Dictionary) ทั้ง 18 ตารางของระบบ FarmGAP",
+    "bmName": "_TocTarget_83"
+  },
+  {
+    "tocIdx": 84,
+    "tocParagraphIdx": 173,
+    "leftText": "ภาพที่ 3.1 แผนภาพกรณีใช้งานของระบบ (Use Case Diagram)",
+    "oldPage": "36",
+    "targetParagraphIdx": 404,
+    "targetText": "ภาพที่ 3.1 แผนภาพกรณีใช้งานของระบบ (Use Case Diagram)",
+    "bmName": "_TocTarget_84"
+  },
+  {
+    "tocIdx": 85,
+    "tocParagraphIdx": 174,
+    "leftText": "ภาพที่ 3.2 สถาปัตยกรรมของระบบ FarmGAP (System Architecture)",
+    "oldPage": "37",
+    "targetParagraphIdx": 408,
+    "targetText": "ภาพที่ 3.2 สถาปัตยกรรมของระบบ FarmGAP (System Architecture)",
+    "bmName": "_TocTarget_85"
+  },
+  {
+    "tocIdx": 86,
+    "tocParagraphIdx": 175,
+    "leftText": "ภาพที่ 3.3 แผนภาพบริบทของระบบ (Context Diagram / DFD ระดับ 0)",
+    "oldPage": "38",
+    "targetParagraphIdx": 413,
+    "targetText": "ภาพที่ 3.3 แผนภาพบริบทของระบบ (Context Diagram / DFD ระดับ 0)",
+    "bmName": "_TocTarget_86"
+  },
+  {
+    "tocIdx": 87,
+    "tocParagraphIdx": 176,
+    "leftText": "ภาพที่ 3.4 แผนภาพกระแสข้อมูลระดับที่ 1 (Data Flow Diagram Level 1)",
+    "oldPage": "39",
+    "targetParagraphIdx": 415,
+    "targetText": "ภาพที่ 3.4 แผนภาพกระแสข้อมูลระดับที่ 1 (Data Flow Diagram Level 1)",
+    "bmName": "_TocTarget_87"
+  },
+  {
+    "tocIdx": 88,
+    "tocParagraphIdx": 177,
+    "leftText": "ภาพที่ 3.5 แผนภาพความสัมพันธ์ของข้อมูล (Entity-Relationship Diagram: ER Diagram)",
+    "oldPage": "43",
+    "targetParagraphIdx": 515,
+    "targetText": "ภาพที่ 3.5 แผนภาพความสัมพันธ์ของข้อมูล (Entity-Relationship Diagram: ER Diagram ทั้ง 18 ตาราง)",
+    "bmName": "_TocTarget_88"
+  },
+  {
+    "tocIdx": 89,
+    "tocParagraphIdx": 178,
+    "leftText": "ภาพที่ 4.1 หน้าจอแดชบอร์ดภาพรวมฟาร์มและสถิติสำคัญ (Dashboard)",
+    "oldPage": "62",
+    "targetParagraphIdx": 1893,
+    "targetText": "ภาพที่ 4.1 หน้าจอแดชบอร์ดภาพรวมฟาร์มและสถิติสำคัญ (Dashboard)",
+    "bmName": "_TocTarget_89"
+  },
+  {
+    "tocIdx": 90,
+    "tocParagraphIdx": 179,
+    "leftText": "ภาพที่ 4.2 หน้าจอจัดการแปลงปลูก แคร่ปลูก และการบันทึกการเตรียมดิน",
+    "oldPage": "63",
+    "targetParagraphIdx": 1897,
+    "targetText": "ภาพที่ 4.2 หน้าจอจัดการแปลงปลูก แคร่ปลูก และการบันทึกการเตรียมดิน",
+    "bmName": "_TocTarget_90"
+  },
+  {
+    "tocIdx": 91,
+    "tocParagraphIdx": 180,
+    "leftText": "ภาพที่ 4.3 หน้าจอบันทึกการเพาะกล้า การย้ายลงปลูก และการคำนวณอายุพืชสะสม",
+    "oldPage": "63",
+    "targetParagraphIdx": 1901,
+    "targetText": "ภาพที่ 4.3 หน้าจอบันทึกการเพาะกล้า การย้ายลงปลูก และการคำนวณอายุพืชสะสม",
+    "bmName": "_TocTarget_91"
+  },
+  {
+    "tocIdx": 92,
+    "tocParagraphIdx": 181,
+    "leftText": "ภาพที่ 4.4 หน้าจอบันทึกการใช้ปุ๋ยเคมีและระบบล็อกการเก็บเกี่ยวตามระยะปลอดภัย (PHI)",
+    "oldPage": "64",
+    "targetParagraphIdx": 1905,
+    "targetText": "ภาพที่ 4.4 หน้าจอบันทึกการใช้ปุ๋ยเคมีและระบบล็อกการเก็บเกี่ยวตามระยะปลอดภัย (PHI)",
+    "bmName": "_TocTarget_92"
+  },
+  {
+    "tocIdx": 93,
+    "tocParagraphIdx": 182,
+    "leftText": "ภาพที่ 4.5 หน้าจอบันทึกการเก็บเกี่ยวผลผลิตเข้าคลังสินค้าและการสร้างรหัส Lot",
+    "oldPage": "65",
+    "targetParagraphIdx": 1909,
+    "targetText": "ภาพที่ 4.5 หน้าจอบันทึกการเก็บเกี่ยวผลผลิตเข้าคลังสินค้าและการสร้างรหัส Lot",
+    "bmName": "_TocTarget_93"
+  },
+  {
+    "tocIdx": 94,
+    "tocParagraphIdx": 183,
+    "leftText": "ภาพที่ 4.6 ตัวอย่างรายงานมาตรฐาน GAP รูปแบบเอกสาร A4 แยกรายรอบการปลูก",
+    "oldPage": "65",
+    "targetParagraphIdx": 1913,
+    "targetText": "ภาพที่ 4.6 ตัวอย่างรายงานมาตรฐาน GAP รูปแบบเอกสาร A4 แยกรายรอบการปลูก",
+    "bmName": "_TocTarget_94"
+  },
+  {
+    "tocIdx": 95,
+    "tocParagraphIdx": 184,
+    "leftText": "ภาพที่ 4.7 หน้าจอร้านค้าออนไลน์ผ่าน LINE LIFF และการสั่งซื้อสินค้า",
+    "oldPage": "66",
+    "targetParagraphIdx": 1919,
+    "targetText": "ภาพที่ 4.7 หน้าจอร้านค้าออนไลน์ผ่าน LINE LIFF และการสั่งซื้อสินค้า",
+    "bmName": "_TocTarget_95"
+  },
+  {
+    "tocIdx": 96,
+    "tocParagraphIdx": 185,
+    "leftText": "ภาพที่ 4.8 การ์ดแจ้งเตือนสถานะคำสั่งซื้อและการตรวจสอบสถานะจัดส่งผ่าน Flex Message",
+    "oldPage": "67",
+    "targetParagraphIdx": 1923,
+    "targetText": "ภาพที่ 4.8 การ์ดแจ้งเตือนสถานะคำสั่งซื้อและการตรวจสอบสถานะจัดส่งผ่าน Flex Message",
+    "bmName": "_TocTarget_96"
+  },
+  {
+    "tocIdx": 97,
+    "tocParagraphIdx": 186,
+    "leftText": "ภาพที่ 4.9 หน้าจอตรวจสอบย้อนกลับแหล่งที่มาของผลผลิตผ่านการสแกน QR Code",
+    "oldPage": "68",
+    "targetParagraphIdx": 1927,
+    "targetText": "ภาพที่ 4.9 หน้าจอตรวจสอบย้อนกลับแหล่งที่มาของผลผลิตผ่านการสแกน QR Code",
+    "bmName": "_TocTarget_97"
+  },
+  {
+    "tocIdx": 98,
+    "tocParagraphIdx": 187,
+    "leftText": "ภาพที่ 4.10 หน้าจอแดชบอร์ดแสดงผลการวิเคราะห์กลุ่มลูกค้าด้วย K-Means (K = 3) และปุ่มยิงแจ้งเตือน LINE เฉพาะกลุ่ม",
+    "oldPage": "69",
+    "targetParagraphIdx": 1933,
+    "targetText": "ภาพที่ 4.10 หน้าจอแดชบอร์ดแสดงผลการวิเคราะห์กลุ่มลูกค้าด้วย K-Means (K = 3) และปุ่มยิงแจ้งเตือน LINE เฉพาะกลุ่ม",
+    "bmName": "_TocTarget_98"
+  },
+  {
+    "tocIdx": 99,
+    "tocParagraphIdx": 188,
+    "leftText": "ภาพที่ 4.11 การสนทนาและรับคำสั่งซื้ออัตโนมัติด้วย Google Gemini AI บน LINE OA",
+    "oldPage": "70",
+    "targetParagraphIdx": 1938,
+    "targetText": "ภาพที่ 4.11 การสนทนาและรับคำสั่งซื้ออัตโนมัติด้วย Google Gemini AI บน LINE OA",
+    "bmName": "_TocTarget_99"
+  }
+]

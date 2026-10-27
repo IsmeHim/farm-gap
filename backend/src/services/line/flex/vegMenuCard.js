@@ -1,8 +1,8 @@
 import { pool } from '../../../db.js';
 import { client, getChatSession } from '../config.js';
 
-// Reply veg menu Flex Message
-export async function replyVegMenu(replyToken, userId) {
+// Build veg menu Flex Message object (reusable for single or multi-bubble replies)
+export async function buildVegMenuFlex(userId) {
   const [products] = await pool.query(
     'SELECT id, name, price, unit, stock_quantity FROM products WHERE status = "available" AND stock_quantity > 0 ORDER BY id ASC LIMIT 8'
   );
@@ -268,7 +268,13 @@ export async function replyVegMenu(replyToken, userId) {
     },
   };
 
+  return flexMenu;
+}
+
+// Reply veg menu Flex Message
+export async function replyVegMenu(replyToken, userId) {
   try {
+    const flexMenu = await buildVegMenuFlex(userId);
     await client.replyMessage({
       replyToken: replyToken,
       messages: [flexMenu],

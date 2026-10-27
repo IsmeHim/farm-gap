@@ -23,7 +23,9 @@ export async function askGemini(prompt, systemInstruction) {
     'gemini-3.5-flash-lite', // ตัวหลัก: ฟรีวันละ 500 ครั้ง เร็ว ฉลาดพอดีกับงานร้านค้า/ฟาร์ม
     'gemini-3.1-flash-lite', // สำรอง 1: ฟรีอีก 500 ครั้ง/วัน (รวมเป็น 1,000 ครั้ง/วัน)
     'gemini-3.6-flash',      // สำรอง 2: ตัวท็อป (กรณี Lite ใช้งานไม่ได้)
-    'gemini-2.5-flash-lite', // สำรอง 3
+    'gemini-2.5-flash',      // สำรอง 3: รวดเร็ว แม่นยำ รองรับงานร้านค้าและฟาร์ม
+    'gemini-2.5-flash-lite', // สำรอง 4: ประหยัดโควต้า ตอบไวมาก
+    'gemini-2.0-flash',      // สำรอง 5: เสถียรสูง
   ].filter(Boolean);
   const models = [...new Set(candidateModels)];
 
@@ -43,7 +45,7 @@ export async function askGemini(prompt, systemInstruction) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(6000),
+        signal: AbortSignal.timeout(4500),
       });
       
       if (!res.ok) {

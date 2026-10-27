@@ -11,11 +11,11 @@ import {
   fetchLineMessageContentBuffer,
 } from './config.js';
 import { askGemini, isCancelWithGemini } from './ai/gemini.js';
-import { getFarmContext, getOwnerContactInfo } from './ai/farmContext.js';
+import { getFarmContext, getOwnerContactInfo, detectCropInquiry } from './ai/farmContext.js';
 import { extractOrderIntent, getProductWeightInKg } from './parsers/orderIntent.js';
 import { parseSmartCustomerContact, detectPaymentMethodWithGemini } from './parsers/addressParser.js';
 import { replyWelcome } from './flex/welcomeCard.js';
-import { replyVegMenu } from './flex/vegMenuCard.js';
+import { replyVegMenu, buildVegMenuFlex } from './flex/vegMenuCard.js';
 import { replyWebStoreLink } from './flex/webStoreCard.js';
 import { replyInvoiceAndPayment, replySlipConfirmed } from './flex/invoiceCard.js';
 import { replyCodOrderConfirmation } from './flex/codCard.js';
@@ -1020,7 +1020,7 @@ export async function handleEvent(event) {
       }
 
       // 2. ตรวจสอบว่าพิมพ์ตัวเลขหรือจำนวนเข้ามา (เช่น "8", "8 ถุง", "6 กิโล", "6 โล", "5 kg", "เอา 8", "10")
-      const qtyMatch = text.match(/^(?:เอา|สั่ง|ขอ|เพิ่ม|รับ)?\s*([0-9]+(?:\.[0-9]+)?)\s*(กิโลกรัม|กิโล|กีโล|กก\.|ก\.ก\.|กก|โล|kg|ขีด|ถุง|แพ็ค|แพค|ห่อ|ชุด|อัน|ชิ้น)?$/i);
+      const qtyMatch = text.match(/^(?:เอา|สั่ง|ขอ|เพิ่ม|รับ)?\s*([0-9]+(?:\.[0-9]+)?)\s*(กิโลกรัม|กิโล|กีโล|กก\.|ก\.ก\.|กก|โล|kg|ขีด|ถุง|แพ็ค|แพค|ห่อ|ชุด|อัน|ชิ้น)?\s*(?:ครับ|ค่ะ|คะ|คับ|นะ|นะครับ|นะคะ|จ้า|จ้ะ)?$/i);
       if (qtyMatch) {
         const rawNum = parseFloat(qtyMatch[1]);
         const rawUnit = qtyMatch[2] ? qtyMatch[2].toLowerCase() : 'ถุง';
@@ -1124,7 +1124,8 @@ export async function handleEvent(event) {
       }
     }
 
-    if (isMenuInquiry(text)) {
+    // คำสั่งขอดูเมนูผักแบบตรงตัว (เช่น กดจาก Rich Menu หรือพิมพ์ "เมนูผัก")
+    if (['เมนูผัก', 'เมนุผัก', 'สั่งซื้อ', 'เมนู', 'เมนุ', 'menu', 'ดูเมนู', 'ดูเมนุ', 'ขอดูเมนู', 'ขอดูเมนุ', 'สั่งผัก', 'ซื้อผัก', 'รายการผัก', 'ผัก', 'รายการสินค้า', 'ผักพร้อมส่ง'].includes(lowerTrimText)) {
       return replyVegMenu(replyToken, userId);
     }
     if (
@@ -1228,6 +1229,18 @@ export async function handleEvent(event) {
 
     if (orderIntent.isOrder) {
       if (orderIntent.error) {
+        if (orderIntent.showMenuCard) {
+          try {
+            const flexMenu = await buildVegMenuFlex(userId);
+            return client.replyMessage({
+              replyToken: replyToken,
+              messages: [
+                { type: 'text', text: orderIntent.error },
+                flexMenu,
+              ],
+            });
+          } catch (_) {}
+        }
         return client.replyMessage({
           replyToken: replyToken,
           messages: [{ type: 'text', text: orderIntent.error }],
@@ -1283,6 +1296,33 @@ export async function handleEvent(event) {
       }
     }
 
+    // 1.5 ตรวจสอบกรณีลูกค้าสอบถามเกี่ยวกับผักรายชนิด (เช่น "ตอนนี้ผัก test มีไหม", "มี test ไหม", "ผักกวางตุ้งมีไหม")
+    // รองรับทั้งผักที่มีพร้อมขาย ผักที่สต็อกหมด และผักที่กำลังเพาะปลูกอยู่บนแปลงแต่ยังไม่เคยลงร้านค้า พร้อมแนบการ์ดเมนูผักด้านล่างทันที
+    const cropInquiry = await detectCropInquiry(text);
+    if (cropInquiry && cropInquiry.isCropInquiry) {
+      try {
+        const flexMenu = await buildVegMenuFlex(userId);
+        return client.replyMessage({
+          replyToken: replyToken,
+          messages: [
+            { type: 'text', text: cropInquiry.replyText },
+            flexMenu,
+          ],
+        });
+      } catch (err) {
+        console.error('Error replying crop inquiry with menu:', err.message);
+        return client.replyMessage({
+          replyToken: replyToken,
+          messages: [{ type: 'text', text: cropInquiry.replyText }],
+        });
+      }
+    }
+
+    // 1.8 ตรวจสอบคำถามขอดูเมนูผักทั่วไป (เช่น "วันนี้มีผักอะไรบ้าง", "ขายอะไรบ้าง")
+    if (isMenuInquiry(text)) {
+      return replyVegMenu(replyToken, userId);
+    }
+
     // 2. Smart Address & Contact Parser (เฉพาะกรณีที่ไม่ได้สั่งซื้อ และผู้ใช้พิมพ์ข้อมูลจัดส่งเข้ามา)
     const contactInfo = await parseSmartCustomerContact(text);
     if (contactInfo.hasAddress || (contactInfo.phone && contactInfo.address)) {
@@ -1309,8 +1349,8 @@ export async function handleEvent(event) {
       const systemInstruction = await getFarmContext();
       const responseText = await askGemini(text, systemInstruction);
 
-      // หาก AI วิเคราะห์แล้วว่าลูกค้าอยากดูเมนูผัก ให้แสดง Flex Message เมนูผักสวยๆ ทันที
-      if (responseText.includes('[SHOW_MENU_CARD]') || isMenuInquiry(responseText)) {
+      // หาก AI วิเคราะห์แล้วว่าลูกค้าอยากดูเมนูผัก ให้แสดง Flex Message เมนูผักสวยๆ ทันที (เช็คเฉพาะ [SHOW_MENU_CARD] ไม่นำคำตอบ AI ไปผ่าน isMenuInquiry)
+      if (responseText.includes('[SHOW_MENU_CARD]')) {
         return replyVegMenu(replyToken, userId);
       }
 
