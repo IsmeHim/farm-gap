@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { useAuth } from '../lib/auth.jsx';
 import { toast } from 'sonner';
 import {
   Layers,
@@ -39,6 +40,8 @@ const STAGE_LABELS = {
 };
 
 export default function Plots() {
+  const { user } = useAuth();
+  const ownerName = user?.display_name || 'เจ้าของฟาร์ม';
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [plots, setPlots] = useState([]);
@@ -59,7 +62,7 @@ export default function Plots() {
     soil_prep_date: getTodayLocalStr(),
     seed_prep_date: '',
     notes: '',
-    operator_name: 'เจ้าของฟาร์ม',
+    operator_name: user?.display_name || 'เจ้าของฟาร์ม',
     soil_recipe: '',
   });
 
@@ -113,9 +116,36 @@ export default function Plots() {
     title: '',
     details: '',
     materials_used: '',
-    operator_name: 'เจ้าของฟาร์ม',
+    operator_name: user?.display_name || 'เจ้าของฟาร์ม',
   });
   const [savingNursery, setSavingNursery] = useState(false);
+
+  // ซิงค์ชื่อผู้ปฏิบัติงานจากโปรไฟล์เจ้าของฟาร์มอัตโนมัติเมื่อข้อมูล user โหลดเสร็จ
+  useEffect(() => {
+    if (user?.display_name) {
+      setForm((prev) => ({
+        ...prev,
+        operator_name:
+          !prev.operator_name || prev.operator_name === 'เจ้าของฟาร์ม'
+            ? user.display_name
+            : prev.operator_name,
+      }));
+      setNurseryForm((prev) => ({
+        ...prev,
+        operator_name:
+          !prev.operator_name || prev.operator_name === 'เจ้าของฟาร์ม'
+            ? user.display_name
+            : prev.operator_name,
+      }));
+      setSoilForm((prev) => ({
+        ...prev,
+        operator_name:
+          !prev.operator_name || prev.operator_name === 'เจ้าของฟาร์ม'
+            ? user.display_name
+            : prev.operator_name,
+      }));
+    }
+  }, [user?.display_name]);
 
   // State for Crop Timeline Drawer / Modal
   const [showTimelineModal, setShowTimelineModal] = useState(false);
@@ -216,7 +246,7 @@ export default function Plots() {
       seed_prep_date: found?.seed_prep_date
         ? formatDateForInput(found.seed_prep_date)
         : '',
-      operator_name: 'เจ้าของฟาร์ม',
+      operator_name: ownerName,
       notes: initialMode === 'nursery' ? (chosenCrop?.notes || '') : '',
       soil_recipe:
         found?.soil_recipe ||
@@ -374,7 +404,10 @@ export default function Plots() {
       soil_prep_date: initialSoilDate
         ? formatDateForInput(initialSoilDate)
         : getTodayLocalStr(),
-      operator_name: plot.soil_activity?.operator_name || 'เจ้าของฟาร์ม',
+      operator_name:
+        plot.soil_activity?.operator_name && plot.soil_activity.operator_name !== 'เจ้าของฟาร์ม'
+          ? plot.soil_activity.operator_name
+          : ownerName,
       details: plot.soil_activity?.details || '',
     });
     setShowSoilModal(true);
@@ -388,7 +421,7 @@ export default function Plots() {
       const res = await api.put(`/api/plots/${soilForm.plot_id}/soil`, {
         soil_recipe: soilForm.soil_recipe,
         soil_prep_date: soilForm.soil_prep_date,
-        operator_name: soilForm.operator_name || 'เจ้าของฟาร์ม',
+        operator_name: soilForm.operator_name || ownerName,
         details: soilForm.details || '',
       });
       toast.success(res.data?.message || `บันทึกกิจกรรมเตรียมดินของ "${soilForm.plot_name}" เรียบร้อยแล้ว!`);
@@ -454,7 +487,7 @@ export default function Plots() {
       title: defaultTitle,
       details: defaultDetails,
       materials_used: '',
-      operator_name: 'เจ้าของฟาร์ม',
+      operator_name: ownerName,
     });
     setShowNurseryModal(true);
   };
@@ -477,7 +510,10 @@ export default function Plots() {
       title: activity.title || '',
       details: activity.details || '',
       materials_used: '',
-      operator_name: activity.operator_name || 'เจ้าของฟาร์ม',
+      operator_name:
+        activity.operator_name && activity.operator_name !== 'เจ้าของฟาร์ม'
+          ? activity.operator_name
+          : ownerName,
     });
     setShowNurseryModal(true);
   };
@@ -578,7 +614,7 @@ export default function Plots() {
           stage: 'seeding',
           title: `เพาะเมล็ดพันธุ์${cropName}`,
           details: form.notes || defaultSeedingDetails,
-          operator_name: form.operator_name || 'เจ้าของฟาร์ม',
+          operator_name: form.operator_name || ownerName,
         });
 
         toast.success(

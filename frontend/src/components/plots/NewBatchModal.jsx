@@ -274,9 +274,9 @@ export default function NewBatchModal({
                   <label className="block text-xs font-bold text-slate-800 mb-1.5">ผู้ปฏิบัติงาน / ผู้บันทึก</label>
                   <input
                     type="text"
-                    value={form.operator_name || 'เจ้าของฟาร์ม'}
+                    value={form.operator_name ?? ''}
                     onChange={(e) => setForm({ ...form, operator_name: e.target.value })}
-                    placeholder="เช่น เจ้าของฟาร์ม"
+                    placeholder="ชื่อผู้ปฏิบัติงาน / เจ้าของฟาร์ม"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-teal-300 bg-white text-slate-900 font-bold focus:border-teal-600 focus:ring-1 focus:ring-teal-600 outline-none text-sm"
                   />
                 </div>
@@ -406,9 +406,9 @@ export default function NewBatchModal({
                   </label>
                   <input
                     type="text"
-                    value={form.operator_name || 'เจ้าของฟาร์ม'}
+                    value={form.operator_name ?? ''}
                     onChange={(e) => setForm({ ...form, operator_name: e.target.value })}
-                    placeholder="เช่น เจ้าของฟาร์ม / ผู้ดูแลแปลง"
+                    placeholder="ชื่อผู้ปฏิบัติงาน / เจ้าของฟาร์ม"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 font-bold focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none text-sm"
                   />
                   <span className="text-[10.5px] text-slate-400 block mt-1">

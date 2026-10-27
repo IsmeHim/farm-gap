@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import LogManager from '../components/LogManager.jsx';
+import { useAuth } from '../lib/auth.jsx';
 import { toast } from 'sonner';
 import {
   Sparkles,
@@ -163,6 +164,8 @@ const PRESET_UNITS = [
 ];
 
 function ChemicalCustomModal({ open, setOpen, editingId, form, setForm, save, plots, title }) {
+  const { user } = useAuth();
+  const ownerName = user?.display_name || 'เจ้าของฟาร์ม';
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedPresetName, setSelectedPresetName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -244,7 +247,7 @@ function ChemicalCustomModal({ open, setOpen, editingId, form, setForm, save, pl
         ...preset.data,
         plot_id: (curDetail && curDetail.isSelectable && prev.plot_id) ? prev.plot_id : (firstActive?.id || ''),
         log_date: prev.log_date || new Date().toISOString().split('T')[0],
-        worker_name: prev.worker_name || 'เจ้าของฟาร์ม'
+        worker_name: prev.worker_name && prev.worker_name !== 'เจ้าของฟาร์ม' ? prev.worker_name : ownerName
       };
     });
     toast.success(`✨ ใส่ข้อมูล "${preset.name}" ให้อัตโนมัติเรียบร้อย`);
@@ -273,7 +276,7 @@ function ChemicalCustomModal({ open, setOpen, editingId, form, setForm, save, pl
         application_method: form.application_method || 'พ่น',
         safety_ppe: form.safety_ppe ? 1 : 0,
         phi_days: form.phi_days === '' || form.phi_days === null || form.phi_days === undefined ? 0 : Number(form.phi_days),
-        worker_name: form.worker_name || 'เจ้าของฟาร์ม'
+        worker_name: form.worker_name || ownerName
       });
     } finally {
       setSaving(false);

@@ -50,10 +50,11 @@ export default function LogManager({
 
   const openNew = () => {
     const init = {};
+    const defaultOwner = user?.display_name || 'เจ้าของฟาร์ม';
     fields.forEach(f => {
       if (f.type === 'date') init[f.key] = format(new Date(), 'yyyy-MM-dd');
       else if (f.default !== undefined) init[f.key] = f.default;
-      else if (f.key === 'worker_name' || f.key === 'operator_name') init[f.key] = user?.display_name || 'เจ้าของฟาร์ม';
+      else if (f.key === 'worker_name' || f.key === 'operator_name') init[f.key] = defaultOwner;
       if (f.allowCustom) init[`custom_${f.key}`] = '';
     });
     setForm(init);
@@ -63,14 +64,39 @@ export default function LogManager({
 
   const openEdit = (item) => {
     const init = {};
+    const defaultOwner = user?.display_name || 'เจ้าของฟาร์ม';
     fields.forEach(f => {
-      init[f.key] = item[f.key] ?? (f.type === 'date' ? '' : '');
+      if (f.key === 'worker_name' || f.key === 'operator_name') {
+        const existingVal = item[f.key];
+        init[f.key] = existingVal && existingVal !== 'เจ้าของฟาร์ม' ? existingVal : defaultOwner;
+      } else {
+        init[f.key] = item[f.key] ?? (f.type === 'date' ? '' : '');
+      }
       if (f.allowCustom) init[`custom_${f.key}`] = '';
     });
     setForm(init);
     setEditingId(item.id);
     setOpen(true);
   };
+
+  // ซิงค์ชื่อผู้ปฏิบัติงานจากโปรไฟล์หากฟอร์มเปิดอยู่แล้ว user โหลดเสร็จตามมา
+  useEffect(() => {
+    if (open && user?.display_name) {
+      setForm(prev => {
+        const next = { ...prev };
+        let changed = false;
+        if ('worker_name' in next && (!next.worker_name || next.worker_name === 'เจ้าของฟาร์ม')) {
+          next.worker_name = user.display_name;
+          changed = true;
+        }
+        if ('operator_name' in next && (!next.operator_name || next.operator_name === 'เจ้าของฟาร์ม')) {
+          next.operator_name = user.display_name;
+          changed = true;
+        }
+        return changed ? next : prev;
+      });
+    }
+  }, [open, user?.display_name]);
 
   const save = async (customPayload) => {
     try {

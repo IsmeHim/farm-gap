@@ -337,7 +337,11 @@ export async function syncOrderToStorageLog(orderId, customData = {}, userId = 1
     const targetStorageLoc = customData.storage_location || 'คลังบรรจุและกระจายสินค้าฟาร์ม';
     const targetStorageCond = customData.storage_conditions || 'บรรจุในกล่อง/ถุงเก็บความสด ป้องกันแสงแดดและความร้อน';
     const targetDeliveryCond = customData.delivery_condition || 'ดี';
-    const targetWorker = customData.worker_name || 'เจ้าของฟาร์ม';
+    let targetWorker = (customData.worker_name || '').trim();
+    if (!targetWorker || targetWorker === 'เจ้าของฟาร์ม') {
+      const [uRows] = await pool.query("SELECT display_name FROM users WHERE role IN ('owner', 'admin') ORDER BY id ASC LIMIT 1");
+      targetWorker = uRows[0]?.display_name || 'เจ้าของฟาร์ม';
+    }
     const targetNotes = customData.notes || defaultNotes;
     const targetDate = customData.log_date || new Date().toISOString().split('T')[0];
     const targetTime = customData.transport_time || new Date().toTimeString().split(' ')[0];

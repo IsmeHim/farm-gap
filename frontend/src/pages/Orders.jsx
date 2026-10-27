@@ -49,7 +49,7 @@ export default function Orders() {
   const [promptPayNumber, setPromptPayNumber] = useState(user?.promptpay_number || '');
   const [copiedField, setCopiedField] = useState(null);
 
-  // Fetch farm profile for promptpay_number if not already loaded in user
+  // Fetch farm profile for promptpay_number and sync default worker_name if not already loaded in user
   useEffect(() => {
     if (user?.promptpay_number) {
       setPromptPayNumber(user.promptpay_number);
@@ -59,6 +59,12 @@ export default function Orders() {
           setPromptPayNumber(res.data.promptpay_number);
         }
       }).catch(() => {});
+    }
+    if (user?.display_name) {
+      setDispatchForm(prev => ({
+        ...prev,
+        worker_name: !prev.worker_name || prev.worker_name === 'เจ้าของฟาร์ม' ? user.display_name : prev.worker_name,
+      }));
     }
   }, [user]);
 

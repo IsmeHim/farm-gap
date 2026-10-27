@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { format } from 'date-fns';
+import { useAuth } from '../../lib/auth.jsx';
 import {
   Clock,
   X,
@@ -23,6 +24,8 @@ export default function CropTimelineDrawer({
   onOpenEditActivity,
   onDeleteActivity,
 }) {
+  const { user } = useAuth();
+  const ownerName = user?.display_name || 'เจ้าของฟาร์ม';
   // โหมดการแสดงผล: 'compact' (กระชับ ดูได้หลายรายการพร้อมกัน คลิกกางดูได้) หรือ 'expanded' (กางรายละเอียดทุกอัน)
   const [viewMode, setViewMode] = useState('compact');
   const [expandedIds, setExpandedIds] = useState({});
@@ -252,7 +255,7 @@ export default function CropTimelineDrawer({
                                isHarvest ? '🧺 เก็บเกี่ยว' : '📝 บันทึก'}
                             </span>
                             <span className="text-[10px] text-slate-400 ml-auto sm:ml-0">
-                              • {act.operator_name || 'เจ้าของฟาร์ม'}
+                              • {act.operator_name && act.operator_name !== 'เจ้าของฟาร์ม' ? act.operator_name : ownerName}
                             </span>
                           </div>
 

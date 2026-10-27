@@ -80,11 +80,18 @@ batchesRouter.post('/', async (req, res) => {
       soil_prep_date = null,
       seed_prep_date = null,
       notes = '',
-      soil_recipe = ''
+      soil_recipe = '',
+      operator_name = ''
     } = req.body;
 
     if (!plot_id || !crop_id) {
       return res.status(400).json({ error: 'plot_id และ crop_id จำเป็นต้องระบุ' });
+    }
+
+    let effectiveOperator = (operator_name || '').trim();
+    if (!effectiveOperator || effectiveOperator === 'เจ้าของฟาร์ม') {
+      const [uRows] = await pool.query('SELECT display_name FROM users WHERE id = ?', [req.user.id]);
+      effectiveOperator = uRows[0]?.display_name || req.user.display_name || 'เจ้าของฟาร์ม';
     }
 
     // 1. ตรวจสอบแปลงปลูก
@@ -191,7 +198,7 @@ batchesRouter.post('/', async (req, res) => {
           `เตรียมดินและแคร่ปลูก (${batch_code})`,
           `ผสมดินและปรับปรุงแปลงปลูกตามสูตรมาตรฐานฟาร์ม เตรียมแปลงสำหรับการปลูก ${crop.name}`,
           effectiveSoilRecipe || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบ)',
-          req.user.display_name || 'เจ้าของฟาร์ม'
+          effectiveOperator
         ]
       );
     } else {
@@ -216,7 +223,7 @@ batchesRouter.post('/', async (req, res) => {
         `ย้ายกล้าลงแปลง ${crop.name} (${batch_code})`,
         notes || `ย้ายต้นกล้าลงแปลงปลูก คาดเก็บเกี่ยว ${expected_harvest_date}`,
         effectiveSoilRecipe ? `สูตรดิน: ${effectiveSoilRecipe}` : null,
-        req.user.display_name || 'เจ้าของฟาร์ม'
+        effectiveOperator
       ]
     );
 

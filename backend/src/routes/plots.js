@@ -302,6 +302,12 @@ plotsRouter.post('/:id/activities', async (req, res) => {
     );
     const currentBatchId = plotRows[0]?.current_batch_id || null;
 
+    let finalOperator = (operator_name || '').trim();
+    if (!finalOperator || finalOperator === 'เจ้าของฟาร์ม') {
+      const [uRows] = await pool.query('SELECT display_name FROM users WHERE id = ?', [req.user.id]);
+      finalOperator = uRows[0]?.display_name || req.user.display_name || 'เจ้าของฟาร์ม';
+    }
+
     const [result] = await pool.query(
       `INSERT INTO crop_activities (user_id, plot_id, batch_id, activity_date, stage, title, details, materials_used, operator_name)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -314,7 +320,7 @@ plotsRouter.post('/:id/activities', async (req, res) => {
         title,
         details || null,
         materials_used || null,
-        operator_name || req.user.display_name || 'เจ้าของฟาร์ม'
+        finalOperator
       ]
     );
 
@@ -346,6 +352,11 @@ plotsRouter.put('/activities/:activityId', async (req, res) => {
   try {
     const actId = Number(req.params.activityId);
     const { activity_date, stage, title, details, materials_used, operator_name } = req.body;
+    let finalOperator = (operator_name || '').trim();
+    if (!finalOperator || finalOperator === 'เจ้าของฟาร์ม') {
+      const [uRows] = await pool.query('SELECT display_name FROM users WHERE id = ?', [req.user.id]);
+      finalOperator = uRows[0]?.display_name || req.user.display_name || 'เจ้าของฟาร์ม';
+    }
     await pool.query(
       `UPDATE crop_activities 
        SET activity_date = ?, stage = ?, title = ?, details = ?, materials_used = ?, operator_name = ?
@@ -356,7 +367,7 @@ plotsRouter.put('/activities/:activityId', async (req, res) => {
         title,
         details || null,
         materials_used || null,
-        operator_name || 'เจ้าของฟาร์ม',
+        finalOperator,
         actId,
         req.user.id
       ]
@@ -500,7 +511,11 @@ plotsRouter.put('/:id/soil', async (req, res) => {
     }
     const finalRecipe = (soil_recipe || '').trim() || 'ผสมดิน 8 กระบะปูน (กากยางพัฒนาที่ดิน 2 กระสอบ + ขี้ไก่ 1/2 กระสอบต่อกระบะ)';
     const finalDate = soil_prep_date;
-    const finalOperator = operator_name || req.user.display_name || 'เจ้าของฟาร์ม';
+    let finalOperator = (operator_name || '').trim();
+    if (!finalOperator || finalOperator === 'เจ้าของฟาร์ม') {
+      const [uRows] = await pool.query('SELECT display_name FROM users WHERE id = ?', [req.user.id]);
+      finalOperator = uRows[0]?.display_name || req.user.display_name || 'เจ้าของฟาร์ม';
+    }
     const finalDetails = details || notes || 'ผสมดินและปรับปรุงแคร่ปลูกตามมาตรฐาน GAP ข้อ 2 (การจัดการดินและวัสดุปลูก)';
 
     // ตรวจสอบแปลง

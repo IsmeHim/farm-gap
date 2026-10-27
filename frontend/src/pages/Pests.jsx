@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import LogManager from '../components/LogManager.jsx';
+import { useAuth } from '../lib/auth.jsx';
 import { toast } from 'sonner';
 import {
   Bug,
@@ -100,6 +101,8 @@ const PEST_PRESETS = [
 ];
 
 function PestCustomModal({ open, setOpen, editingId, form, setForm, save, plots, title }) {
+  const { user } = useAuth();
+  const ownerName = user?.display_name || 'เจ้าของฟาร์ม';
   const [selectedPresetName, setSelectedPresetName] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -110,7 +113,7 @@ function PestCustomModal({ open, setOpen, editingId, form, setForm, save, plots,
       ...preset.data,
       plot_id: prev.plot_id || (plots[0]?.id || ''),
       log_date: prev.log_date || new Date().toISOString().split('T')[0],
-      worker_name: prev.worker_name || 'เจ้าของฟาร์ม'
+      worker_name: prev.worker_name && prev.worker_name !== 'เจ้าของฟาร์ม' ? prev.worker_name : ownerName
     }));
     toast.success(`✨ ใส่ข้อมูล "${preset.name}" ให้อัตโนมัติเรียบร้อย`);
   };
@@ -138,7 +141,7 @@ function PestCustomModal({ open, setOpen, editingId, form, setForm, save, plots,
         damage_unit: form.damage_unit || 'ต้น',
         severity: form.severity || 'น้อย',
         treatment_method: form.treatment_method || '',
-        worker_name: form.worker_name || 'เจ้าของฟาร์ม',
+        worker_name: form.worker_name || ownerName,
         notes: form.notes || ''
       });
     } finally {

@@ -155,7 +155,11 @@ chemicalsRouter.post('/', async (req, res) => {
       return res.status(400).json({ error: 'กรุณาระบุชื่อผลิตภัณฑ์/ปุ๋ย/ชีวภัณฑ์' });
     }
 
-    const worker = worker_name || req.user.display_name || 'เจ้าของฟาร์ม';
+    let worker = (worker_name || '').trim();
+    if (!worker || worker === 'เจ้าของฟาร์ม') {
+      const [uRows] = await pool.query('SELECT display_name FROM users WHERE id = ?', [req.user.id]);
+      worker = uRows[0]?.display_name || req.user.display_name || 'เจ้าของฟาร์ม';
+    }
     const targetBatchId = await resolveTargetBatchId(plot_id, req.user.id, batch_id);
 
     const [result] = await pool.query(
