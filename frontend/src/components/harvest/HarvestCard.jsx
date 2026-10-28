@@ -41,30 +41,39 @@ export default function HarvestCard({
       <div className="space-y-3">
         {/* Header: Plot Name, Batch, Date, Badges */}
         <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-3">
-          <div className="space-y-1 min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <h3 className="font-black text-sm sm:text-base text-[#173f2a] truncate">
-                {cleanPlotTitle}
-              </h3>
-              {r.crop_name && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-900 bg-emerald-100/90 border border-emerald-300 px-2 py-0.5 rounded-md shadow-2xs">
-                  <span>🥦</span>
-                  <span>{r.crop_name}</span>
-                </span>
-              )}
-              {(r.batch_code || batchCode) && (
-                <span className="font-mono text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 shrink-0">
-                  {r.batch_code || batchCode}
-                </span>
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            {(r.effective_image_url || r.product_image_url || r.crop_image_url) ? (
+              <img
+                src={r.effective_image_url || r.product_image_url || r.crop_image_url}
+                alt={r.crop_name || 'ผักสด'}
+                className="w-10 h-10 rounded-xl object-cover border border-emerald-200 shadow-2xs shrink-0 bg-white"
+              />
+            ) : null}
+            <div className="space-y-1 min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h3 className="font-black text-sm sm:text-base text-[#173f2a] truncate">
+                  {cleanPlotTitle}
+                </h3>
+                {r.crop_name && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-900 bg-emerald-100/90 border border-emerald-300 px-2 py-0.5 rounded-md shadow-2xs">
+                    <span>🥦</span>
+                    <span>{r.crop_name}</span>
+                  </span>
+                )}
+                {(r.batch_code || batchCode) && (
+                  <span className="font-mono text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 shrink-0">
+                    {r.batch_code || batchCode}
+                  </span>
+                )}
+              </div>
+
+              {r.harvest_date && (
+                <div className="text-[11px] text-slate-500 flex items-center gap-1.5 font-medium">
+                  <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>{format(new Date(r.harvest_date), 'dd/MM/yyyy')}</span>
+                </div>
               )}
             </div>
-
-            {r.harvest_date && (
-              <div className="text-[11px] text-slate-500 flex items-center gap-1.5 font-medium">
-                <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span>{format(new Date(r.harvest_date), 'dd/MM/yyyy')}</span>
-              </div>
-            )}
           </div>
 
           {/* Badges: Quality Grade & Hygiene */}

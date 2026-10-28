@@ -316,14 +316,25 @@ export default function Harvest() {
   // Selected plot object
   const selectedPlot = plots.find((p) => p.id === Number(form.plot_id));
 
-  // Auto-detect existing product matching selected plot or crop name
+  // Auto-detect existing product matching selected plot's crop name first (then plot_id fallback)
   const matchedProduct = selectedPlot
-    ? products.find(
-        (pr) =>
-          (pr.plot_id && Number(pr.plot_id) === Number(selectedPlot.id)) ||
-          pr.name.toLowerCase().includes(selectedPlot.crop_name.toLowerCase()) ||
-          selectedPlot.crop_name.toLowerCase().includes(pr.name.toLowerCase())
-      )
+    ? (() => {
+        const crop = (selectedPlot.crop_name || '').trim();
+        const cleanCrop = crop
+          .replace(/ปลอดสาร|สด|gap|อินทรีย์|ซูเปอร์ฟู้ด|พรีเมียม|\(.*?\)/gi, '')
+          .trim()
+          .toLowerCase();
+        const cropLower = crop.toLowerCase();
+        const byName = products.find((pr) => {
+          const pName = (pr.name || '').toLowerCase();
+          return (
+            (cropLower && (pName.includes(cropLower) || cropLower.includes(pName))) ||
+            (cleanCrop && pName.includes(cleanCrop))
+          );
+        });
+        if (byName) return byName;
+        return products.find((pr) => pr.plot_id && Number(pr.plot_id) === Number(selectedPlot.id));
+      })()
     : null;
 
   // Update packaging and price when user selects a different plot

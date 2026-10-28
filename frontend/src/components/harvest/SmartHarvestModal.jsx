@@ -63,13 +63,25 @@ export default function SmartHarvestModal({
   });
 
   const matchedProduct = selectedPlot
-    ? products.find((pr) => {
-        const crop = selectedPlot.crop_name || '';
-        return (
-          pr.name?.toLowerCase().includes(crop.toLowerCase()) ||
-          crop.toLowerCase().includes(pr.name?.toLowerCase())
-        );
-      })
+    ? (() => {
+        const crop = (selectedPlot.crop_name || '').trim();
+        const cleanCrop = crop
+          .replace(/ปลอดสาร|สด|gap|อินทรีย์|ซูเปอร์ฟู้ด|พรีเมียม|\(.*?\)/gi, '')
+          .trim()
+          .toLowerCase();
+        const cropLower = crop.toLowerCase();
+        // 1. ค้นหาจากชื่อชนิดผักก่อน (แม่นยำที่สุดแม้แปลงเปลี่ยนชนิดผัก)
+        const byName = products.find((pr) => {
+          const pName = (pr.name || '').toLowerCase();
+          return (
+            (cropLower && (pName.includes(cropLower) || cropLower.includes(pName))) ||
+            (cleanCrop && pName.includes(cleanCrop))
+          );
+        });
+        if (byName) return byName;
+        // 2. สำรองด้วย plot_id หากชื่อสินค้าตั้งต่างออกไปแต่ผูกกับแปลงนี้
+        return products.find((pr) => pr.plot_id && Number(pr.plot_id) === Number(selectedPlot.id));
+      })()
     : null;
 
   return (
@@ -297,13 +309,38 @@ export default function SmartHarvestModal({
                     selectedPlot.crop_name.toLowerCase().includes(c.name.toLowerCase()) ||
                     c.name.toLowerCase().includes(selectedPlot.crop_name.toLowerCase())
                 );
+                const cropImageUrl =
+                  form.image_url ||
+                  matchedProduct?.image_url ||
+                  matchedCrop?.image_url ||
+                  selectedPlot?.image_url ||
+                  null;
+                const rawIcon = matchedCrop?.icon;
+                const safeEmoji =
+                  rawIcon && !/^[a-zA-Z0-9_-]+$/.test(String(rawIcon).trim()) ? rawIcon : '🥬';
 
                 return (
                   <div className="p-3.5 bg-gradient-to-br from-emerald-50/90 to-teal-50/50 border border-emerald-200 rounded-2xl text-xs text-emerald-950 space-y-2.5 shadow-xs">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-white border border-emerald-200 flex items-center justify-center text-xl shrink-0 shadow-xs">
-                          {matchedCrop?.icon || '🥬'}
+                        {cropImageUrl ? (
+                          <img
+                            src={cropImageUrl}
+                            alt={selectedPlot.crop_name}
+                            className="w-11 h-11 rounded-xl object-cover bg-white border border-emerald-200 shrink-0 shadow-xs"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              if (e.currentTarget.nextElementSibling) {
+                                e.currentTarget.nextElementSibling.style.display = 'flex';
+                              }
+                            }}
+                          />
+                        ) : null}
+                        <div
+                          style={{ display: cropImageUrl ? 'none' : 'flex' }}
+                          className="w-11 h-11 rounded-xl bg-white border border-emerald-200 items-center justify-center text-xl shrink-0 shadow-xs"
+                        >
+                          {safeEmoji}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
@@ -735,31 +772,46 @@ export default function SmartHarvestModal({
                   <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
                     {matchedProduct ? (
                       /* Case 1: Product Exists */
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-xs font-bold text-emerald-800">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                          พบสินค้าในคลัง: "{matchedProduct.name}"
+                      <div className="space-y-2.5">
+                        <div className="flex items-center gap-3 p-2.5 bg-white rounded-xl border border-emerald-200/80 shadow-2xs">
+                          {matchedProduct.image_url ? (
+                            <img
+                              src={matchedProduct.image_url}
+                              alt={matchedProduct.name}
+                              className="w-11 h-11 rounded-lg object-cover border border-slate-200 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-11 h-11 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-lg shrink-0">
+                              🥬
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1 space-y-0.5">
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span className="truncate">พบสินค้าในคลัง: "{matchedProduct.name}"</span>
+                            </div>
+                            {(() => {
+                              const calculatedBags = Math.max(
+                                1,
+                                Math.floor(
+                                  Number(form.total_weight_kg || 0) /
+                                    (Number(form.weight_per_unit_kg) || 0.4)
+                                )
+                              );
+                              const oldStock = Number(matchedProduct.stock_quantity) || 0;
+                              return (
+                                <p className="text-[11px] text-slate-600">
+                                  สต็อกเดิม: <strong>{oldStock} ถุง</strong> ➔ บวกเพิ่ม{' '}
+                                  <strong className="text-emerald-700">+{calculatedBags} ถุง</strong>{' '}
+                                  ({form.package_type}) = สต็อกใหม่รวมเป็น{' '}
+                                  <strong className="text-slate-900">
+                                    {oldStock + calculatedBags} ถุง
+                                  </strong>
+                                </p>
+                              );
+                            })()}
+                          </div>
                         </div>
-                        {(() => {
-                          const calculatedBags = Math.max(
-                            1,
-                            Math.floor(
-                              Number(form.total_weight_kg || 0) /
-                                (Number(form.weight_per_unit_kg) || 0.4)
-                            )
-                          );
-                          const oldStock = Number(matchedProduct.stock_quantity) || 0;
-                          return (
-                            <p className="text-[11px] text-slate-600">
-                              สต็อกเดิม: <strong>{oldStock} ถุง</strong> ➔ บวกเพิ่ม{' '}
-                              <strong className="text-emerald-700">+{calculatedBags} ถุง</strong>{' '}
-                              ({form.package_type}) = สต็อกใหม่รวมเป็น{' '}
-                              <strong className="text-slate-900">
-                                {oldStock + calculatedBags} ถุง
-                              </strong>
-                            </p>
-                          );
-                        })()}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                           <div className="space-y-1">
                             <label className="text-[11px] font-semibold text-slate-600">

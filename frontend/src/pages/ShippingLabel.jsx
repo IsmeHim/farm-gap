@@ -247,12 +247,42 @@ export default function ShippingLabel() {
             </div>
           </div>
 
-          {/* Barcode Mock Visual */}
-          <div className="text-center py-1 border-b border-slate-200">
-            <div className="font-mono text-lg sm:text-2xl tracking-[0.2em] sm:tracking-[0.25em] font-black text-slate-900 select-none">
-              ||| | |||| | |||||| | |||
-            </div>
-            <div className="font-mono text-[9px] sm:text-[10px] text-slate-500 font-bold tracking-widest">
+          {/* 1D Barcode Visual (SVG Code-128 Style) */}
+          <div className="flex flex-col items-center justify-center py-2 border-b border-slate-200 bg-slate-50/40 rounded-lg">
+            {(() => {
+              const codeStr = String(order.order_code || order.id || 'ORD0001');
+              // Generate deterministic realistic barcode bar widths (1 to 4 units) from order_code
+              const bars = [2, 1, 1, 2, 3, 1]; // Start guard
+              for (let i = 0; i < codeStr.length; i++) {
+                const c = codeStr.charCodeAt(i);
+                bars.push((c % 3) + 1);
+                bars.push(((c >> 2) % 2) + 1);
+                bars.push(((c >> 4) % 3) + 1);
+                bars.push((i % 2) + 1);
+              }
+              bars.push(2, 3, 1, 1, 2); // Stop guard
+
+              let x = 0;
+              const rects = [];
+              bars.forEach((w, idx) => {
+                if (idx % 2 === 0) {
+                  rects.push(<rect key={idx} x={x} y="0" width={w} height="34" fill="#0f172a" />);
+                }
+                x += w;
+              });
+
+              return (
+                <svg
+                  viewBox={`0 0 ${x} 34`}
+                  className="w-full max-w-[260px] sm:max-w-[300px] h-8 sm:h-9 overflow-visible"
+                  preserveAspectRatio="none"
+                  aria-label={`Barcode ${codeStr}`}
+                >
+                  {rects}
+                </svg>
+              );
+            })()}
+            <div className="font-mono text-[10px] sm:text-[11px] text-slate-600 font-bold tracking-[0.22em] mt-1">
               *{order.order_code}*
             </div>
           </div>
