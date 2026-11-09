@@ -117,6 +117,22 @@ export async function initSessionTable(retries = 3) {
     await pool.query(`
       ALTER TABLE orders MODIFY COLUMN slip_image_url LONGTEXT
     `).catch(() => {});
+
+    // Auto-add Gemini AI configuration columns to users table if not present
+    await pool.query(`ALTER TABLE users ADD COLUMN gemini_api_key VARCHAR(255) NULL`).catch(() => {});
+    await pool.query(`ALTER TABLE users ADD COLUMN gemini_model VARCHAR(100) NULL DEFAULT 'gemini-3.5-flash-lite'`).catch(() => {});
+    await pool.query(`ALTER TABLE users ADD COLUMN gemini_auto_fallback TINYINT(1) NOT NULL DEFAULT 1`).catch(() => {});
+    await pool.query(`ALTER TABLE users ADD COLUMN gemini_enabled TINYINT(1) NOT NULL DEFAULT 1`).catch(() => {});
+
+    // Seed default Gemini API Key from .env into owner row if still empty
+    const defaultEnvKey = (process.env.GEMINI_API_KEY || '').trim();
+    if (defaultEnvKey && defaultEnvKey !== 'dummy_key') {
+      await pool.query(
+        `UPDATE users SET gemini_api_key = ? WHERE (role = 'owner' OR role = 'admin') AND (gemini_api_key IS NULL OR gemini_api_key = '')`,
+        [defaultEnvKey]
+      ).catch(() => {});
+    }
+
     tableInitialized = true;
   } catch (err) {
     if (retries > 0) {

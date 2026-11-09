@@ -10,8 +10,13 @@ import {
   clearChatSession,
   fetchLineMessageContentBuffer,
 } from './config.js';
-import { askGemini, isCancelWithGemini } from './ai/gemini.js';
-import { getFarmContext, getOwnerContactInfo, detectCropInquiry } from './ai/farmContext.js';
+import {
+  askGemini,
+  isCancelWithGemini,
+  analyzeOwnerMessageWithGemini,
+  analyzeCustomerMessageWithGemini,
+} from './ai/gemini.js';
+import { getFarmContext, getOwnerContactInfo, detectCropInquiry, getOwnerDeepContext } from './ai/farmContext.js';
 import { extractOrderIntent, getProductWeightInKg } from './parsers/orderIntent.js';
 import { parseSmartCustomerContact, detectPaymentMethodWithGemini } from './parsers/addressParser.js';
 import { replyWelcome } from './flex/welcomeCard.js';
@@ -31,6 +36,8 @@ import {
   notifyAdminNewOrder,
   buildAdminShippingStepBubble,
   buildAdminCompletedStepBubble,
+  buildAdminOrderManagementMessages,
+  buildAdminOrderListFlex,
   getAdminFrontendBase,
 } from './notifications/adminNotifier.js';
 import { notifyCustomerOrderStatus } from './notifications/customerNotifier.js';
@@ -384,7 +391,12 @@ export async function handleEvent(event) {
     }
 
     // 3.7 คำสั่งจัดการออเดอร์สำหรับเจ้าของฟาร์มเท่านั้น (Owner-Only In-Chat Order Management)
-    if (action === 'admin_dispatch' || action === 'admin_complete' || action === 'admin_cancel') {
+    if (
+      action === 'admin_open_order' ||
+      action === 'admin_dispatch' ||
+      action === 'admin_complete' ||
+      action === 'admin_cancel'
+    ) {
       const orderId = params.get('order_id');
       if (!orderId) return;
 
@@ -436,6 +448,31 @@ export async function handleEvent(event) {
          WHERE oi.order_id = ?`,
         [orderId]
       );
+
+      // กดปุ่ม "⚙️ จัดการออเดอร์นี้" จากการ์ด List -> ส่งการ์ดแจ้งเตือนออเดอร์ใบเดิมตอนแรกที่ออเดอร์เข้า (พร้อมรูปสลิปถ้ามี และปุ่มกดจัดส่ง/พิมพ์ใบปะหน้า/ยกเลิกครบ)
+      if (action === 'admin_open_order') {
+        order.items = itemRows;
+        const { messages: manageMessages } = await buildAdminOrderManagementMessages(
+          order,
+          order.slip_image_url ? 'SLIP_UPLOADED' : 'NEW_ORDER',
+          frontendBase
+        );
+        try {
+          return await client.replyMessage({
+            replyToken: event.replyToken,
+            messages: manageMessages,
+          });
+        } catch (replyErr) {
+          // Fallback กรณี URL รูปสลิปมีปัญหา ให้ส่งเฉพาะการ์ด Flex Bubble
+          if (manageMessages.length > 1) {
+            return await client.replyMessage({
+              replyToken: event.replyToken,
+              messages: [manageMessages[manageMessages.length - 1]],
+            });
+          }
+          throw replyErr;
+        }
+      }
 
       // Step 1 -> Step 2: กดจัดส่งสินค้า (บันทึกสมุด GAP #6 + แจ้งเตือนลูกค้า + ส่งการ์ด Step 2 ให้เจ้าของ)
       if (action === 'admin_dispatch') {
@@ -633,6 +670,55 @@ export async function handleEvent(event) {
     // Fetch active session state
     const session = await getChatSession(userId);
     const lowerTrimText = text.toLowerCase().trim();
+
+    // 👑 OWNER-FIRST AI ASSISTANT: ตรวจสอบว่าผู้ส่งข้อความคือ "เจ้าของฟาร์ม" หรือไม่
+    // หากเป็นเจ้าของฟาร์ม (และไม่ได้กำลังอยู่ใน Flow จำลองการสั่งซื้อของตัวเอง) ให้ส่งข้อความเข้า Gemini AI วิเคราะห์เจตนาและข้อมูลเชิงลึกเป็นหลักทันที โดยไม่ต้องพึ่งคำดักแบบตายตัว!
+    try {
+      const [ownerCheckRows] = await pool.query(
+        "SELECT id, email, display_name, role, line_user_id FROM users WHERE (role = 'owner' OR role = 'admin') AND TRIM(line_user_id) = ? LIMIT 1",
+        [userId.trim()]
+      );
+
+      if (ownerCheckRows.length > 0 && (!session || session.state === 'IDLE')) {
+        const deepData = await getOwnerDeepContext();
+        const ownerAiResult = await analyzeOwnerMessageWithGemini(text, deepData);
+
+        if (ownerAiResult && ownerAiResult.isOwnerAction) {
+          const replyMessages = [
+            {
+              type: 'text',
+              text: ownerAiResult.replyText,
+            },
+          ];
+
+          if (ownerAiResult.showOrderListCard) {
+            let targetOrders = [];
+            if (Array.isArray(ownerAiResult.matchedOrderIds) && ownerAiResult.matchedOrderIds.length > 0) {
+              const idSet = new Set(ownerAiResult.matchedOrderIds.map(Number));
+              targetOrders = deepData.orders.filter(o => idSet.has(Number(o.id)));
+            }
+            // หาก AI ตั้งใจแสดงการ์ดแต่ไม่ได้ส่ง ID หรือหา ID ไม่เจอ ให้แสดงออเดอร์ที่ยังไม่ได้จัดการทั้งหมดเป็นค่าเริ่มต้น
+            if (targetOrders.length === 0 && deepData.unmanagedOrders.length > 0) {
+              targetOrders = deepData.unmanagedOrders;
+            }
+
+            if (targetOrders.length > 0) {
+              const orderListFlex = buildAdminOrderListFlex(targetOrders);
+              if (orderListFlex) {
+                replyMessages.push(orderListFlex);
+              }
+            }
+          }
+
+          return await client.replyMessage({
+            replyToken: replyToken,
+            messages: replyMessages,
+          });
+        }
+      }
+    } catch (ownerAiErr) {
+      console.error('Owner AI processing error:', ownerAiErr.message);
+    }
 
     // 1. Global Greeting Handler: เมื่อลูกค้าทักทาย (สวัสดี, หหวัดดี, hello, hi ฯลฯ)
     // ส่งการ์ดต้อนรับ replyWelcome ทันทีใน 0.02 วินาที ไม่ผ่าน Gemini และไม่อยู่ใต้สถานะใดๆ
@@ -1084,7 +1170,184 @@ export async function handleEvent(event) {
       }
     }
 
-    // STATE: IDLE (Standard conversation or new order intent)
+    // STATE: IDLE / SHOPPING_CART (Standard conversation or new order intent)
+    // เฉพาะคำสั่งปุ่มกดตรงตัวจาก Rich Menu หรือปุ่มบนการ์ด (Instant UI Button Commands)
+    if (['เมนูผัก', 'เมนู', 'menu'].includes(lowerTrimText)) {
+      return replyVegMenu(replyToken, userId);
+    }
+    if (['ตะกร้า', 'ดูตะกร้า', 'cart'].includes(lowerTrimText)) {
+      const currentCart = session.draft_data?.cart || [];
+      if (currentCart.length > 0) {
+        return replyCartSummary(replyToken, currentCart);
+      }
+      return client.replyMessage({
+        replyToken,
+        messages: [
+          {
+            type: 'text',
+            text: '🧺 ขณะนี้ยังไม่มีสินค้าในตะกร้าของคุณครับ\n\n👉 สามารถพิมพ์ "เมนูผัก" เพื่อเลือกชมและแตะสั่งผักสดพร้อมส่งได้เลยครับ 🌱',
+          },
+        ],
+      });
+    }
+
+    // ============================================================================
+    // 🧠 1. PRIMARY BRAIN: GEMINI AI-FIRST ROUTER (เหมือนระบบ Money Manager)
+    // ให้ Gemini AI วิเคราะห์เจตนาและข้อมูลฟาร์มเป็นหลักก่อนคำดักเสมอ!
+    // ============================================================================
+    try {
+      const [availableProducts] = await pool.query(
+        'SELECT id, name, price, unit, stock_quantity, status FROM products WHERE status = "available" AND stock_quantity > 0'
+      );
+      const farmContext = await getFarmContext();
+      const activeCart = Array.isArray(session.draft_data?.cart) ? session.draft_data.cart : [];
+
+      const aiDecision = await analyzeCustomerMessageWithGemini(
+        text,
+        farmContext,
+        availableProducts,
+        activeCart
+      );
+
+      if (aiDecision && aiDecision.intent) {
+        const intent = aiDecision.intent;
+
+        if (intent === 'SHOW_MENU') {
+          return replyVegMenu(replyToken, userId);
+        }
+
+        if (intent === 'CHECK_ORDER_STATUS') {
+          let specificOrderCode = aiDecision.orderCode || null;
+          if (!specificOrderCode) {
+            const m = text.match(/ORD-[\w-]+/i);
+            if (m) specificOrderCode = m[0];
+          }
+          return replyOrderStatus(replyToken, userId, specificOrderCode);
+        }
+
+        if (intent === 'ORDER_HISTORY') {
+          return replyOrderHistory(replyToken, userId);
+        }
+
+        if (intent === 'VIEW_CART') {
+          if (activeCart.length > 0) {
+            return replyCartSummary(replyToken, activeCart);
+          }
+          return client.replyMessage({
+            replyToken,
+            messages: [
+              {
+                type: 'text',
+                text: '🧺 ขณะนี้ยังไม่มีสินค้าในตะกร้าของคุณครับ\n\n👉 สามารถพิมพ์ "เมนูผัก" เพื่อเลือกชมและแตะสั่งผักสดพร้อมส่งได้เลยครับ 🌱',
+              },
+            ],
+          });
+        }
+
+        if (intent === 'CLEAR_CART') {
+          if (session.draft_data) {
+            session.draft_data.cart = [];
+            await setChatSession(userId, 'IDLE', null, session.draft_data);
+          }
+          return replyCartClearedCard(replyToken);
+        }
+
+        if (intent === 'CHECKOUT_CART') {
+          if (activeCart.length > 0) {
+            const totalAmount = activeCart.reduce(
+              (sum, it) => sum + Number(it.subtotal || it.quantity * it.price),
+              0
+            );
+            return sendSmartOrderDraftConfirmation(replyToken, userId, activeCart, totalAmount);
+          }
+          return replyVegMenu(replyToken, userId);
+        }
+
+        if (intent === 'REFUND_INFO') {
+          return replyRefundInstructions(replyToken);
+        }
+
+        if (intent === 'CONTACT_OWNER') {
+          return replyOwnerContact(replyToken);
+        }
+
+        if (intent === 'WEB_STORE') {
+          return replyWebStoreLink(replyToken);
+        }
+
+        if (intent === 'SELECT_PRODUCT_QTY' && aiDecision.selectingProductId) {
+          const prod = availableProducts.find(p => Number(p.id) === Number(aiDecision.selectingProductId));
+          if (prod) {
+            return replyProductQuantitySelector(replyToken, userId, prod);
+          }
+        }
+
+        if (intent === 'ORDER_ITEMS' && Array.isArray(aiDecision.items) && aiDecision.items.length > 0) {
+          const draft = session.draft_data || {};
+          const cart = Array.isArray(draft.cart) ? draft.cart : [];
+          let lastAdded = null;
+
+          for (const rawIt of aiDecision.items) {
+            const prod = availableProducts.find(p => Number(p.id) === Number(rawIt.product_id));
+            const qty = Math.max(1, parseInt(rawIt.quantity, 10) || 1);
+            if (prod) {
+              const existingIndex = cart.findIndex(c => Number(c.product_id) === Number(prod.id));
+              if (existingIndex >= 0) {
+                cart[existingIndex].quantity += qty;
+                cart[existingIndex].subtotal = cart[existingIndex].quantity * Number(prod.price);
+              } else {
+                cart.push({
+                  product_id: prod.id,
+                  name: prod.name,
+                  unit: prod.unit || 'ถุง',
+                  price: Number(prod.price),
+                  unit_price: Number(prod.price),
+                  quantity: qty,
+                  stock_quantity: Number(prod.stock_quantity),
+                  subtotal: qty * Number(prod.price),
+                  conversion_note: rawIt.unit_note || null,
+                });
+              }
+              lastAdded = { product_id: prod.id, name: prod.name, addedQty: qty };
+            }
+          }
+
+          if (lastAdded) {
+            draft.cart = cart;
+            await setChatSession(userId, 'SHOPPING_CART', null, draft);
+            return replyCartSummary(replyToken, cart, lastAdded);
+          }
+        }
+
+        if (intent === 'CROP_OR_FARM_QA' && aiDecision.replyText) {
+          if (aiDecision.replyText.includes('[SHOW_MENU_CARD]')) {
+            return replyVegMenu(replyToken, userId);
+          }
+          if (aiDecision.attachMenuCard) {
+            try {
+              const flexMenu = await buildVegMenuFlex(userId);
+              return await client.replyMessage({
+                replyToken,
+                messages: [
+                  { type: 'text', text: aiDecision.replyText },
+                  flexMenu,
+                ],
+              });
+            } catch (_) {}
+          }
+          return await client.replyMessage({
+            replyToken,
+            messages: [{ type: 'text', text: aiDecision.replyText }],
+          });
+        }
+      }
+    } catch (aiFirstErr) {
+      console.warn('⚠️ AI-First customer router fallback to local engine:', aiFirstErr.message);
+    }
+
+    // ============================================================================
+    // 🛡️ 2. OFFLINE / LOCAL FALLBACK ENGINE (ทำงานเฉพาะกรณี Gemini ปิดหรือโควตาเต็ม)
+    // ============================================================================
     // ตรวจสอบคำสั่งเกี่ยวกับตะกร้าสินค้าในแชท (In-Chat Cart)
     const isCartInquiry = ['ตะกร้า', 'ดูตะกร้า', 'เช็คตะกร้า', 'เปิดตะกร้า', 'cart', 'ตะกร้าสินค้า', 'ตะกร้าของฉัน'].some(k => lowerTrimText === k || lowerTrimText.startsWith(k));
     if (isCartInquiry) {

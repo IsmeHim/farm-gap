@@ -455,3 +455,133 @@ export async function getFarmContext() {
     return 'คุณคือผู้ช่วยแชทบอทของฟาร์มผัก FarmGAP AI มาตรฐาน GAP โปรดตอบกลับสั้นๆ อย่างมีไมตรีจิต';
   }
 }
+
+// 3. ดึงข้อมูลภาพรวมฟาร์มเชิงลึก + รายการออเดอร์ทั้งหมด สำหรับ Gemini AI ของเจ้าของฟาร์ม (Owner-Only Deep Context)
+export async function getOwnerDeepContext() {
+  try {
+    const owner = await getOwnerContactInfo();
+
+    // 1. ดึงออเดอร์ล่าสุดพร้อมชื่อลูกค้าและรายการสินค้า (สูงสุด 40 รายการล่าสุด + ออเดอร์ค้างทั้งหมด)
+    const [orders] = await pool.query(`
+      SELECT o.id, o.order_code, o.total_amount, o.status, o.payment_method, o.slip_image_url, o.created_at,
+             COALESCE(o.recipient_name, c.display_name, 'ลูกค้าทั่วไป') AS customer_name,
+             COALESCE(o.recipient_phone, c.phone, '-') AS customer_phone,
+             COALESCE(o.recipient_address, c.address, '-') AS customer_address
+      FROM orders o
+      LEFT JOIN customers c ON o.customer_id = c.id
+      ORDER BY 
+        CASE WHEN o.status IN ('paid', 'pending', 'shipping') THEN 0 ELSE 1 END ASC,
+        o.id DESC
+      LIMIT 40
+    `);
+
+    if (orders.length > 0) {
+      const orderIds = orders.map(o => o.id);
+      const [itemsRows] = await pool.query(
+        `SELECT oi.order_id, oi.quantity, oi.subtotal, p.name AS product_name, p.unit
+         FROM order_items oi
+         LEFT JOIN products p ON oi.product_id = p.id
+         WHERE oi.order_id IN (?)`,
+        [orderIds]
+      );
+
+      const itemsMap = new Map();
+      for (const it of itemsRows) {
+        if (!itemsMap.has(it.order_id)) itemsMap.set(it.order_id, []);
+        itemsMap.get(it.order_id).push(it);
+      }
+
+      for (const o of orders) {
+        o.items = itemsMap.get(o.id) || [];
+        o.items_summary = o.items.length > 0
+          ? o.items.map(i => `${i.product_name || 'ผักสด'} x${i.quantity} ${i.unit || 'ถุง'}`).join(', ')
+          : 'ผักสด GAP';
+      }
+    }
+
+    // 2. ดึงสต็อกสินค้าทั้งหมดและแปลงเพาะปลูกปัจจุบัน
+    const [products] = await pool.query(
+      'SELECT id, name, price, unit, stock_quantity, status FROM products ORDER BY id ASC'
+    );
+    const batches = await getActivePlantingBatches();
+
+    const now = new Date();
+    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const todayThai = formatThaiDate(todayIso);
+
+    // แยกหมวดหมู่ออเดอร์เพื่อให้ AI เห็นภาพชัดเจน
+    const unmanagedOrders = orders.filter(o => o.status === 'paid' || o.status === 'pending' || o.status === 'shipping');
+    const todayOrders = orders.filter(o => String(o.created_at || '').startsWith(todayIso));
+    const todayRevenue = todayOrders
+      .filter(o => o.status !== 'cancelled')
+      .reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
+
+    let contextText = `วันที่ปัจจุบัน: ${todayThai} (${todayIso})\n`;
+    contextText += `เจ้าของฟาร์ม: คุณ${owner.displayName} (${owner.farmName})\n\n`;
+
+    contextText += `[สรุปภาพรวมออเดอร์วันนี้ (${todayThai})]:\n`;
+    contextText += `- ออเดอร์เข้าวันนี้ทั้งหมด: ${todayOrders.length} ออเดอร์ (ยอดขายรวมวันนี้ ไม่นับที่ยกเลิก: ฿${todayRevenue.toLocaleString()} บาท)\n`;
+    contextText += `- ออเดอร์ที่ยังไม่ได้จัดการ/ยังไม่ปิดงานสะสมทั้งหมดในระบบ (สถานะ paid, pending, shipping): ${unmanagedOrders.length} ออเดอร์\n\n`;
+
+    contextText += `[รายการออเดอร์ที่ยังไม่ได้จัดการ / รอดำเนินการ (${unmanagedOrders.length} รายการ)]:\n`;
+    if (unmanagedOrders.length > 0) {
+      unmanagedOrders.forEach(o => {
+        const dateStr = String(o.created_at || '').slice(0, 16);
+        const isToday = String(o.created_at || '').startsWith(todayIso) ? '[ออเดอร์วันนี้]' : '[ออเดอร์ค้างจากวันก่อน]';
+        const payLabel = o.payment_method === 'cod'
+          ? 'เก็บเงินปลายทาง (COD)'
+          : (o.slip_image_url || o.status === 'paid' ? 'โอนเงินแนบสลิปแล้ว' : 'โอนเงิน (รอแนบสลิป)');
+        const statusDesc = o.status === 'paid'
+          ? 'ชำระแล้ว-รอจัดส่ง'
+          : (o.status === 'pending' && o.payment_method === 'cod'
+              ? 'COD-รอจัดส่ง'
+              : (o.status === 'pending' ? 'รอลูกค้าโอน/แนบสลิป' : 'กำลังจัดส่ง-รอยืนยันส่งถึงมือลูกค้า'));
+        contextText += `- order_id: ${o.id} | รหัส: ${o.order_code} ${isToday} (${dateStr}) | ลูกค้า: คุณ${o.customer_name} (${o.customer_phone}) | ยอด: ฿${Number(o.total_amount).toLocaleString()} | ชำระ: ${payLabel} | สถานะ: ${statusDesc} (${o.status}) | สินค้า: ${o.items_summary}\n`;
+      });
+    } else {
+      contextText += `- ไม่มีออเดอร์ค้างที่ยังไม่ได้จัดการ (จัดการครบทุกออเดอร์แล้ว!)\n`;
+    }
+
+    contextText += `\n[รายการออเดอร์ทั้งหมดล่าสุดในระบบ (รวมที่สำเร็จและยกเลิกแล้ว)]:\n`;
+    orders.slice(0, 25).forEach(o => {
+      const dateStr = String(o.created_at || '').slice(0, 16);
+      contextText += `- order_id: ${o.id} | รหัส: ${o.order_code} (${dateStr}) | ลูกค้า: คุณ${o.customer_name} | ยอด: ฿${Number(o.total_amount).toLocaleString()} | สถานะ: ${o.status} | การชำระ: ${o.payment_method} | สินค้า: ${o.items_summary}\n`;
+    });
+
+    contextText += `\n[ข้อมูลสต็อกสินค้าในร้านปัจจุบัน]:\n`;
+    products.forEach(p => {
+      contextText += `- ID: ${p.id} | ${p.name}: ราคา ฿${p.price}/${p.unit}, คงเหลือ ${p.stock_quantity} ${p.unit} (สถานะ: ${p.status})\n`;
+    });
+
+    contextText += `\n[ข้อมูลแปลงเพาะปลูกที่กำลังปลูกอยู่ในปัจจุบัน]:\n`;
+    if (batches.length > 0) {
+      batches.forEach(b => {
+        const stats = computeBatchStats(b);
+        contextText += `- แปลง: ${b.plot_name} | พืช: ${b.crop_name} | อายุพืช: ${stats.plantAge}/${stats.growthDays} วัน | กำหนดเก็บเกี่ยว: ${stats.harvestDateThai} (อีก ${stats.daysRemaining} วัน)\n`;
+      });
+    } else {
+      contextText += `- ไม่มีแปลงที่กำลังเพาะปลูกในขณะนี้\n`;
+    }
+
+    return {
+      owner,
+      orders,
+      unmanagedOrders,
+      todayOrders,
+      products,
+      batches,
+      contextText,
+    };
+  } catch (err) {
+    console.error('getOwnerDeepContext error:', err.message);
+    return {
+      owner: { displayName: 'เจ้าของฟาร์ม', farmName: 'FarmGAP' },
+      orders: [],
+      unmanagedOrders: [],
+      todayOrders: [],
+      products: [],
+      batches: [],
+      contextText: '',
+    };
+  }
+}

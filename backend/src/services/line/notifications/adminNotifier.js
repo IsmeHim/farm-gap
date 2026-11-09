@@ -417,6 +417,602 @@ export function buildAdminCompletedStepBubble(order, frontendBase = 'http://loca
   };
 }
 
+// Helper: สร้างชุดข้อความแจ้งเตือนออเดอร์ (รูปสลิป + Flex Bubble เดิมตอนมีออเดอร์เข้า) สำหรับทั้ง Push แรกและกดปุ่ม "จัดการออเดอร์" ย้อนหลัง
+export async function buildAdminOrderManagementMessages(orderData, eventType = 'NEW_ORDER', frontendBaseOverride = null) {
+  let frontendBase = frontendBaseOverride;
+  if (!frontendBase) {
+    const baseInfo = await getAdminFrontendBase();
+    frontendBase = baseInfo.frontendBase;
+  }
+
+  let resolvedOrder = { ...orderData };
+  if (orderData.id) {
+    try {
+      const [oRows] = await pool.query(`
+        SELECT o.*, 
+               COALESCE(o.recipient_name, c.display_name) AS customer_name, 
+               COALESCE(o.recipient_phone, c.phone) AS customer_phone, 
+               COALESCE(o.recipient_address, c.address) AS customer_address
+        FROM orders o
+        LEFT JOIN customers c ON o.customer_id = c.id
+        WHERE o.id = ?
+      `, [orderData.id]);
+      if (oRows.length > 0) {
+        const [itRows] = await pool.query(`
+          SELECT oi.*, p.name AS product_name, p.unit
+          FROM order_items oi
+          LEFT JOIN products p ON oi.product_id = p.id
+          WHERE oi.order_id = ?
+        `, [orderData.id]);
+        resolvedOrder = {
+          ...oRows[0],
+          ...orderData,
+          slip_image_url: oRows[0].slip_image_url || orderData.slip_image_url,
+          payment_method: oRows[0].payment_method || orderData.payment_method,
+          customer_name: orderData.customer_name || oRows[0].customer_name,
+          customer_phone: orderData.customer_phone || oRows[0].customer_phone,
+          customer_address: orderData.customer_address || oRows[0].customer_address,
+          items: (itRows.length > 0 ? itRows : (orderData.items || [])),
+        };
+      }
+    } catch (dbErr) {
+      console.warn('⚠️ Could not refresh order details from DB for admin notify:', dbErr.message);
+    }
+  }
+
+  // หากออเดอร์อยู่ในสถานะกำลังจัดส่ง (shipping) ให้แสดงการ์ด Step 2 พร้อมปุ่มยืนยันจัดส่งสำเร็จได้ด้วย หรือหากต้องการการ์ดแรกก็มีปุ่มจัดส่งครบ
+  const isCod = resolvedOrder.payment_method === 'cod';
+  const publicSlipUrl = !isCod ? resolvePublicSlipHttpsUrl(resolvedOrder.slip_image_url, frontendBase) : null;
+  const isSlip = !isCod && (eventType === 'SLIP_UPLOADED' || Boolean(resolvedOrder.slip_image_url));
+
+  const title = isCod
+    ? '🚚 ออเดอร์ใหม่ (เก็บเงินปลายทาง)'
+    : (isSlip ? '💸 ออเดอร์ใหม่ (โอนเงินแนบสลิปแล้ว)' : '🔔 มีคำสั่งซื้อใหม่เข้ามา!');
+  const badgeText = isCod ? 'เก็บปลายทาง COD' : (isSlip ? 'แนบสลิปแล้ว' : 'ออเดอร์ใหม่');
+  const badgeBg = isCod ? '#d97706' : (isSlip ? '#16a34a' : '#0284c7');
+  const headerBg = isCod ? '#78350f' : (isSlip ? '#14532d' : '#0f172a');
+
+  const orderCode = resolvedOrder.order_code || `ORD-${resolvedOrder.id || ''}`;
+  const totalAmount = Number(resolvedOrder.total_amount || 0).toLocaleString();
+  const customerName = resolvedOrder.customer_name || 'ลูกค้าทั่วไป';
+  const customerPhone = resolvedOrder.customer_phone || '-';
+  const customerAddress = resolvedOrder.customer_address || '-';
+
+  // เตรียมรายการสินค้า (ถ้ามี)
+  const items = resolvedOrder.items || [];
+  const itemRows = items.slice(0, 6).map(item => ({
+    type: 'box',
+    layout: 'horizontal',
+    contents: [
+      {
+        type: 'text',
+        text: `• ${item.product_name || item.name || 'ผักสด'} x${Number(item.quantity) || 1} ${item.unit || 'ถุง'}`,
+        size: 'xs',
+        color: '#374151',
+        flex: 8,
+        wrap: true,
+      },
+      {
+        type: 'text',
+        text: `฿${Number(item.subtotal || (item.quantity * (item.unit_price || item.price || 0))).toLocaleString()}`,
+        size: 'xs',
+        color: '#111827',
+        weight: 'bold',
+        align: 'end',
+        flex: 4,
+      },
+    ],
+  }));
+
+  const actionUri = process.env.DASHBOARD_ORDER_URL || `${frontendBase}/orders`;
+  const printUri = resolvedOrder.id ? `${frontendBase}/orders/${resolvedOrder.id}/print` : actionUri;
+
+  const flexContents = {
+    type: 'bubble',
+    size: 'mega',
+    header: {
+      type: 'box',
+      layout: 'vertical',
+      backgroundColor: headerBg,
+      paddingAll: 'lg',
+      contents: [
+        {
+          type: 'box',
+          layout: 'horizontal',
+          alignItems: 'center',
+          contents: [
+            {
+              type: 'text',
+              text: title,
+              weight: 'bold',
+              size: 'md',
+              color: '#ffffff',
+              flex: 7,
+              wrap: true,
+            },
+            {
+              type: 'box',
+              layout: 'horizontal',
+              backgroundColor: badgeBg,
+              cornerRadius: 'sm',
+              paddingStart: 'sm',
+              paddingEnd: 'sm',
+              paddingTop: 'xs',
+              paddingBottom: 'xs',
+              contents: [
+                {
+                  type: 'text',
+                  text: badgeText,
+                  weight: 'bold',
+                  size: 'xxs',
+                  color: '#ffffff',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          type: 'text',
+          text: `รหัสคำสั่งซื้อ: ${orderCode}`,
+          size: 'xs',
+          color: '#cbd5e1',
+          margin: 'sm',
+        },
+      ],
+    },
+    body: {
+      type: 'box',
+      layout: 'vertical',
+      spacing: 'md',
+      paddingAll: 'lg',
+      contents: [
+        // กล่องยอดรวมเงิน
+        {
+          type: 'box',
+          layout: 'horizontal',
+          backgroundColor: '#f8fafc',
+          cornerRadius: 'md',
+          paddingAll: 'md',
+          borderColor: '#e2e8f0',
+          borderWidth: '1px',
+          alignItems: 'center',
+          contents: [
+            {
+              type: 'text',
+              text: 'ยอดรวมทั้งสิ้น',
+              size: 'sm',
+              color: '#64748b',
+              flex: 6,
+            },
+            {
+              type: 'text',
+              text: `฿${totalAmount} บาท`,
+              size: 'lg',
+              weight: 'bold',
+              color: isCod ? '#d97706' : '#059669',
+              align: 'end',
+              flex: 6,
+            },
+          ],
+        },
+        // แถบแสดงสถานะการชำระเงิน (แยก COD กับ โอนเงินแนบสลิป ชัดเจน)
+        {
+          type: 'box',
+          layout: 'vertical',
+          backgroundColor: isCod ? '#fffbeb' : '#f0fdf4',
+          borderColor: isCod ? '#fde68a' : '#bbf7d0',
+          borderWidth: '1px',
+          cornerRadius: 'md',
+          paddingAll: 'sm',
+          spacing: 'xs',
+          contents: [
+            {
+              type: 'text',
+              text: isCod
+                ? `🚚 เก็บเงินปลายทาง (COD) — ไม่มีสลิปโอนเงิน`
+                : (publicSlipUrl
+                    ? `💳 โอนเงินผ่านธนาคาร — ส่งรูปสลิปให้ด้านบนแล้ว`
+                    : (resolvedOrder.status === 'paid'
+                        ? `💳 โอนเงินผ่านธนาคาร — แจ้งชำระเงินแล้ว`
+                        : `⏳ โอนเงินผ่านธนาคาร — รอลูกค้าแนบสลิปโอนเงิน`)),
+              size: 'xs',
+              weight: 'bold',
+              color: isCod ? '#b45309' : '#166534',
+              wrap: true,
+            },
+            {
+              type: 'text',
+              text: isCod
+                ? `โปรดเตรียมจัดส่งผักสด และเก็บเงินสด ฿${totalAmount} บาท เมื่อส่งถึงมือลูกค้าครับ`
+                : (publicSlipUrl
+                    ? `กรุณาตรวจสอบรูปสลิปโอนเงินด้านบน แล้วกดปุ่ม "จัดส่งสินค้า" ด้านล่างเพื่อดำเนินการต่อได้ทันทีครับ`
+                    : `สามารถกดปุ่ม "จัดส่งสินค้า" ด้านล่างเพื่อดำเนินการต่อได้ทันทีครับ`),
+              size: 'xxs',
+              color: isCod ? '#92400e' : '#15803d',
+              wrap: true,
+            },
+          ],
+        },
+        // ข้อมูลลูกค้า
+        {
+          type: 'box',
+          layout: 'vertical',
+          spacing: 'xs',
+          contents: [
+            {
+              type: 'text',
+              text: '👤 ข้อมูลลูกค้าและที่อยู่จัดส่ง:',
+              size: 'xs',
+              weight: 'bold',
+              color: '#475569',
+            },
+            {
+              type: 'text',
+              text: `ชื่อ: ${customerName}`,
+              size: 'xs',
+              color: '#1e293b',
+              weight: 'bold',
+            },
+            {
+              type: 'text',
+              text: `โทร: ${customerPhone}`,
+              size: 'xs',
+              color: '#1e293b',
+            },
+            {
+              type: 'text',
+              text: `ที่อยู่: ${customerAddress}`,
+              size: 'xs',
+              color: '#334155',
+              wrap: true,
+            },
+          ],
+        },
+        // รายการสินค้า
+        ...(itemRows.length > 0
+          ? [
+              {
+                type: 'separator',
+                margin: 'md',
+              },
+              {
+                type: 'box',
+                layout: 'vertical',
+                spacing: 'xs',
+                contents: [
+                  {
+                    type: 'text',
+                    text: '🥬 รายการผักที่สั่ง:',
+                    size: 'xs',
+                    weight: 'bold',
+                    color: '#475569',
+                  },
+                  ...itemRows,
+                ],
+              },
+            ]
+          : []),
+      ],
+    },
+    footer: {
+      type: 'box',
+      layout: 'vertical',
+      spacing: 'sm',
+      paddingAll: 'md',
+      contents: [
+        ...(resolvedOrder.id
+          ? [
+              resolvedOrder.status === 'shipping'
+                ? {
+                    type: 'button',
+                    action: {
+                      type: 'postback',
+                      label: '✅ ยืนยันจัดส่งถึงมือลูกค้าสำเร็จ',
+                      data: `action=admin_complete&order_id=${resolvedOrder.id}`,
+                      displayText: `✅ ยืนยันจัดส่งออเดอร์ ${orderCode} สำเร็จ`,
+                    },
+                    style: 'primary',
+                    color: '#16a34a',
+                    height: 'sm',
+                  }
+                : {
+                    type: 'button',
+                    action: {
+                      type: 'postback',
+                      label: '🚚 กดจัดส่งสินค้า (ลงสมุด GAP #6)',
+                      data: `action=admin_dispatch&order_id=${resolvedOrder.id}`,
+                      displayText: `🚚 เริ่มจัดส่งออเดอร์ ${orderCode}`,
+                    },
+                    style: 'primary',
+                    color: '#16a34a',
+                    height: 'sm',
+                  },
+            ]
+          : []),
+        {
+          type: 'button',
+          action: {
+            type: 'uri',
+            label: '🖨️ พิมพ์ใบปะหน้า & เช็คลิสต์',
+            uri: printUri,
+          },
+          style: 'secondary',
+          height: 'sm',
+        },
+        ...(resolvedOrder.id && resolvedOrder.status !== 'completed'
+          ? [
+              {
+                type: 'button',
+                action: {
+                  type: 'postback',
+                  label: '❌ ยกเลิกออเดอร์ (คืนสต็อกผัก)',
+                  data: `action=admin_cancel&order_id=${resolvedOrder.id}`,
+                  displayText: `❌ ยกเลิกออเดอร์ ${orderCode}`,
+                },
+                style: 'secondary',
+                color: '#fee2e2',
+                height: 'sm',
+              },
+            ]
+          : []),
+      ],
+    },
+  };
+
+  const messagesToSend = [];
+  if (!isCod && publicSlipUrl) {
+    messagesToSend.push({
+      type: 'image',
+      originalContentUrl: publicSlipUrl,
+      previewImageUrl: publicSlipUrl,
+    });
+  }
+
+  messagesToSend.push({
+    type: 'flex',
+    altText: isCod
+      ? `🚚 ออเดอร์ใหม่ (COD เก็บปลายทาง): ${orderCode} (฿${totalAmount})`
+      : `💸 ออเดอร์ใหม่พร้อมสลิปโอนเงิน: ${orderCode} (฿${totalAmount})`,
+    contents: flexContents,
+  });
+
+  return { messages: messagesToSend, flexBubble: flexContents, resolvedOrder, isCod, publicSlipUrl };
+}
+
+// Helper: สร้าง Flex Message (List / Carousel) รายการออเดอร์พร้อมปุ่มกด "จัดการออเดอร์" สำหรับตอบคำถามเจ้าของฟาร์ม
+export function buildAdminOrderListFlex(orders = []) {
+  if (!orders || orders.length === 0) return null;
+
+  // แบ่งกลุ่มออเดอร์ละ 5 รายการต่อ 1 Bubble (รองรับ Carousel สูงสุด 10 Bubbles = 50 ออเดอร์)
+  const chunkSize = 5;
+  const chunks = [];
+  for (let i = 0; i < Math.min(orders.length, 50); i += chunkSize) {
+    chunks.push(orders.slice(i, i + chunkSize));
+  }
+
+  const getStatusMeta = (o) => {
+    const st = (o.status || '').toLowerCase();
+    const isCod = o.payment_method === 'cod';
+    if (st === 'paid') {
+      return { label: '💸 ชำระแล้ว (รอจัดส่ง)', bg: '#dcfce7', color: '#166534' };
+    }
+    if (st === 'pending' && isCod) {
+      return { label: '🚚 COD เก็บปลายทาง (รอจัดส่ง)', bg: '#fef3c7', color: '#92400e' };
+    }
+    if (st === 'pending') {
+      return { label: '⏳ รอโอน/รอแนบสลิป', bg: '#f1f5f9', color: '#475569' };
+    }
+    if (st === 'shipping') {
+      return { label: '🛵 กำลังจัดส่ง (รอยืนยันส่งสำเร็จ)', bg: '#e0f2fe', color: '#0369a1' };
+    }
+    if (st === 'completed') {
+      return { label: '✅ จัดส่งสำเร็จ', bg: '#f0fdf4', color: '#15803d' };
+    }
+    return { label: '❌ ยกเลิกแล้ว', bg: '#fee2e2', color: '#991b1b' };
+  };
+
+  const bubbles = chunks.map((chunk, pageIdx) => {
+    const orderBoxes = [];
+    chunk.forEach((o, idx) => {
+      const orderCode = o.order_code || `ORD-${o.id}`;
+      const customerName = o.customer_name || o.recipient_name || 'ลูกค้าทั่วไป';
+      const totalAmount = Number(o.total_amount || 0).toLocaleString();
+      const itemsSummary = Array.isArray(o.items) && o.items.length > 0
+        ? o.items.map(it => `${it.product_name || it.name || 'ผักสด'} x${it.quantity}`).join(', ')
+        : (o.items_summary || 'รายการผักสด GAP');
+      const statusMeta = getStatusMeta(o);
+
+      let timeStr = '';
+      if (o.created_at) {
+        try {
+          const d = new Date(o.created_at);
+          timeStr = d.toLocaleDateString('th-TH', { day: '2-digit', month: 'short' }) + ' ' +
+            d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+        } catch (_) {}
+      }
+
+      if (idx > 0) {
+        orderBoxes.push({
+          type: 'separator',
+          margin: 'md',
+          color: '#e2e8f0',
+        });
+      }
+
+      orderBoxes.push({
+        type: 'box',
+        layout: 'vertical',
+        margin: idx > 0 ? 'md' : 'none',
+        paddingAll: 'md',
+        backgroundColor: '#f8fafc',
+        cornerRadius: 'lg',
+        borderWidth: '1px',
+        borderColor: '#cbd5e1',
+        spacing: 'xs',
+        contents: [
+          {
+            type: 'box',
+            layout: 'horizontal',
+            alignItems: 'center',
+            contents: [
+              {
+                type: 'text',
+                text: `#${orderCode}`,
+                weight: 'bold',
+                size: 'sm',
+                color: '#0f172a',
+                flex: 7,
+              },
+              {
+                type: 'text',
+                text: `฿${totalAmount}`,
+                weight: 'bold',
+                size: 'md',
+                color: '#059669',
+                align: 'end',
+                flex: 5,
+              },
+            ],
+          },
+          {
+            type: 'box',
+            layout: 'horizontal',
+            alignItems: 'center',
+            contents: [
+              {
+                type: 'box',
+                layout: 'horizontal',
+                backgroundColor: statusMeta.bg,
+                cornerRadius: 'sm',
+                paddingStart: 'sm',
+                paddingEnd: 'sm',
+                paddingTop: '2px',
+                paddingBottom: '2px',
+                contents: [
+                  {
+                    type: 'text',
+                    text: statusMeta.label,
+                    size: 'xxs',
+                    weight: 'bold',
+                    color: statusMeta.color,
+                  },
+                ],
+              },
+              ...(timeStr
+                ? [
+                    {
+                      type: 'text',
+                      text: timeStr,
+                      size: 'xxs',
+                      color: '#64748b',
+                      align: 'end',
+                    },
+                  ]
+                : []),
+            ],
+          },
+          {
+            type: 'text',
+            text: `👤 ลูกค้า: คุณ${customerName}${o.customer_phone ? ` (${o.customer_phone})` : ''}`,
+            size: 'xs',
+            weight: 'bold',
+            color: '#1e293b',
+            wrap: true,
+            margin: 'xs',
+          },
+          {
+            type: 'text',
+            text: `🥬 ${itemsSummary}`,
+            size: 'xs',
+            color: '#475569',
+            wrap: true,
+          },
+          {
+            type: 'button',
+            action: {
+              type: 'postback',
+              label: '⚙️ จัดการออเดอร์นี้',
+              data: `action=admin_open_order&order_id=${o.id}`,
+              displayText: `⚙️ จัดการออเดอร์ ${orderCode}`,
+            },
+            style: 'primary',
+            color: '#166534',
+            height: 'sm',
+            margin: 'sm',
+          },
+        ],
+      });
+    });
+
+    return {
+      type: 'bubble',
+      size: 'mega',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: '#14532d',
+        paddingAll: 'lg',
+        contents: [
+          {
+            type: 'box',
+            layout: 'horizontal',
+            alignItems: 'center',
+            contents: [
+              {
+                type: 'text',
+                text: '📋 รายการออเดอร์ที่พบ',
+                weight: 'bold',
+                size: 'md',
+                color: '#ffffff',
+                flex: 7,
+              },
+              {
+                type: 'box',
+                layout: 'horizontal',
+                backgroundColor: '#16a34a',
+                cornerRadius: 'sm',
+                paddingStart: 'sm',
+                paddingEnd: 'sm',
+                paddingTop: 'xs',
+                paddingBottom: 'xs',
+                contents: [
+                  {
+                    type: 'text',
+                    text: chunks.length > 1 ? `หน้า ${pageIdx + 1}/${chunks.length}` : `รวม ${orders.length} รายการ`,
+                    size: 'xxs',
+                    weight: 'bold',
+                    color: '#ffffff',
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            type: 'text',
+            text: 'แตะปุ่ม "⚙️ จัดการออเดอร์นี้" เพื่อเปิดการ์ดจัดการออเดอร์แบบเต็ม',
+            size: 'xxs',
+            color: '#dcfce7',
+            margin: 'xs',
+            wrap: true,
+          },
+        ],
+      },
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        paddingAll: 'md',
+        contents: orderBoxes,
+      },
+    };
+  });
+
+  return {
+    type: 'flex',
+    altText: `📋 รายการออเดอร์ (${orders.length} รายการ) - กดปุ่มจัดการได้ทันที`,
+    contents: bubbles.length === 1 ? bubbles[0] : { type: 'carousel', contents: bubbles },
+  };
+}
+
 // Helper: ส่งการแจ้งเตือนเข้า LINE ของเจ้าของฟาร์ม (Admin Push Notification)
 export async function notifyAdminNewOrder(orderData, eventType = 'NEW_ORDER') {
   try {
@@ -439,344 +1035,11 @@ export async function notifyAdminNewOrder(orderData, eventType = 'NEW_ORDER') {
       return;
     }
 
-    // 2. ดึงข้อมูลออเดอร์ ข้อมูลลูกค้า และรายการสินค้าล่าสุดจากฐานข้อมูลจริง (ถ้ามี orderData.id)
-    let resolvedOrder = { ...orderData };
-    if (orderData.id) {
-      try {
-        const [oRows] = await pool.query(`
-          SELECT o.*, 
-                 COALESCE(o.recipient_name, c.display_name) AS customer_name, 
-                 COALESCE(o.recipient_phone, c.phone) AS customer_phone, 
-                 COALESCE(o.recipient_address, c.address) AS customer_address
-          FROM orders o
-          LEFT JOIN customers c ON o.customer_id = c.id
-          WHERE o.id = ?
-        `, [orderData.id]);
-        if (oRows.length > 0) {
-          const [itRows] = await pool.query(`
-            SELECT oi.*, p.name AS product_name, p.unit
-            FROM order_items oi
-            LEFT JOIN products p ON oi.product_id = p.id
-            WHERE oi.order_id = ?
-          `, [orderData.id]);
-          resolvedOrder = {
-            ...oRows[0],
-            ...orderData,
-            slip_image_url: oRows[0].slip_image_url || orderData.slip_image_url,
-            payment_method: oRows[0].payment_method || orderData.payment_method,
-            customer_name: orderData.customer_name || oRows[0].customer_name,
-            customer_phone: orderData.customer_phone || oRows[0].customer_phone,
-            customer_address: orderData.customer_address || oRows[0].customer_address,
-            items: (itRows.length > 0 ? itRows : (orderData.items || [])),
-          };
-        }
-      } catch (dbErr) {
-        console.warn('⚠️ Could not refresh order details from DB for admin notify:', dbErr.message);
-      }
-    }
-
-    const isCod = resolvedOrder.payment_method === 'cod';
-    const publicSlipUrl = !isCod ? resolvePublicSlipHttpsUrl(resolvedOrder.slip_image_url, frontendBase) : null;
-    const isSlip = !isCod && (eventType === 'SLIP_UPLOADED' || Boolean(resolvedOrder.slip_image_url));
-
-    const title = isCod
-      ? '🚚 ออเดอร์ใหม่ (เก็บเงินปลายทาง)'
-      : (isSlip ? '💸 ออเดอร์ใหม่ (โอนเงินแนบสลิปแล้ว)' : '🔔 มีคำสั่งซื้อใหม่เข้ามา!');
-    const badgeText = isCod ? 'เก็บปลายทาง COD' : (isSlip ? 'แนบสลิปแล้ว' : 'ออเดอร์ใหม่');
-    const badgeBg = isCod ? '#d97706' : (isSlip ? '#16a34a' : '#0284c7');
-    const headerBg = isCod ? '#78350f' : (isSlip ? '#14532d' : '#0f172a');
-
-    const orderCode = resolvedOrder.order_code || `ORD-${resolvedOrder.id || ''}`;
-    const totalAmount = Number(resolvedOrder.total_amount || 0).toLocaleString();
-    const customerName = resolvedOrder.customer_name || 'ลูกค้าทั่วไป';
-    const customerPhone = resolvedOrder.customer_phone || '-';
-    const customerAddress = resolvedOrder.customer_address || '-';
-
-    // เตรียมรายการสินค้า (ถ้ามี)
-    const items = resolvedOrder.items || [];
-    const itemRows = items.slice(0, 6).map(item => ({
-      type: 'box',
-      layout: 'horizontal',
-      contents: [
-        {
-          type: 'text',
-          text: `• ${item.product_name || item.name || 'ผักสด'} x${Number(item.quantity) || 1} ${item.unit || 'ถุง'}`,
-          size: 'xs',
-          color: '#374151',
-          flex: 8,
-          wrap: true,
-        },
-        {
-          type: 'text',
-          text: `฿${Number(item.subtotal || (item.quantity * (item.unit_price || item.price || 0))).toLocaleString()}`,
-          size: 'xs',
-          color: '#111827',
-          weight: 'bold',
-          align: 'end',
-          flex: 4,
-        },
-      ],
-    }));
-
-    const actionUri = process.env.DASHBOARD_ORDER_URL || `${frontendBase}/orders`;
-    const printUri = resolvedOrder.id ? `${frontendBase}/orders/${resolvedOrder.id}/print` : actionUri;
-
-    const flexContents = {
-      type: 'bubble',
-      size: 'mega',
-      header: {
-        type: 'box',
-        layout: 'vertical',
-        backgroundColor: headerBg,
-        paddingAll: 'lg',
-        contents: [
-          {
-            type: 'box',
-            layout: 'horizontal',
-            alignItems: 'center',
-            contents: [
-              {
-                type: 'text',
-                text: title,
-                weight: 'bold',
-                size: 'md',
-                color: '#ffffff',
-                flex: 7,
-                wrap: true,
-              },
-              {
-                type: 'box',
-                layout: 'horizontal',
-                backgroundColor: badgeBg,
-                cornerRadius: 'sm',
-                paddingStart: 'sm',
-                paddingEnd: 'sm',
-                paddingTop: 'xs',
-                paddingBottom: 'xs',
-                contents: [
-                  {
-                    type: 'text',
-                    text: badgeText,
-                    weight: 'bold',
-                    size: 'xxs',
-                    color: '#ffffff',
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            type: 'text',
-            text: `รหัสคำสั่งซื้อ: ${orderCode}`,
-            size: 'xs',
-            color: '#cbd5e1',
-            margin: 'sm',
-          },
-        ],
-      },
-      body: {
-        type: 'box',
-        layout: 'vertical',
-        spacing: 'md',
-        paddingAll: 'lg',
-        contents: [
-          // กล่องยอดรวมเงิน
-          {
-            type: 'box',
-            layout: 'horizontal',
-            backgroundColor: '#f8fafc',
-            cornerRadius: 'md',
-            paddingAll: 'md',
-            borderColor: '#e2e8f0',
-            borderWidth: '1px',
-            alignItems: 'center',
-            contents: [
-              {
-                type: 'text',
-                text: 'ยอดรวมทั้งสิ้น',
-                size: 'sm',
-                color: '#64748b',
-                flex: 6,
-              },
-              {
-                type: 'text',
-                text: `฿${totalAmount} บาท`,
-                size: 'lg',
-                weight: 'bold',
-                color: isCod ? '#d97706' : '#059669',
-                align: 'end',
-                flex: 6,
-              },
-            ],
-          },
-          // แถบแสดงสถานะการชำระเงิน (แยก COD กับ โอนเงินแนบสลิป ชัดเจน)
-          {
-            type: 'box',
-            layout: 'vertical',
-            backgroundColor: isCod ? '#fffbeb' : '#f0fdf4',
-            borderColor: isCod ? '#fde68a' : '#bbf7d0',
-            borderWidth: '1px',
-            cornerRadius: 'md',
-            paddingAll: 'sm',
-            spacing: 'xs',
-            contents: [
-              {
-                type: 'text',
-                text: isCod
-                  ? `🚚 เก็บเงินปลายทาง (COD) — ไม่มีสลิปโอนเงิน`
-                  : (publicSlipUrl
-                      ? `💳 โอนเงินผ่านธนาคาร — ส่งรูปสลิปให้ด้านบนแล้ว`
-                      : `💳 โอนเงินผ่านธนาคาร — แจ้งชำระเงินแล้ว`),
-                size: 'xs',
-                weight: 'bold',
-                color: isCod ? '#b45309' : '#166534',
-                wrap: true,
-              },
-              {
-                type: 'text',
-                text: isCod
-                  ? `โปรดเตรียมจัดส่งผักสด และเก็บเงินสด ฿${totalAmount} บาท เมื่อส่งถึงมือลูกค้าครับ`
-                  : (publicSlipUrl
-                      ? `กรุณาตรวจสอบรูปสลิปโอนเงินด้านบน แล้วกดปุ่ม "จัดส่งสินค้า" ด้านล่างเพื่อดำเนินการต่อได้ทันทีครับ`
-                      : `สามารถกดปุ่ม "จัดส่งสินค้า" ด้านล่างเพื่อดำเนินการต่อได้ทันทีครับ`),
-                size: 'xxs',
-                color: isCod ? '#92400e' : '#15803d',
-                wrap: true,
-              },
-            ],
-          },
-          // ข้อมูลลูกค้า
-          {
-            type: 'box',
-            layout: 'vertical',
-            spacing: 'xs',
-            contents: [
-              {
-                type: 'text',
-                text: '👤 ข้อมูลลูกค้าและที่อยู่จัดส่ง:',
-                size: 'xs',
-                weight: 'bold',
-                color: '#475569',
-              },
-              {
-                type: 'text',
-                text: `ชื่อ: ${customerName}`,
-                size: 'xs',
-                color: '#1e293b',
-                weight: 'bold',
-              },
-              {
-                type: 'text',
-                text: `โทร: ${customerPhone}`,
-                size: 'xs',
-                color: '#1e293b',
-              },
-              {
-                type: 'text',
-                text: `ที่อยู่: ${customerAddress}`,
-                size: 'xs',
-                color: '#334155',
-                wrap: true,
-              },
-            ],
-          },
-          // รายการสินค้า
-          ...(itemRows.length > 0
-            ? [
-                {
-                  type: 'separator',
-                  margin: 'md',
-                },
-                {
-                  type: 'box',
-                  layout: 'vertical',
-                  spacing: 'xs',
-                  contents: [
-                    {
-                      type: 'text',
-                      text: '🥬 รายการผักที่สั่ง:',
-                      size: 'xs',
-                      weight: 'bold',
-                      color: '#475569',
-                    },
-                    ...itemRows,
-                  ],
-                },
-              ]
-            : []),
-        ],
-      },
-      footer: {
-        type: 'box',
-        layout: 'vertical',
-        spacing: 'sm',
-        paddingAll: 'md',
-        contents: [
-          ...(resolvedOrder.id
-            ? [
-                {
-                  type: 'button',
-                  action: {
-                    type: 'postback',
-                    label: '🚚 กดจัดส่งสินค้า (ลงสมุด GAP #6)',
-                    data: `action=admin_dispatch&order_id=${resolvedOrder.id}`,
-                    displayText: `🚚 เริ่มจัดส่งออเดอร์ ${orderCode}`,
-                  },
-                  style: 'primary',
-                  color: '#16a34a',
-                  height: 'sm',
-                },
-              ]
-            : []),
-          {
-            type: 'button',
-            action: {
-              type: 'uri',
-              label: '🖨️ พิมพ์ใบปะหน้า & เช็คลิสต์',
-              uri: printUri,
-            },
-            style: 'secondary',
-            height: 'sm',
-          },
-          ...(resolvedOrder.id
-            ? [
-                {
-                  type: 'button',
-                  action: {
-                    type: 'postback',
-                    label: '❌ ยกเลิกออเดอร์ (คืนสต็อกผัก)',
-                    data: `action=admin_cancel&order_id=${resolvedOrder.id}`,
-                    displayText: `❌ ยกเลิกออเดอร์ ${orderCode}`,
-                  },
-                  style: 'secondary',
-                  color: '#fee2e2',
-                  height: 'sm',
-                },
-              ]
-            : []),
-        ],
-      },
-    };
-
-    // สร้างชุดข้อความที่จะส่งให้เจ้าของฟาร์ม:
-    // - หากเป็นโอนเงินและมีรูปสลิป (publicSlipUrl) ➔ ส่งรูปสลิปใบใหญ่คู่กับการ์ดออเดอร์ทันที
-    // - หากเป็นเก็บเงินปลายทาง (COD) ➔ ส่งเฉพาะการ์ดออเดอร์ (ไม่มีรูปสลิป)
-    const messagesToSend = [];
-    if (!isCod && publicSlipUrl) {
-      messagesToSend.push({
-        type: 'image',
-        originalContentUrl: publicSlipUrl,
-        previewImageUrl: publicSlipUrl,
-      });
-    }
-
-    messagesToSend.push({
-      type: 'flex',
-      altText: isCod
-        ? `🚚 ออเดอร์ใหม่ (COD เก็บปลายทาง): ${orderCode} (฿${totalAmount})`
-        : `💸 ออเดอร์ใหม่พร้อมสลิปโอนเงิน: ${orderCode} (฿${totalAmount})`,
-      contents: flexContents,
-    });
+    const { messages: messagesToSend, isCod, publicSlipUrl } = await buildAdminOrderManagementMessages(
+      orderData,
+      eventType,
+      frontendBase
+    );
 
     try {
       await client.pushMessage({
