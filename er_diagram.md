@@ -55,6 +55,10 @@ erDiagram
         varchar promptpay_number
         varchar line_user_id
         varchar frontend_url
+        varchar gemini_api_key
+        varchar gemini_model
+        tinyint gemini_auto_fallback
+        tinyint gemini_enabled
         timestamp created_at
     }
 
@@ -384,8 +388,12 @@ erDiagram
 * `bank_account_no`: `VARCHAR(50)` — เลขที่บัญชีธนาคาร
 * `bank_account_name`: `VARCHAR(150)` — ชื่อบัญชีธนาคาร
 * `promptpay_number`: `VARCHAR(50)` — หมายเลขพร้อมเพย์สำหรับสร้าง QR Code รับชำระเงินอัตโนมัติ
-* `line_user_id`: `VARCHAR(255)` — LINE User ID ของเจ้าของฟาร์มสำหรับรับแจ้งเตือนออเดอร์/สลิปใหม่
-* `frontend_url`: `VARCHAR(255)` — URL หน้าเว็บหลักของระบบ
+* `line_user_id`: `VARCHAR(255)` — LINE User ID ของเจ้าของฟาร์มสำหรับรับแจ้งเตือนออเดอร์/สลิปใหม่ และยืนยันตัวตนเจ้าของฟาร์มเมื่อสนทนากับ AI ใน LINE
+* `frontend_url`: `VARCHAR(255)` — URL หน้าเว็บหลักของระบบสำหรับเปิดลิงก์จากใน LINE
+* `gemini_api_key`: `VARCHAR(255) NULL` — Google Gemini API Key ที่ตั้งค่าในหน้าโปรไฟล์
+* `gemini_model`: `VARCHAR(100) DEFAULT 'gemini-3.5-flash-lite'` — โมเดล Gemini หลักที่เลือกใช้
+* `gemini_auto_fallback`: `TINYINT(1) DEFAULT 1` — สถานะเปิด/ปิดโหมดสลับโมเดลสำรองอัตโนมัติ (Auto Fallback)
+* `gemini_enabled`: `TINYINT(1) DEFAULT 1` — สถานะเปิด/ปิดการใช้งานสมองกล Gemini AI ใน LINE Chatbot
 * `created_at`: `TIMESTAMP` — วันเวลาที่สร้างบัญชี
 
 ### 2) `crops` (ตารางคลังข้อมูลชนิดผัก)

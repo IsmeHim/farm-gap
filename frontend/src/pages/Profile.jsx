@@ -115,10 +115,10 @@ const SETTINGS_TABS = [
   },
   {
     id: 'line',
-    label: 'เชื่อมต่อ LINE & โดเมน',
-    shortLabel: 'LINE & โดเมน',
+    label: 'เชื่อมต่อ LINE เจ้าของฟาร์ม',
+    shortLabel: 'LINE เจ้าของฟาร์ม',
     icon: Bell,
-    desc: 'แจ้งเตือนออเดอร์เข้า LINE เจ้าของฟาร์ม และลิงก์เว็บไซต์',
+    desc: 'ถาม-ตอบ AI เจ้าของฟาร์ม, รับแจ้งเตือนออเดอร์ และโดเมนเว็บ',
   },
   {
     id: 'security',
@@ -514,13 +514,13 @@ export default function Profile() {
                 <div className="min-w-0 space-y-0.5">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
                     <Bell className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                    <span>แจ้งเตือน LINE OA</span>
+                    <span>LINE เจ้าของฟาร์ม (AI & แจ้งเตือน)</span>
                     {form.lineUserId && (
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                     )}
                   </div>
                   <div className="text-[10px] font-mono text-slate-500 truncate">
-                    {form.lineUserId ? form.lineUserId : 'ยังไม่ได้ผูก LINE User ID'}
+                    {form.lineUserId ? `เชื่อมแล้ว: ${form.lineUserId}` : 'ยังไม่ได้ผูก LINE เจ้าของฟาร์ม'}
                   </div>
                 </div>
                 <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
@@ -877,25 +877,47 @@ export default function Profile() {
                 <div className="border-b border-slate-100 pb-3">
                   <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
                     <Bell className="w-4 h-4 text-emerald-700" />
-                    การแจ้งเตือน LINE เจ้าของฟาร์ม & โดเมนเว็บไซต์
+                    การเชื่อมต่อ LINE สำหรับเจ้าของฟาร์ม & โดเมนเว็บไซต์
                   </h2>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    ผูก LINE User ID เพื่อรับการ์ดแจ้งเตือนออเดอร์ใหม่ และตั้งค่าลิงก์สำหรับเปิดหน้าเว็บจากในมือถือ
+                    ผูกบัญชี LINE ของเจ้าของฟาร์มเพื่อใช้งาน AI ผู้ช่วยหลังบ้าน (ถาม-ตอบข้อมูลฟาร์ม/จัดการออเดอร์ค้างในแชท) และรับแจ้งเตือนออเดอร์ใหม่
                   </p>
                 </div>
 
                 <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-4">
+                  {/* What Owner LINE Connection Does */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-xl p-3 space-y-1">
+                      <div className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                        <Bot className="w-4 h-4 text-emerald-700 shrink-0" />
+                        1. ถาม-ตอบ AI สำหรับเจ้าของฟาร์ม
+                      </div>
+                      <p className="text-[11px] text-emerald-800 leading-relaxed">
+                        ใช้ LINE บัญชีนี้พิมพ์ถามข้อมูลในระบบได้โดยตรง เช่น <em>"วันนี้มีออเดอร์ไหนที่ยังไม่จัดการบ้าง"</em>, <em>"สรุปยอดขายวันนี้"</em> พร้อมกดปุ่มจัดการออเดอร์จากการ์ดในแชทได้ทันที
+                      </p>
+                    </div>
+                    <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-xl p-3 space-y-1">
+                      <div className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                        <Bell className="w-4 h-4 text-emerald-700 shrink-0" />
+                        2. รับแจ้งเตือนออเดอร์และตรวจสลิป
+                      </div>
+                      <p className="text-[11px] text-emerald-800 leading-relaxed">
+                        เมื่อลูกค้าสั่งซื้อผักหรือแนบสลิปโอนเงิน ระบบจะส่งการ์ดแจ้งเตือนพร้อมปุ่มกด <strong>อนุมัติสลิป / จัดส่ง / ยกเลิก</strong> เข้า LINE บัญชีนี้แบบเรียลไทม์
+                      </p>
+                    </div>
+                  </div>
+
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
                       <Smartphone className="w-3.5 h-3.5 text-emerald-700" />
-                      LINE User ID ของเจ้าของฟาร์ม (ขึ้นต้นด้วยตัว U ความยาว 33 หลัก)
+                      LINE User ID ของเจ้าของฟาร์ม (ใช้ยืนยันสิทธิ์เจ้าของฟาร์มในแชท LINE + รับแจ้งเตือน)
                     </label>
                     <div className="flex flex-col sm:flex-row gap-2">
                       <input
                         type="text"
                         value={form.lineUserId}
                         onChange={e => setForm(prev => ({ ...prev, lineUserId: e.target.value }))}
-                        placeholder="เช่น U1234567890abcdef1234567890abcdef"
+                        placeholder="เช่น U1234567890abcdef1234567890abcdef (ขึ้นต้นด้วย U ความยาว 33 หลัก)"
                         className="input text-xs flex-1 py-2.5 px-3.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-600 font-mono text-[11px] bg-white"
                       />
                       <button
@@ -905,7 +927,7 @@ export default function Profile() {
                         className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition shadow-xs disabled:opacity-50 cursor-pointer whitespace-nowrap"
                       >
                         <Send className="w-3.5 h-3.5" />
-                        {testingLine ? 'กำลังส่งทดสอบ...' : '🧪 ทดสอบส่งข้อความเข้า LINE'}
+                        {testingLine ? 'กำลังส่งทดสอบ...' : '🧪 ทดสอบเชื่อมต่อ LINE เจ้าของฟาร์ม'}
                       </button>
                     </div>
                   </div>
@@ -914,12 +936,12 @@ export default function Profile() {
                   <div className="bg-white border border-emerald-100 rounded-xl p-3.5 text-xs space-y-1.5">
                     <div className="font-bold text-emerald-900 flex items-center gap-1.5 text-[11px]">
                       <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                      วิธีดู LINE User ID ของคุณแบบง่ายๆ ใน 5 วินาที:
+                      วิธีดู LINE User ID ของเจ้าของฟาร์มแบบง่ายๆ ใน 5 วินาที:
                     </div>
                     <ol className="list-decimal list-inside text-[11px] text-slate-600 space-y-1 pl-1 leading-relaxed">
-                      <li>เปิดห้องแชท LINE Official Account ของฟาร์ม</li>
+                      <li>ใช้ LINE ส่วนตัวของเจ้าของฟาร์ม เปิดห้องแชท LINE Official Account ของร้าน</li>
                       <li>พิมพ์คำว่า <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">myid</span> หรือ <span className="font-bold text-emerald-700">แอดมิน</span> แล้วกดส่งในแชท</li>
-                      <li>คัดลอกรหัส <strong>LINE User ID (ขึ้นต้นด้วย U...)</strong> มาวางในช่องด้านบน แล้วกดบันทึก</li>
+                      <li>คัดลอกรหัส <strong>LINE User ID (ขึ้นต้นด้วย U...)</strong> มาวางในช่องด้านบน แล้วกดบันทึกการตั้งค่า</li>
                     </ol>
                   </div>
 
@@ -928,7 +950,7 @@ export default function Profile() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                       <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
                         <Globe className="w-3.5 h-3.5 text-blue-600" />
-                        โดเมน / URL เว็บไซต์สำหรับเปิดจาก LINE (Website Base URL)
+                        โดเมน / URL เว็บไซต์หลักสำหรับเปิดจาก LINE (Website Base URL)
                       </label>
                       <div className="flex items-center gap-2">
                         <button
@@ -936,7 +958,7 @@ export default function Profile() {
                           onClick={handleUseCurrentOrigin}
                           className="text-[11px] text-blue-600 hover:text-blue-800 font-medium hover:underline cursor-pointer"
                         >
-                          ⚡ ใช้โดเมนปัจจุบัน
+                          ⚡ ใช้โดเมนหน้าเว็บปัจจุบัน
                         </button>
                         {form.frontendUrl && (
                           <button
@@ -953,11 +975,11 @@ export default function Profile() {
                       type="url"
                       value={form.frontendUrl}
                       onChange={e => setForm(prev => ({ ...prev, frontendUrl: e.target.value }))}
-                      placeholder="เช่น https://xxxx.ngrok-free.dev หรือ https://farmgap.com (เว้นว่าง = ค่าเริ่มต้น)"
+                      placeholder="เช่น https://xxxx.ngrok-free.dev หรือ https://farmgap.com"
                       className="input text-xs w-full py-2.5 px-3.5 rounded-xl border border-slate-200 focus:outline-none focus:border-blue-600 font-mono text-[11px] bg-white"
                     />
                     <p className="text-[11px] text-slate-500 leading-relaxed">
-                      ใช้กำหนดลิงก์ปุ่ม <strong>"🖨️ พิมพ์ใบปะหน้า"</strong> และ <strong>"📦 เปิดดูรายการออเดอร์"</strong> ใน LINE เพื่อให้กดเปิดจากมือถือได้ทันที
+                      ระบบจะใช้ URL ที่ระบุในช่องนี้เป็นหลักโดยตรง สำหรับสร้างลิงก์ปุ่ม <strong>"🖨️ พิมพ์ใบปะหน้า"</strong>, <strong>"📦 เปิดดูรายการออเดอร์"</strong> และการแสดงรูปสลิปโอนเงินใน LINE (สามารถกดปุ่ม <em>"⚡ ใช้โดเมนหน้าเว็บปัจจุบัน"</em> แล้วกดบันทึกได้ทันที)
                     </p>
                   </div>
                 </div>

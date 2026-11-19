@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS users (
   promptpay_number VARCHAR(50),
   line_user_id VARCHAR(255),
   frontend_url VARCHAR(255),
+  gemini_api_key VARCHAR(255) NULL,
+  gemini_model VARCHAR(100) NULL DEFAULT 'gemini-3.5-flash-lite',
+  gemini_auto_fallback TINYINT(1) NOT NULL DEFAULT 1,
+  gemini_enabled TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

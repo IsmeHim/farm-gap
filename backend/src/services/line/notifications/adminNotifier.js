@@ -8,14 +8,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadsDir = path.join(__dirname, '../../../../uploads');
 
-// Helper: ดึง URL หน้าเว็บหลักของฟาร์ม (HTTPS สำหรับ LINE)
+// Helper: ดึง URL หน้าเว็บหลักของฟาร์มจากที่ระบุในระบบตั้งค่า (ตาราง users) เป็นหลัก
 export async function getAdminFrontendBase() {
   const [owners] = await pool.query(
     "SELECT id, email, line_user_id, farm_name, display_name, frontend_url FROM users WHERE (role = 'owner' OR role = 'admin') ORDER BY id ASC"
   );
   const ownerWithLine = owners.find(o => o.line_user_id && o.line_user_id.trim().startsWith('U')) || owners[0];
   const configuredUrl = ownerWithLine?.frontend_url ? ownerWithLine.frontend_url.trim() : null;
-  const rawFrontendBase = configuredUrl || process.env.FRONTEND_URL || process.env.DASHBOARD_URL || 'http://localhost:5173';
+  const rawFrontendBase = configuredUrl || 'http://localhost:4000';
   const frontendBase = rawFrontendBase.replace(/\/+$/, '');
   return { frontendBase, owner: ownerWithLine, allOwners: owners };
 }
@@ -52,11 +52,7 @@ function resolvePublicSlipHttpsUrl(rawSlipUrl, frontendBase) {
 
   if (slipUrl.startsWith('/')) {
     // ตรวจสอบว่า frontendBase เป็น https:// หรือไม่ (LINE บังคับ https สำหรับรูปภาพ)
-    const httpsBase = frontendBase.startsWith('https://')
-      ? frontendBase
-      : (process.env.FRONTEND_URL && process.env.FRONTEND_URL.startsWith('https://')
-          ? process.env.FRONTEND_URL.replace(/\/+$/, '')
-          : null);
+    const httpsBase = frontendBase.startsWith('https://') ? frontendBase : null;
     if (httpsBase) {
       return `${httpsBase}${slipUrl}`;
     }

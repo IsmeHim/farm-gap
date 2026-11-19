@@ -49,8 +49,8 @@
         <mxCell id="uc08" parent="sys_boundary" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#2563eb;strokeWidth=1.5;fontSize=11;fontStyle=1;fontColor=#0f172a;" value="UC08: ติดตามสถานะจัดส่งและประวัติใน LINE&lt;br&gt;&lt;font style=&quot;font-size: 10px; color: #64748b;&quot;&gt;(Track Order &amp; Delivery inside LINE Chat)&lt;/font&gt;" vertex="1">
           <mxGeometry height="65" width="270" x="590" y="663" as="geometry" />
         </mxCell>
-        <mxCell id="uc09" parent="sys_boundary" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#2563eb;strokeWidth=1.5;fontSize=11;fontStyle=1;fontColor=#0f172a;" value="UC09: จัดการออเดอร์ &amp; พิมพ์ใบปะหน้า&lt;br&gt;&lt;font style=&quot;font-size: 10px; color: #64748b;&quot;&gt;(Manage Orders &amp; Shipping Label)&lt;/font&gt;" vertex="1">
-          <mxGeometry height="65" width="230" x="220" y="610" as="geometry" />
+        <mxCell id="uc09" parent="sys_boundary" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#2563eb;strokeWidth=1.5;fontSize=11;fontStyle=1;fontColor=#0f172a;" value="UC09: จัดการออเดอร์ (เว็บ &amp; LINE) &amp; พิมพ์ใบปะหน้า&lt;br&gt;&lt;font style=&quot;font-size: 10px; color: #64748b;&quot;&gt;(Manage Orders via Web/LINE &amp; Shipping Label)&lt;/font&gt;" vertex="1">
+          <mxGeometry height="65" width="250" x="210" y="610" as="geometry" />
         </mxCell>
         <mxCell id="uc10" parent="sys_boundary" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#2563eb;strokeWidth=1.5;fontSize=11;fontStyle=1;fontColor=#0f172a;" value="UC10: สแกนตรวจสอบย้อนกลับผลผลิต&lt;br&gt;&lt;font style=&quot;font-size: 10px; color: #64748b;&quot;&gt;(Trace Produce Origin via QR Code)&lt;/font&gt;" vertex="1">
           <mxGeometry height="65" width="260" x="600" y="745" as="geometry" />
@@ -64,7 +64,7 @@
         <mxCell id="uc12" parent="sys_boundary" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#16a34a;strokeWidth=1.5;fontSize=11;fontStyle=1;fontColor=#0f172a;" value="UC12: วิเคราะห์ต้นทุนและยอดขาย&lt;br&gt;&lt;font style=&quot;font-size: 10px; color: #64748b;&quot;&gt;(Cost &amp; Sales Financial Analytics)&lt;/font&gt;" vertex="1">
           <mxGeometry height="65" width="230" x="340" y="895" as="geometry" />
         </mxCell>
-        <mxCell id="uc13" parent="sys_boundary" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9333ea;strokeWidth=1.5;fontSize=11;fontStyle=1;fontColor=#0f172a;" value="UC13: วิเคราะห์กลุ่มลูกค้า &amp; ผู้ช่วย AI ตอบแชท&lt;br&gt;&lt;font style=&quot;font-size: 10px; color: #64748b;&quot;&gt;(K-Means AI &amp; Gemini Farm Assistant)&lt;/font&gt;" vertex="1">
+        <mxCell id="uc13" parent="sys_boundary" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9333ea;strokeWidth=1.5;fontSize=11;fontStyle=1;fontColor=#0f172a;" value="UC13: วิเคราะห์กลุ่มลูกค้า &amp; ผู้ช่วย AI 2 บทบาท&lt;br&gt;&lt;font style=&quot;font-size: 10px; color: #64748b;&quot;&gt;(K-Means AI &amp; Dual-Role Gemini Farm Assistant)&lt;/font&gt;" vertex="1">
           <mxGeometry height="65" width="250" x="615" y="895" as="geometry" />
         </mxCell>
         <mxCell id="rel_inc_03" edge="1" parent="sys_boundary" source="uc03" style="dashed=1;html=1;endArrow=open;endFill=0;strokeColor=#059669;fontSize=10;fontColor=#059669;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="uc03_inc" value="&amp;lt;&amp;lt;include&amp;gt;&amp;gt;">
@@ -125,6 +125,9 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="line_ext_8" edge="1" parent="1" source="uc08" style="endArrow=none;html=1;strokeColor=#9333ea;strokeWidth=1.5;exitX=1;exitY=0.3;exitDx=0;exitDy=0;" target="act_ext">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="line_ext_9" edge="1" parent="1" source="uc09" style="endArrow=none;html=1;strokeColor=#9333ea;strokeWidth=1.5;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="act_ext">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="line_ext_13" edge="1" parent="1" source="uc13" style="endArrow=none;html=1;strokeColor=#9333ea;strokeWidth=1.5;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="act_ext">

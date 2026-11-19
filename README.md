@@ -198,6 +198,84 @@ export const GEMINI_FALLBACK_ORDER = [
 
 ---
 
+### 4. 🔄 เจาะลึก Flow การทำงานของโค้ดในระบบ AI (End-to-End AI Code Execution Flow)
+
+แผนภาพและลำดับการทำงานด้านล่างนี้อธิบายการไหลของข้อมูลในระดับซอร์สโค้ด (Code-Level Execution Flow) ตั้งแต่มีข้อความวิ่งเข้า Webhook ไปจนถึงการประมวลผลของสมองกล AI ทั้ง 3 ส่วน:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User as 📱 ผู้ใช้ LINE (เจ้าของฟาร์ม / ลูกค้า)
+    participant Webhook as ⚙️ eventHandler.js (Webhook Router)
+    participant Context as 🗄️ farmContext.js (MySQL Real-Time Data)
+    participant Gemini as 🧠 gemini.js (6-Model Auto Fallback)
+    participant Flex as 🃏 Flex Builders & Notifiers
+
+    User->>Webhook: ส่งข้อความแชทเข้า LINE OA (POST /api/line/webhook)
+    Webhook->>Webhook: ตรวจสอบ userId กับตาราง users.line_user_id และสถานะ line_chat_sessions
+
+    alt 👑 กรณีผู้ส่งคือ "เจ้าของฟาร์ม" (Owner AI-First Flow)
+        Webhook->>Context: เรียก getOwnerDeepContext() ดึงออเดอร์ค้าง (paid/pending/shipping), ยอดขายวันนี้, สต็อก, รอบปลูก
+        Context-->>Webhook: คืนอ็อบเจกต์ deepData (unmanagedOrders, orders, products, plots)
+        Webhook->>Gemini: เรียก analyzeOwnerMessageWithGemini(text, deepData)
+        Gemini->>Gemini: getActiveGeminiConfig() -> buildModelTryList() (ไล่ 6 โมเดลอัตโนมัติ)
+        Gemini-->>Webhook: คืน JSON { isOwnerAction, replyText, showOrderListCard, matchedOrderIds }
+        opt showOrderListCard === true
+            Webhook->>Flex: เรียก buildAdminOrderListFlex(targetOrders) สร้างการ์ดพร้อมปุ่ม "⚙️ จัดการออเดอร์นี้"
+        end
+        Webhook-->>User: ตอบกลับข้อความสรุปจาก AI + การ์ดรายการออเดอร์ค้างจัดการ
+        opt เจ้าของฟาร์มกดปุ่ม "⚙️ จัดการออเดอร์นี้" (Postback: action=admin_open_order)
+            User->>Webhook: ส่ง Postback Event (order_id)
+            Webhook->>Flex: เรียก buildAdminOrderManagementMessages(orderId)
+            Flex-->>User: ส่งการ์ดจัดการออเดอร์ใบเดิม + รูปสลิป + ปุ่มอนุมัติ/จัดส่ง/ยกเลิก
+        end
+    else 🛒 กรณีผู้ส่งคือ "ลูกค้า" (Customer AI-First Flow)
+        Webhook->>Context: เรียก getFarmContextForAI() ดึงสต็อกพร้อมขาย + วันเก็บเกี่ยวรอบถัดไป
+        Context-->>Webhook: คืนข้อความบริบทฟาร์ม (farmContextText) + รายการสินค้า (availableProducts)
+        Webhook->>Gemini: เรียก analyzeCustomerMessageWithGemini(text, farmContextText, availableProducts, activeCart)
+        Gemini->>Gemini: callGeminiWithDetails() (กรอง !p.thought, maxOutputTokens: 8192, Auto Fallback 6 รุ่น)
+        alt Gemini AI ตอบกลับสำเร็จ
+            Gemini-->>Webhook: คืน JSON { intent, items: [{product_id, qty}], replyText }
+            Webhook->>Flex: แยกตาม intent (ORDER_ITEMS -> เติมตะกร้า + แนะนำผักคู่กัน / SHOW_MENU / CHECK_ORDER_STATUS / GENERAL_QA)
+            Flex-->>User: ส่งการ์ดสรุปตะกร้า Flex Message หรือคำตอบ AI อ้างอิงสต็อกจริง
+        else กรณีฉุกเฉิน (API หมดโควต้าทุกตัว / ออฟไลน์)
+            Webhook->>Webhook: สลับใช้ Local Fallback (extractOrderIntent ใน parsers/orderIntent.js)
+            Webhook-->>User: สกัดรายการสั่งซื้อเข้าตะกร้าหรือตอบกลับอัตโนมัติโดยระบบไม่ล่ม
+        end
+    end
+```
+
+#### ลำดับการทำงานของโค้ดแยกตามไฟล์สำคัญ:
+
+1. **ด่านรับข้อความและแยกบทบาทผู้ใช้งาน ([`backend/src/services/line/eventHandler.js`](backend/src/services/line/eventHandler.js))**:
+   - เมื่อมีข้อความเข้า `handleEvent(event)` ระบบจะดึงสถานะบทสนทนาปัจจุบันจากตาราง `line_chat_sessions` (`getChatSession(userId)`)
+   - **ตรวจสอบสิทธิ์เจ้าของฟาร์ม:** คิวรีเช็คว่า `userId` ของผู้ส่งตรงกับ `users.line_user_id` ของบัญชี `owner` หรือไม่ หากตรงและไม่ได้อยู่ในโหมดจำลองสั่งซื้อ (`session.state === 'IDLE'`) ระบบจะส่งเข้า **Owner AI-First Flow** ทันที
+
+2. **Flow สมองกล AI ฝั่งเจ้าของฟาร์ม ([`farmContext.js`](backend/src/services/line/ai/farmContext.js) $\rightarrow$ [`gemini.js`](backend/src/services/line/ai/gemini.js) $\rightarrow$ [`adminNotifier.js`](backend/src/services/line/notifications/adminNotifier.js))**:
+   - **สเต็ป 1 ดึงข้อมูลเชิงลึก (`getOwnerDeepContext`):** คิวรีข้อมูลจริงจาก MySQL แบบเรียลไทม์ ได้แก่ รายการออเดอร์ล่าสุด 30 รายการพร้อมรายการผักย่อย (`order_items`), คัดกรองออเดอร์ที่ยังไม่ได้จัดการ (`status IN ('paid', 'pending', 'shipping')`), คำนวณยอดขายวันนี้, ดึงสต็อกสินค้า (`products`) และสถานะแปลงปลูก (`plots`)
+   - **สเต็ป 2 วิเคราะห์ด้วย Gemini (`analyzeOwnerMessageWithGemini`):** แนบ `deepData.contextText` เข้าไปใน `systemInstruction` แล้วให้ Gemini ตอบกลับเป็น JSON โครงสร้าง `{ isOwnerAction, replyText, showOrderListCard, matchedOrderIds }`
+   - **สเต็ป 3 สร้างการ์ดจัดการออเดอร์ (`buildAdminOrderListFlex` & `buildAdminOrderManagementMessages`):** หากคำถามเกี่ยวข้องกับออเดอร์ (เช่น *"วันนี้มีออเดอร์ไหนที่ยังไม่จัดการบ้าง"*) ระบบจะนำ `matchedOrderIds` ไปสร้างการ์ด Carousel ที่มีปุ่ม Postback `action=admin_open_order&order_id=...` เมื่อเจ้าของกดปุ่ม ระบบจะเรียก `buildAdminOrderManagementMessages(orderId)` เพื่อส่งการ์ดแจ้งเตือนออเดอร์ใบเต็มพร้อมภาพสลิปโอนเงินกลับมาให้กดอนุมัติหรือจัดส่งได้ทันที
+
+3. **Flow สมองกล AI ฝั่งลูกค้า ([`eventHandler.js`](backend/src/services/line/eventHandler.js) $\rightarrow$ [`gemini.js`](backend/src/services/line/ai/gemini.js) $\rightarrow$ [`cartSummaryCard.js`](backend/src/services/line/flex/cartSummaryCard.js))**:
+   - **สเต็ป 1 สร้างบริบทสต็อกและแปลงปลูก (`getFarmContextForAI`):** ดึงเฉพาะผักที่มีสต็อกพร้อมขาย (`stock_quantity > 0`) และดึงรอบการปลูก (`planting_batches`) ที่กำลังเติบโตพร้อมวันคาดการณ์เก็บเกี่ยว (`expected_harvest_date`) และตรวจสอบวันปลอดภัย PHI (`chemical_logs`)
+   - **สเต็ป 2 วิเคราะห์เจตนาและสกัดออเดอร์ (`analyzeCustomerMessageWithGemini`):** ส่งข้อความลูกค้าพร้อมรายการสินค้าและตะกร้าปัจจุบันให้ Gemini วิเคราะห์ออกมาเป็น JSON `{ intent, items, replyText }`:
+     - หาก `intent === "ORDER_ITEMS"`: ระบบนำ `items` (`product_id`, `qty`) ไปตรวจสอบสต็อกจริง บันทึกลง `line_chat_sessions.draft_data` และเรียก `replyCartSummaryCard()` ซึ่งจะคิวรีตาราง `product_recommendations` มาแสดงปุ่ม **"➕ แนะนำซื้อคู่กัน"** ใต้ตะกร้าสินค้า
+     - หาก `intent === "SHOW_MENU"` / `"CHECK_ORDER_STATUS"` / `"CLEAR_CART"`: เรียกฟังก์ชันแสดงการ์ดเมนูผัก การ์ดเช็คสถานะจัดส่ง หรือล้างตะกร้าตามลำดับ
+     - หาก `intent === "GENERAL_QA"`: ตอบคำถามลูกค้าด้วย `replyText` ที่อ้างอิงข้อมูลสต็อกและมาตรฐาน GAP จริง
+   - **สเต็ป 3 ระบบสำรองไร้รอยต่อ (`extractOrderIntent`):** หาก Gemini API คืนค่า `null` (เช่น เน็ตหลุดหรือโควต้าหมดทุกโมเดล) โค้ดใน `eventHandler.js` จะไหลลงไปเรียก `extractOrderIntent(text)` ใน [`orderIntent.js`](backend/src/services/line/parsers/orderIntent.js) เพื่อใช้ Regex สกัดชื่อผักและจำนวนแทนอัตโนมัติ
+
+4. **Flow กลไกสลับโมเดลสำรองอัตโนมัติ 6 ลำดับ (`callGeminiWithDetails` ใน [`gemini.js`](backend/src/services/line/ai/gemini.js))**:
+   - ดึงค่า `gemini_api_key`, `gemini_model`, `gemini_auto_fallback`, `gemini_enabled` จากตาราง `users` ผ่าน `getActiveGeminiConfig()`
+   - สร้างลิสต์ลำดับโมเดลด้วย `buildModelTryList(model, autoFallback)` โดยนำโมเดลหลักที่เจ้าของฟาร์มเลือกไว้ขึ้นเป็นอันดับ 1 ตามด้วยโมเดลสำรองที่เหลือใน `GEMINI_FALLBACK_ORDER`
+   - วนลูปเรียก `callSingleGeminiModel()` ไปยัง Google Generative Language API (`v1beta`) โดยกรองเฉพาะ Part ที่ไม่ใช่ Thinking Token (`!p.thought`) และใช้ `maxOutputTokens: 8192` หากโมเดลใดติด HTTP 429 (Quota Exceeded) หรือ 503 ระบบจะ `continue` ไปเรียกโมเดลลำดับถัดไปทันทีโดยผู้ใช้ไม่รู้สึกสะดุด
+
+5. **Flow การจัดกลุ่มลูกค้า K-Means & Market Basket Analysis ([`backend/src/routes/ai.js`](backend/src/routes/ai.js))**:
+   - **K-Means Clustering (`POST /api/ai/run-clustering`):** ดึงข้อมูลลูกค้าและคำสั่งซื้อจากตาราง `customers`, `orders`, `order_items` มาคำนวณเวกเตอร์ 4 มิติ (`order_count`, `total_spend`, `avg_order_value`, `total_items`) $\rightarrow$ ปรับสเกลข้อมูลด้วย **Min-Max Normalization** ให้อยู่ในช่วง $[0, 1]$ $\rightarrow$ คำนวณระยะห่างแบบยุคลิด (Euclidean Distance) และจัดเข้ากลุ่ม $K=3$ (`สลัดเลิฟเวอร์`, `ลูกค้าประจำเพื่อสุขภาพ`, `กลุ่มร้านอาหารและค้าส่ง`) $\rightarrow$ อัปเดต `customers.cluster_id` และบันทึกชนิดผักยอดนิยมของแต่ละกลุ่มลง `customer_clusters.preferred_crops`
+   - **Market Basket Co-occurrence (`POST /api/ai/run-clustering` & `GET /api/ai/recommendations/:productId`):** นับความถี่ของคู่สินค้า $(A, B)$ ที่ถูกสั่งซื้อร่วมกันใน `order_id` เดียวกันจากตาราง `order_items` คำนวณค่าคะแนนความสัมพันธ์ (`score`) แล้วบันทึกลงตาราง `product_recommendations` เพื่อใช้แนะนำผักคู่กันทั้งในหน้า LIFF และในแชท LINE
+   - **Targeted LINE Push Notification (`POST /api/ai/targeted-push`):** คัดกรอง `line_user_id` ของลูกค้าตามกลุ่ม K-Means (`cluster_id`) หรือตามประวัติผู้ที่เคยซื้อผักชนิดที่เพิ่งเก็บเกี่ยว (`crop_buyers`) แล้วส่งการ์ด Flex Message แจ้งเตือนผลผลิตตัดสดใหม่เข้า LINE ของลูกค้ากลุ่มเป้าหมายโดยตรง
+
+---
+
 ## 🗄️ โครงสร้างฐานข้อมูลโดยละเอียด (Detailed Database Schema)
 
 ฐานข้อมูลระบบ FarmGAP ประกอบด้วยตารางทั้งหมด **18 ตาราง** ที่เชื่อมโยงกันอย่างเป็นระบบ:
